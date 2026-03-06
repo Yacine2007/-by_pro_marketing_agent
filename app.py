@@ -31,7 +31,6 @@ SYSTEM_PROMPT = (
 # ========== تخزين الجلسات والبيانات ==========
 sessions = {}  # جلسات المستخدمين
 processed_messages = set()  # الرسائل التي تمت معالجتها
-pending_orders = {}  # الطلبات المكتملة في انتظار الإرسال للمالك
 
 # ========== نماذج البيانات ==========
 class ClientData:
@@ -318,13 +317,14 @@ def polling_worker():
                 time.sleep(30)
                 continue
             
-            # جلب المحادثات
+            # جلب المحادثات - استخدام me/conversations بدلاً من معرف الصفحة
             print("📥 جلب المحادثات...")
-            url = f'https://graph.facebook.com/v18.0/923170140890240/conversations?access_token={PAGE_ACCESS_TOKEN}&limit=10'
+            url = f'https://graph.facebook.com/v18.0/me/conversations?access_token={PAGE_ACCESS_TOKEN}&limit=10'
             response = requests.get(url, timeout=10)
             
             if response.status_code != 200:
                 print(f"❌ فشل جلب المحادثات: {response.status_code}")
+                print(f"   {response.text[:200]}")
                 time.sleep(30)
                 continue
             
