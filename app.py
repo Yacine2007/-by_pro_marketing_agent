@@ -296,7 +296,7 @@ def process_message(sender_id, message_text):
     print(f"✅ تمت معالجة الرسالة بنجاح")
     print(f"{'='*50}\n")
 
-# ========== دالة Polling الرئيسية ==========
+# ========== دالة Polling الرئيسية (المصححة) ==========
 def polling_worker():
     """تعمل كل 5 ثوان وتجلب الرسائل الجديدة"""
     print("\n" + "🚀"*50)
@@ -317,7 +317,7 @@ def polling_worker():
                 time.sleep(30)
                 continue
             
-            # جلب المحادثات - استخدام me/conversations بدلاً من معرف الصفحة
+            # جلب المحادثات
             print("📥 جلب المحادثات...")
             url = f'https://graph.facebook.com/v18.0/me/conversations?access_token={PAGE_ACCESS_TOKEN}&limit=10'
             response = requests.get(url, timeout=10)
@@ -335,17 +335,20 @@ def polling_worker():
             # معالجة كل محادثة
             for conv in conversations:
                 conv_id = conv.get('id')
+                print(f"📁 معالجة محادثة: {conv_id[:20]}...")
                 
-                # جلب رسائل المحادثة
+                # جلب آخر 5 رسائل من المحادثة
                 msg_url = f'https://graph.facebook.com/v18.0/{conv_id}/messages?access_token={PAGE_ACCESS_TOKEN}&fields=message,from,created_time&limit=5'
                 msg_response = requests.get(msg_url, timeout=10)
                 
                 if msg_response.status_code != 200:
+                    print(f"❌ فشل جلب الرسائل: {msg_response.status_code}")
                     continue
                 
                 messages = msg_response.json().get('data', [])
+                print(f"💬 عدد الرسائل: {len(messages)}")
                 
-                # معالجة كل رسالة (من الأقدم للأحدث)
+                # معالجة كل رسالة جديدة (من الأقدم للأحدث)
                 for msg in reversed(messages):
                     msg_id = msg.get('id')
                     
@@ -367,8 +370,8 @@ def polling_worker():
                         continue
                     
                     print(f"\n📨 رسالة جديدة!")
-                    print(f"   👤 من: {sender_id[:15]}...")
-                    print(f"   💬 نص: {msg_text[:100]}")
+                    print(f"   👤 من: {sender_id}")
+                    print(f"   💬 نص: {msg_text}")
                     
                     # معالجة الرسالة
                     process_message(sender_id, msg_text)
@@ -411,6 +414,14 @@ def home():
     active_clients = len([c for c in sessions.values() if c.is_complete()])
     pending = len([c for c in sessions.values() if c.is_complete() and not c.confirmed])
     
+    # بناء قائمة العملاء
+    clients_list = ""
+    for c in list(sessions.values())[-5:]:
+        name = c.name if c.name else 'غير معروف'
+        service = c.service if c.service else '...'
+        budget = c.budget if c.budget else '...'
+        clients_list += f"<div class='client-item'><b>{name}</b> - {service} - {budget}</div>"
+    
     return f"""
     <html dir='rtl'>
     <head>
@@ -451,7 +462,7 @@ def home():
             
             <div class='clients'>
                 <h3>📋 آخر العملاء</h3>
-                {''.join([f"<div class='client-item'><b>{c.name if c.name else 'غير معروف'}</b> - {c.service if c.service else '...'} - {c.budget if c.budget else '...'}</div>" for c in list(sessions.values())[-5:]])}
+                {clients_list}
             </div>
             
             <p style='margin-top: 30px; font-size: 0.9em;'>⏱ {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}</p>
