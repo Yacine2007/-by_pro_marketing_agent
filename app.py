@@ -6,16 +6,20 @@ import time
 import threading
 import sys
 import random
-from flask import Flask, request, jsonify, render_template_string
+from flask import Flask, request, jsonify, render_template_string, session
 from datetime import datetime
 from collections import deque
 
 app = Flask(__name__)
+app.secret_key = os.urandom(24)  # مطلوب للجلسات
 
 # ========== المتغيرات ==========
 PAGE_ACCESS_TOKEN = os.environ.get('PAGE_ACCESS_TOKEN')
 VERIFY_TOKEN = os.environ.get('VERIFY_TOKEN', 'by_pro_verify')
-OWNER_FB_ID = os.environ.get('OWNER_FB_ID', '61580260328404')  # المدير
+# معرف المدير - أضف كل المعرفات الموثقة هنا (الشخصية والصفحة)
+OWNER_FB_IDS = ['2592319994', '61580260328404']  # المعرف الشخصي أولاً ثم معرف الصفحة
+# كلمة مرور المدير للتحقق الإضافي
+OWNER_PASSWORD = "20070909"
 AI_API_URL = "http://fi8.bot-hosting.net:20163/elos-gemina"
 
 # بينانس ID للدفع
@@ -33,6 +37,7 @@ stats = {
 # ملفات التخزين الدائم
 ORDERS_FILE = "orders.json"
 BLOCKED_FILE = "blocked_users.json"
+VERIFIED_USERS_FILE = "verified_users.json"  # المستخدمون الذين تحققوا بكلمة المرور
 
 # ========== تحميل/حفظ البيانات ==========
 def load_orders():
@@ -57,9 +62,21 @@ def save_blocked(blocked_set):
     with open(BLOCKED_FILE, 'w') as f:
         json.dump(list(blocked_set), f)
 
+def load_verified():
+    try:
+        with open(VERIFIED_USERS_FILE, 'r') as f:
+            return set(json.load(f))
+    except:
+        return set()
+
+def save_verified(verified_set):
+    with open(VERIFIED_USERS_FILE, 'w') as f:
+        json.dump(list(verified_set), f)
+
 # البيانات المحملة
 orders = load_orders()
 blocked_users = load_blocked()
+verified_users = load_verified()  # مستخدمون تحققوا بكلمة المرور
 
 # ========== البرومبت ==========
 SYSTEM_PROMPT = (
@@ -96,6 +113,7 @@ class ClientData:
         self.confirmed = False
         self.conversation = []
         self.last_message_time = datetime.now()
+        self.awaiting_password = False  # هل المستخدم في مرحلة إدخال كلمة المرور
     
     def is_complete(self):
         return bool(self.name and self.service and self.budget)
@@ -237,7 +255,12 @@ def send_order_to_owner(client, details=""):
     """.strip()
     
     add_log('OWNER', f'📦 إرسال الطلب #{order["order_id"]} للمدير')
-    return send_message(OWNER_FB_ID, msg)
+    return send_message(OWNER_FB_IDS[0], msg)  # استخدم المعرف الرئيسي للإرسال
+
+# ========== التحقق من المدير ==========
+def is_owner(sender_id):
+    """التحقق مما إذا كان المستخدم مديراً (معرف موثوق أو تحقق بكلمة المرور)"""
+    return sender_id in OWNER_FB_IDS or sender_id in verified_users
 
 # ========== معالجة أوامر المدير ==========
 def handle_owner_command(text, sender_id):
@@ -286,7 +309,7 @@ def handle_owner_command(text, sender_id):
                 response = "❌ الرقم غير صحيح"
     
     elif cmd in ['احصائيات', 'stats']:
-        response = f"📈 إحصائيات:\nالرسائل الواردة: {stats['messages_received']}\nالرسائل المرسلة: {stats['messages_sent']}\nالطلبات: {len(orders)}\nالمحظورين: {len(blocked_users)}"
+        response = f"📈 إحصائيات:\nالرسائل الواردة: {stats['messages_received']}\nالرسائل المرسلة: {stats['messages_sent']}\nالطلبات: {len(orders)}\nالمحظورين: {len(blocked_users)}\nالمستخدمين الموثوقين: {len(verified_users)}"
     
     elif cmd == 'مساعدة' or cmd == 'help':
         response = """🔹 أوامر المدير:
@@ -302,6 +325,21 @@ def handle_owner_command(text, sender_id):
     send_message(sender_id, response)
     return True
 
+# ========== معالجة محاولة التحقق بالرقم السري ==========
+def handle_password_attempt(text, sender_id, client):
+    """معالجة محاولة إدخال الرقم السري"""
+    if text.strip() == OWNER_PASSWORD:
+        # كلمة المرور صحيحة
+        verified_users.add(sender_id)
+        save_verified(verified_users)
+        client.awaiting_password = False
+        add_log('SECURITY', f'🔐 تحقق ناجح بكلمة المرور للمستخدم {sender_id[:10]}...')
+        send_message(sender_id, "✅ تم التحقق بنجاح! أنت الآن مخول كمدير. أرسل 'مساعدة' لرؤية الأوامر.")
+    else:
+        # كلمة المرور خاطئة
+        add_log('SECURITY', f'⚠️ محاولة دخول فاشلة بكلمة مرور خاطئة من {sender_id[:10]}...')
+        send_message(sender_id, "❌ كلمة المرور غير صحيحة. إذا كنت المدير، يرجى إدخال الرقم السري الصحيح، أو انتظر حتى يتم التحقق من هويتك.")
+
 # ========== معالجة رسالة العميل ==========
 def process_message(sender_id, text):
     add_log('RECEIVE', f'📨 رسالة من {sender_id[:10]}...: {text[:50]}')
@@ -312,12 +350,7 @@ def process_message(sender_id, text):
         add_log('BLOCKED', f'🚫 مستخدم محظور {sender_id[:10]}... تم تجاهل الرسالة')
         return
     
-    # 2. إذا كان المرسل هو المدير
-    if sender_id == OWNER_FB_ID:
-        handle_owner_command(text, sender_id)
-        return
-    
-    # 3. معالجة العميل العادي
+    # 2. إنشاء جلسة إذا لم تكن موجودة
     if sender_id not in sessions:
         sessions[sender_id] = ClientData(sender_id)
         add_log('INFO', '🆕 جلسة جديدة')
@@ -326,7 +359,33 @@ def process_message(sender_id, text):
     client.conversation.append(f"Client: {text}")
     client.last_message_time = datetime.now()
     
-    # استخراج المعلومات (نفس الكود السابق)
+    # 3. التحقق من المدير
+    if is_owner(sender_id):
+        # هذا مدير موثوق (معرف مسبق أو تحقق بكلمة المرور)
+        handle_owner_command(text, sender_id)
+        return
+    
+    # 4. إذا كان المستخدم في مرحلة إدخال كلمة المرور
+    if client.awaiting_password:
+        handle_password_attempt(text, sender_id, client)
+        return
+    
+    # 5. التحقق مما إذا كان المستخدم يدعي أنه المدير
+    owner_claims = [
+        'انا المدير', 'أنا المدير', 'i am the owner', 'i'm the manager',
+        'مديرك', 'المالك', 'الowner', 'انا مديرك', 'انا مالك الشركة'
+    ]
+    
+    if any(claim in text.lower() for claim in owner_claims):
+        # المستخدم يدعي أنه المدير - نطلب كلمة المرور
+        client.awaiting_password = True
+        add_log('SECURITY', f'🔐 طلب تحقق بهوية المدير من {sender_id[:10]}...')
+        send_message(sender_id, "🔐 إذا كنت المدير، يرجى إدخال الرقم السري للمتابعة:")
+        return
+    
+    # 6. معالجة العميل العادي (نفس الكود السابق)
+    
+    # استخراج المعلومات
     if not client.name:
         name_match = re.search(r'اسمي[:\s]*([\w\s]{2,20})|my name is[:\s]*([\w\s]{2,20})|je m\'appelle[:\s]*([\w\s]{2,20})', text, re.IGNORECASE)
         if name_match:
@@ -363,21 +422,17 @@ def process_message(sender_id, text):
     
     # إذا كان الطلب مكتملاً بالفعل (confirmed) نرسل رسالة ثابتة ولا نستخدم AI
     if client.confirmed:
-        # يمكن إرسال تأكيد إضافي إذا أراد العميل إضافة تفاصيل
         send_message(sender_id, "شكراً لك. سيتم التواصل معك بشأن طلبك قريباً.")
         return
     
     # التحقق مما إذا كان العميل قد أكمل البيانات (ولم يتم التأكيد بعد)
     if client.is_complete():
-        # نرسل رسالة تجهيز المحفظة ونؤكد الطلب
         wallet_msg = f"✅ تم تأكيد طلبك! سنقوم الآن بتجهيز المحفظة لاستقبال الدفع.\n🔹 معرف بينانس للدفع: `{BINANCE_ID}`\n🔹 يرجى إرسال المبلغ على هذا المعرف، وسيتم إعلامك فور استلام الدفع لبدء العمل."
         send_message(sender_id, wallet_msg)
         
-        # حفظ الطلب وإرسال إشعار للمدير
         details = "\n".join(client.conversation[-10:])  # آخر 10 رسائل كوصف تفصيلي
         send_order_to_owner(client, details)
         
-        # تحديث حالة العميل
         client.confirmed = True
         return
     
@@ -439,7 +494,7 @@ def test_connection():
         except Exception as e:
             results.append({'test': 'Token', 'status': '❌', 'message': str(e)})
     test_msg = f"🔧 Test message from B.Y PRO Bot at {datetime.now().strftime('%H:%M')}"
-    send_result = send_message(OWNER_FB_ID, test_msg)
+    send_result = send_message(OWNER_FB_IDS[0], test_msg)
     results.append({'test': 'Send', 'status': '✅' if send_result else '❌', 'message': 'Message sent to owner' if send_result else 'Failed to send'})
     add_log('TEST', '✅ اختبار الاتصال مكتمل')
     return jsonify({'results': results, 'timestamp': datetime.now().isoformat()})
@@ -465,7 +520,8 @@ def debug():
         'sessions': len(sessions),
         'stats': stats,
         'token_exists': bool(PAGE_ACCESS_TOKEN),
-        'owner_id': OWNER_FB_ID,
+        'owner_ids': OWNER_FB_IDS,
+        'verified_users': list(verified_users),
         'blocked': list(blocked_users),
         'orders_count': len(orders),
         'recent_logs': list(logs)[:20],
@@ -493,15 +549,16 @@ def home():
             .card .value { font-size: 2.5em; font-weight: bold; color: #667eea; }
             .logs { background: white; border-radius: 15px; padding: 20px; margin-bottom: 20px; max-height: 300px; overflow-y: auto; }
             .log-SUCCESS { color: #059669; } .log-ERROR { color: #dc2626; } .log-WARNING { color: #d97706; }
-            .log-INFO { color: #2563eb; } .log-AI { color: #7c3aed; } .log-EXTRACT { color: #0891b2; } .log-OWNER { color: #b45309; }
+            .log-INFO { color: #2563eb; } .log-AI { color: #7c3aed; } .log-EXTRACT { color: #0891b2; } .log-OWNER { color: #b45309; } .log-SECURITY { color: #8b5cf6; }
             .log-entry { padding: 5px; border-bottom: 1px solid #eee; font-family: monospace; }
-            .clients, .blocked-section { background: white; border-radius: 15px; padding: 20px; margin-bottom: 20px; }
-            .client-row, .blocked-row { display: grid; grid-template-columns: 2fr 2fr 1fr 1fr auto; padding: 10px; border-bottom: 1px solid #eee; align-items: center; }
+            .clients, .blocked-section, .verified-section { background: white; border-radius: 15px; padding: 20px; margin-bottom: 20px; }
+            .client-row, .blocked-row, .verified-row { display: grid; grid-template-columns: 2fr 2fr 1fr 1fr auto; padding: 10px; border-bottom: 1px solid #eee; align-items: center; }
             .client-header { font-weight: bold; background: #f3f4f6; border-radius: 5px; }
             .button { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; border: none; padding: 8px 15px; border-radius: 20px; font-size: 0.9em; cursor: pointer; margin: 2px; }
             .block-btn { background: #ef4444; }
             .unblock-btn { background: #10b981; }
             .test-result { background: #f3f4f6; border-radius: 10px; padding: 15px; margin-top: 15px; font-family: monospace; white-space: pre-wrap; }
+            .password-info { background: #fef3c7; border-right: 4px solid #f59e0b; padding: 10px; margin: 10px 0; border-radius: 5px; }
         </style>
     </head>
     <body>
@@ -511,6 +568,9 @@ def home():
                 <div class='status'>✅ البوت يعمل</div>
                 <p>⏱ وقت التشغيل: {{ start_time }}</p>
                 <p>💰 بينانس ID: <code>{{ binance_id }}</code></p>
+                <div class='password-info'>
+                    <strong>🔐 نظام التحقق:</strong> أي مستخدم يدعي أنه المدير سيُطلب منه الرقم السري <code>20070909</code>
+                </div>
                 <button class='button' onclick='testConnection()'>🔍 فحص الاتصال</button>
                 <div id='testResult' class='test-result' style='display: none;'></div>
             </div>
@@ -520,6 +580,7 @@ def home():
                 <div class='card'><h3>عملاء مكتملين</h3><div class='value'>{{ completed_clients }}</div></div>
                 <div class='card'><h3>الطلبات المحفوظة</h3><div class='value'>{{ orders_count }}</div></div>
                 <div class='card'><h3>المحظورين</h3><div class='value'>{{ blocked_count }}</div></div>
+                <div class='card'><h3>موثوقين بكلمة مرور</h3><div class='value'>{{ verified_count }}</div></div>
             </div>
             
             <div class='logs'>
@@ -527,6 +588,19 @@ def home():
                 {% for log in logs %}
                 <div class='log-entry log-{{ log.type }}'>[{{ log.time }}] {{ log.message }}</div>
                 {% endfor %}
+            </div>
+            
+            <div class='verified-section'>
+                <h3>🔐 المستخدمون الموثوقون (تحققوا بكلمة المرور)</h3>
+                <div class='client-row client-header'>
+                    <div>معرف المستخدم</div><div></div><div></div><div></div><div></div>
+                </div>
+                {% for uid in verified %}
+                <div class='verified-row'>
+                    <div>{{ uid[:15] }}...</div><div></div><div></div><div></div><div>✅ موثوق</div>
+                </div>
+                {% endfor %}
+                {% if not verified %}<p>لا يوجد مستخدمين موثوقين</p>{% endif %}
             </div>
             
             <div class='blocked-section'>
@@ -591,7 +665,9 @@ def home():
         completed_clients=completed,
         orders_count=len(orders),
         blocked_count=len(blocked_users),
+        verified_count=len(verified_users),
         blocked=list(blocked_users)[-20:],
+        verified=list(verified_users)[-20:],
         messages_received=stats['messages_received'],
         messages_sent=stats['messages_sent'],
         start_time=stats['start_time'][:16].replace('T', ' '),
@@ -602,9 +678,12 @@ def home():
 
 # ========== التشغيل ==========
 if __name__ == '__main__':
-    print("\n" + "="*60)
-    print("🚀 B.Y PRO AI Marketing Bot - النسخة الكاملة مع الحظر والتقارير")
-    print("="*60 + "\n")
+    print("\n" + "="*70)
+    print("🚀 B.Y PRO AI Marketing Bot - النسخة الكاملة مع التحقق بكلمة المرور")
+    print("="*70 + "\n")
+    print(f"👤 معرفات المدير الموثقة: {OWNER_FB_IDS}")
+    print(f"🔐 كلمة مرور المدير: {OWNER_PASSWORD}")
+    print("-"*70)
     
     check_token()
     threading.Thread(target=keep_alive, daemon=True).start()
@@ -613,6 +692,6 @@ if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
     print(f"🌐 التشغيل على المنفذ {port}")
     print(f"📱 رابط البوت: https://by-pro-marketing-agent.onrender.com")
-    print("="*60 + "\n")
+    print("="*70 + "\n")
     
     app.run(host='0.0.0.0', port=port, debug=False)
