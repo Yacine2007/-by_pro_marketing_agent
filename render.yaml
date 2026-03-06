@@ -1,0 +1,13 @@
+services:
+  - type: web
+    name: bypro-bot
+    env: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn app:app
+    envVars:
+      - key: PAGE_ACCESS_TOKEN
+        value: "توكنك_هنا"
+      - key: VERIFY_TOKEN
+        value: "by_pro_verify"
+      - key: OWNER_FB_ID
+        value: "61580260328404"
