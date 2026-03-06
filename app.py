@@ -13,25 +13,18 @@ app = Flask(__name__)
 # ========== المتغيرات الأساسية ==========
 PAGE_ACCESS_TOKEN = os.environ.get('PAGE_ACCESS_TOKEN')
 VERIFY_TOKEN = os.environ.get('VERIFY_TOKEN', 'by_pro_verify')
-OWNER_FB_ID = '2592319994'
+OWNER_FB_ID = '2592319994'  # معرف المدير الوحيد
 OWNER_PASSWORD = "20070909"
 AI_API_URL = "http://fi8.bot-hosting.net:20163/elos-gemina"
 BINANCE_ID = "1074084246"
 COMPANY_WEBSITE = "https://b.y-pro.kesug.com"
 
-# ========== البرومبت المحترف ==========
-SYSTEM_PROMPT = """أنت مساعد مبيعات رسمي لشركة B.Y PRO للتكنولوجيا والبرمجيات.
+# ========== البرومبت للعملاء فقط ==========
+CLIENT_PROMPT = """أنت مساعد مبيعات لشركة B.Y PRO للتكنولوجيا والبرمجيات.
 
-هويتك المهنية:
-- وكيل مبيعات بشري محترف، هادئ، واثق، ومختصر جداً.
-- تتحدث باللغة التي يخاطبك بها المستخدم (عربية فصحى، إنجليزية).
-- لا تستخدم الرموز التعبيرية أبداً.
-- لا تكرر الجمل الترحيبية المملة.
-
-قواعد صارمة:
-1. لا تختلق معلومات أبداً.
-2. اجمع البيانات بهدوء: الاسم، الخدمة المطلوبة، الميزانية التقريبية، رقم الجوال (اختياري).
-3. للتعريف بالشركة، يمكنك ذكر الموقع الرسمي.
+هويتك:
+- وكيل مبيعات بشري محترف، هادئ، ومختصر.
+- تتحدث باللغة التي يخاطبك بها المستخدم.
 
 الخدمات والأسعار:
 - مواقع تعريفية: 300-800$ (5-10 أيام)
@@ -40,12 +33,7 @@ SYSTEM_PROMPT = """أنت مساعد مبيعات رسمي لشركة B.Y PRO ل
 - تطبيقات موبايل: من 1500$ (30-60 يوماً)
 - تصميم جرافيك: 50-200$ (24-72 ساعة)
 
-التعامل المالي:
-- 30% عربون، 70% عند التسليم.
-- الدفع عبر USDT (Binance Pay) فقط.
-- معرف بينانس: 1074084246
-
-مهمتك: تحويل الاستفسار إلى مشروع قائم."""
+مهمتك: جمع بيانات العميل وتحويله إلى طلب."""
 
 # ========== تخزين البيانات ==========
 logs = deque(maxlen=100)
@@ -83,7 +71,6 @@ class ClientData:
         self.confirmed = False
         self.conversation = []
         self.awaiting_pw = False
-        self.lang = 'ar'
 
     def is_complete(self):
         return bool(self.name and self.service and self.budget > 0)
@@ -115,12 +102,6 @@ def is_owner(sid):
 # ========== دوال الطلبات ==========
 def save_new_order(client):
     global orders
-    # التأكد من عدم وجود طلب مكرر (نفس المحادثة)
-    for o in orders:
-        if o.get('sid') == client.sid and o.get('status') == 'جديد':
-            if (datetime.now() - datetime.fromisoformat(o['timestamp'])).seconds < 3600:
-                return o  # طلب حديث موجود
-    
     order = {
         'id': len(orders) + 1,
         'name': client.name,
@@ -130,8 +111,7 @@ def save_new_order(client):
         'timestamp': datetime.now().isoformat(),
         'sid': client.sid,
         'link': client.get_link(),
-        'status': 'جديد',
-        'conversation': client.conversation[-5:]
+        'status': 'جديد'
     }
     orders.append(order)
     save_json(ORDERS_FILE, orders)
@@ -142,6 +122,10 @@ def get_orders_today():
     today = datetime.now().strftime('%Y-%m-%d')
     return [o for o in orders if o['timestamp'].startswith(today)]
 
+def get_client_count():
+    # عدد العملاء الفريدين الذين لديهم طلبات
+    return len(set(o['sid'] for o in orders))
+
 def notify_owner(order):
     msg = f"""🔔 طلب جديد #{order['id']}
 الاسم: {order['name']}
@@ -150,48 +134,55 @@ def notify_owner(order):
 {order['link']}"""
     send_fb(OWNER_FB_ID, msg)
 
-# ========== تنفيذ أوامر المدير ==========
-def exec_owner_cmd(text, sid):
+# ========== أوامر المدير (بيانات حقيقية فقط) ==========
+def handle_owner(sid, text, client):
     t = text.strip().lower()
-    parts = t.split()
-
-    # إحصائيات
-    if any(k in t for k in ['احصائيات', 'احصاء', 'stats']):
-        today_ords = len(get_orders_today())
-        msg = f"""📊 إحصائيات:
-• العملاء الحاليون: {len(sessions)}
-• إجمالي الطلبات: {len(orders)}
-• طلبات اليوم: {today_ords}
-• المحظورون: {len(blocked_users)}"""
+    
+    # أمر: كم رسالة
+    if 'كم رسالة' in t or 'message count' in t:
+        send_fb(sid, f"إجمالي الرسائل المستلمة: {stats['msgs_received']}, المرسلة: {stats['msgs_sent']}")
+        return True
+    
+    # أمر: كم عميل
+    if 'كم عميل' in t or 'client count' in t:
+        unique_clients = len(set(o['sid'] for o in orders)) if orders else 0
+        send_fb(sid, f"عدد العملاء المسجلين: {unique_clients}")
+        return True
+    
+    # أمر: اعرض العملاء / اسمائهم
+    if ('اعرض العملاء' in t or 'اسمائهم' in t) and orders:
+        msg = "العملاء المسجلون:\n"
+        for o in orders[-10:]:
+            msg += f"• {o['name']} - {o['service']} - {o['budget']}$\n"
         send_fb(sid, msg)
         return True
-
-    # طلبات اليوم
-    if any(k in t for k in ['طلبات اليوم', 'اليوم']):
+    
+    # أمر: طلبات اليوم
+    if 'طلبات اليوم' in t:
         today_ords = get_orders_today()
         if not today_ords:
             send_fb(sid, "لا توجد طلبات اليوم.")
         else:
             msg = f"طلبات اليوم ({len(today_ords)}):\n"
-            for o in today_ords[-10:]:
-                msg += f"#{o['id']} {o['name']} - {o['service']} - {o['budget']}$\n"
+            for o in today_ords:
+                msg += f"#{o['id']} {o['name']} - {o['service']}\n"
             send_fb(sid, msg)
         return True
-
-    # كل الطلبات
-    if any(k in t for k in ['كل الطلبات', 'جميع الطلبات']):
+    
+    # أمر: كل الطلبات
+    if 'كل الطلبات' in t or 'جميع الطلبات' in t:
         if not orders:
-            send_fb(sid, "لا توجد طلبات مسجلة.")
+            send_fb(sid, "لا توجد طلبات.")
         else:
             msg = f"آخر 10 طلبات من أصل {len(orders)}:\n"
             for o in orders[-10:]:
                 msg += f"#{o['id']} {o['name']} - {o['service']} - {o['budget']}$\n"
             send_fb(sid, msg)
         return True
-
-    # تفاصيل طلب
-    if any(k in t for k in ['تفاصيل', 'order']):
-        nums = [int(p) for p in parts if p.isdigit()]
+    
+    # أمر: تفاصيل طلب
+    if 'تفاصيل' in t:
+        nums = [int(p) for p in t.split() if p.isdigit()]
         if nums:
             o = next((o for o in orders if o['id'] == nums[0]), None)
             if o:
@@ -200,41 +191,47 @@ def exec_owner_cmd(text, sid):
 الخدمة: {o['service']}
 الميزانية: {o['budget']}$
 رقم الجوال: {o.get('phone', 'غير متوفر')}
-الحالة: {o['status']}
 التاريخ: {o['timestamp'][:10]}
-{order['link']}"""
+{o['link']}"""
                 send_fb(sid, msg)
             else:
                 send_fb(sid, f"الطلب {nums[0]} غير موجود.")
         return True
-
-    # حظر
+    
+    # أمر: حظر
     if t.startswith('حظر ') or t.startswith('block '):
+        parts = t.split()
         if len(parts) >= 2 and parts[1].isdigit():
             blocked_users.add(parts[1])
             save_json(BLOCKED_FILE, list(blocked_users))
             send_fb(sid, f"تم حظر {parts[1][:10]}...")
-            add_log(f"🔨 حظر {parts[1][:10]}...")
         return True
-
-    # إلغاء حظر
-    if t.startswith('الغاء حظر ') or t.startswith('unblock '):
-        if len(parts) >= 2 and parts[1] in blocked_users:
-            blocked_users.remove(parts[1])
-            save_json(BLOCKED_FILE, list(blocked_users))
-            send_fb(sid, f"تم إلغاء حظر {parts[1][:10]}...")
-        return True
-
-    # المحظورون
-    if any(k in t for k in ['المحظورين', 'blocked']):
+    
+    # أمر: المحظورون
+    if 'المحظورين' in t or 'blocked' in t:
         if not blocked_users:
             send_fb(sid, "لا يوجد محظورون.")
         else:
             bl = "\n".join([f"• {uid[:15]}..." for uid in list(blocked_users)[:10]])
             send_fb(sid, f"المحظورون ({len(blocked_users)}):\n{bl}")
         return True
-
-    return False
+    
+    # أمر: إحصائيات
+    if 'احصائيات' in t or 'stats' in t:
+        unique_clients = len(set(o['sid'] for o in orders)) if orders else 0
+        today_ords = len(get_orders_today())
+        msg = f"""📊 إحصائيات حقيقية:
+• العملاء المسجلون: {unique_clients}
+• إجمالي الطلبات: {len(orders)}
+• طلبات اليوم: {today_ords}
+• المحظورون: {len(blocked_users)}
+• الرسائل: {stats['msgs_received']} واردة / {stats['msgs_sent']} مرسلة"""
+        send_fb(sid, msg)
+        return True
+    
+    # إذا لم يكن أمراً معروفاً، رد برد بسيط
+    send_fb(sid, "أهلاً بك يا مدير. الأوامر المتاحة: إحصائيات، طلبات اليوم، كل الطلبات، تفاصيل [رقم]، اعرض العملاء، المحظورون.")
+    return True  # نرجع True حتى لا يمر للذكاء الاصطناعي
 
 # ========== استخراج بيانات العميل ==========
 def extract_data(text, client):
@@ -243,9 +240,9 @@ def extract_data(text, client):
     # الاسم
     if not client.name:
         patterns = [
-            r'(?:اسمي|الاسم|my name is)[:\s]*([\w\s]{2,30})',
-            r'انا\s+([\w\s]{2,20})',
-            r'i am\s+([a-zA-Z\s]{2,20})'
+            r'(?:اسمي|الاسم)[:\s]*([\w\s]{2,30})',
+            r'my name is[:\s]*([a-zA-Z\s]{2,30})',
+            r'انا\s+([\w\s]{2,20})'
         ]
         for p in patterns:
             m = re.search(p, text, re.I)
@@ -263,7 +260,7 @@ def extract_data(text, client):
             'متجر|ecommerce|store': 'متجر إلكتروني',
             'تطبيق|app|mobile': 'تطبيق جوال',
             'بوت|bot|chatbot': 'بوت ذكاء اصطناعي',
-            'تصميم|design|graphic': 'تصميم جرافيك'
+            'تصميم|design': 'تصميم جرافيك'
         }
         for kw, svc in services.items():
             if re.search(kw, text, re.I):
@@ -282,7 +279,7 @@ def extract_data(text, client):
     
     # رقم الجوال
     if not client.phone:
-        m = re.search(r'(05[0-9]{8}|5[0-9]{8}|\+966[0-9]{9}|00966[0-9]{9})', text)
+        m = re.search(r'(05[0-9]{8}|5[0-9]{8}|\+966[0-9]{9})', text)
         if m:
             client.phone = m.group(1)
             add_log(f"📱 الجوال: {client.phone}")
@@ -290,14 +287,10 @@ def extract_data(text, client):
     
     return changed
 
-# ========== الذكاء الاصطناعي ==========
-def get_ai_response(msg, client, owner_mode=False):
+# ========== الذكاء الاصطناعي للعملاء فقط ==========
+def get_ai_response(msg, client):
     try:
-        prompt = SYSTEM_PROMPT
-        if owner_mode:
-            prompt += "\n\n(المستخدم هو المدير، كن مباشراً جداً.)"
-        
-        context = f"{prompt}\n\nآخر محادثة:\n" + "\n".join(client.conversation[-4:]) + f"\nالمستخدم: {msg}\nالرد:"
+        context = f"{CLIENT_PROMPT}\n\nآخر محادثة:\n" + "\n".join(client.conversation[-4:]) + f"\nالعميل: {msg}\nالرد:"
         r = requests.get(f'{AI_API_URL}?text={requests.utils.quote(context)}', timeout=10)
         if r.status_code == 200:
             return r.json().get('response', '').strip()
@@ -322,12 +315,8 @@ def process_message(sid, text):
 
     # مدير
     if is_owner(sid):
-        if exec_owner_cmd(text, sid):
-            client.conversation.append("النظام: أمر منفذ")
-            return
-        resp = get_ai_response(text, client, owner_mode=True)
-        send_fb(sid, resp)
-        client.conversation.append(f"الرد: {resp[:40]}")
+        handle_owner(sid, text, client)  # نمرر للمعالج الخاص بالمدير
+        client.conversation.append(f"النظام: رد للمدير")
         return
 
     # كلمة المرور
@@ -343,7 +332,7 @@ def process_message(sid, text):
         return
 
     # كشف محاولة مدير
-    if any(k in text.lower() for k in ['مدير', 'owner', 'المالك', 'ياسين']):
+    if any(k in text.lower() for k in ['مدير', 'owner', 'المالك']):
         client.awaiting_pw = True
         send_fb(sid, "الرجاء إدخال الرقم السري:")
         return
@@ -351,13 +340,11 @@ def process_message(sid, text):
     # استخراج البيانات
     extract_data(text, client)
 
-    # التحقق من اكتمال البيانات
+    # إذا اكتملت البيانات
     if client.is_complete() and not client.confirmed:
-        # تأكيد الطلب وحفظه
         client.confirmed = True
         order = save_new_order(client)
         
-        # رسالة الدفع
         deposit = int(client.budget * 0.3)
         pay_msg = f"""تم تأكيد طلبك {client.name}.
 
@@ -370,12 +357,10 @@ def process_message(sid, text):
 بعد الدفع نبدأ التنفيذ فوراً.
 للاستفسار: {COMPANY_WEBSITE}"""
         send_fb(sid, pay_msg)
-        
-        # إشعار المدير
         notify_owner(order)
         return
 
-    # رد عادي
+    # رد عادي للعميل
     resp = get_ai_response(text, client)
     send_fb(sid, resp)
     client.conversation.append(f"الرد: {resp[:40]}")
@@ -401,40 +386,36 @@ def webhook():
 def home():
     today = datetime.now().strftime('%Y-%m-%d')
     today_orders = len([o for o in orders if o['timestamp'].startswith(today)])
+    unique_clients = len(set(o['sid'] for o in orders)) if orders else 0
     
     html = """
     <!DOCTYPE html>
     <html dir="rtl">
     <head>
         <title>B.Y PRO Agent</title>
-        <meta charset="UTF-8">
         <style>
-            body { background: #f0f2f5; font-family: system-ui; padding: 20px; margin: 0; }
+            body { background: #f0f2f5; font-family: system-ui; padding: 20px; }
             .container { max-width: 1400px; margin: 0 auto; }
-            .header { background: white; border-radius: 12px; padding: 25px; margin-bottom: 20px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
-            h1 { margin: 0; color: #1e293b; }
-            .stats { display: grid; grid-template-columns: repeat(5, 1fr); gap: 15px; margin-bottom: 20px; }
-            .card { background: white; padding: 20px; border-radius: 12px; box-shadow: 0 2px 5px rgba(0,0,0,0.05); }
-            .card h3 { margin: 0 0 10px; color: #64748b; font-size: 0.9em; }
+            .header { background: white; border-radius: 12px; padding: 25px; margin-bottom: 20px; }
+            .stats { display: grid; grid-template-columns: repeat(5,1fr); gap: 15px; margin-bottom: 20px; }
+            .card { background: white; padding: 20px; border-radius: 12px; }
             .card .num { font-size: 2.2em; font-weight: bold; color: #2563eb; }
-            .logs { background: white; border-radius: 12px; padding: 20px; margin-bottom: 20px; max-height: 250px; overflow-y: auto; box-shadow: 0 2px 5px rgba(0,0,0,0.05); }
-            .log-item { padding: 5px; border-bottom: 1px solid #e2e8f0; font-family: monospace; }
-            .orders { background: white; border-radius: 12px; padding: 20px; box-shadow: 0 2px 5px rgba(0,0,0,0.05); }
+            .logs { background: white; border-radius: 12px; padding: 20px; margin-bottom: 20px; max-height: 250px; overflow-y: auto; }
+            .orders { background: white; border-radius: 12px; padding: 20px; }
             table { width: 100%; border-collapse: collapse; }
-            th { text-align: right; padding: 12px; background: #f8fafc; color: #475569; }
+            th { text-align: right; padding: 12px; background: #f8fafc; }
             td { padding: 12px; border-bottom: 1px solid #e2e8f0; }
-            .badge { background: #2563eb; color: white; padding: 3px 10px; border-radius: 15px; font-size: 0.8em; }
         </style>
     </head>
     <body>
         <div class="container">
             <div class="header">
                 <h1>🤖 B.Y PRO Agent</h1>
-                <p>⏱ {{ start_time }} | 💰 بينانس: <code style="background:#f1f5f9;padding:3px 8px;border-radius:5px;">{{ binance_id }}</code></p>
+                <p>⏱ {{ start_time }} | 💰 بينانس: {{ binance_id }}</p>
             </div>
             
             <div class="stats">
-                <div class="card"><h3>العملاء</h3><div class="num">{{ total_clients }}</div></div>
+                <div class="card"><h3>العملاء</h3><div class="num">{{ unique_clients }}</div></div>
                 <div class="card"><h3>الطلبات</h3><div class="num">{{ orders_count }}</div></div>
                 <div class="card"><h3>طلبات اليوم</h3><div class="num">{{ today_orders }}</div></div>
                 <div class="card"><h3>المحظورون</h3><div class="num">{{ blocked_count }}</div></div>
@@ -444,7 +425,7 @@ def home():
             <div class="logs">
                 <h3>📋 آخر الأحداث</h3>
                 {% for log in logs %}
-                <div class="log-item">[{{ log.time }}] {{ log.msg }}</div>
+                <div>[{{ log.time }}] {{ log.msg }}</div>
                 {% endfor %}
             </div>
             
@@ -454,7 +435,7 @@ def home():
                     <tr><th>#</th><th>الاسم</th><th>الخدمة</th><th>الميزانية</th><th>التاريخ</th></tr>
                     {% for o in recent_orders %}
                     <tr>
-                        <td><span class="badge">{{ o.id }}</span></td>
+                        <td>{{ o.id }}</td>
                         <td>{{ o.name }}</td>
                         <td>{{ o.service }}</td>
                         <td>{{ o.budget }}$</td>
@@ -462,18 +443,15 @@ def home():
                     </tr>
                     {% endfor %}
                 </table>
-                {% if not recent_orders %}
-                <p style="text-align:center;color:#94a3b8;">لا توجد طلبات مسجلة</p>
-                {% endif %}
             </div>
         </div>
-        <script>setTimeout(()=>location.reload(), 5000);</script>
+        <script>setTimeout(()=>location.reload(),5000);</script>
     </body>
     </html>
     """
     
     return render_template_string(html,
-        total_clients=len(sessions),
+        unique_clients=unique_clients,
         orders_count=len(orders),
         today_orders=today_orders,
         blocked_count=len(blocked_users),
@@ -490,21 +468,18 @@ def keep_alive():
         time.sleep(600)
         try:
             requests.get("https://by-pro-marketing-agent.onrender.com", timeout=3)
-            add_log("💓 Ping")
         except:
             pass
 
 if __name__ == '__main__':
     print("\n" + "="*60)
-    print("🚀 B.Y PRO Agent - Version 6 (التخزين الفوري)")
+    print("🚀 B.Y PRO Agent - المدير الحقيقي")
     print("="*60)
-    print(f"👤 Owner ID: {OWNER_FB_ID}")
+    print(f"👤 Owner: {OWNER_FB_ID}")
     print(f"🔑 Password: {OWNER_PASSWORD}")
-    print(f"💰 Binance: {BINANCE_ID}")
-    print(f"📦 Orders in DB: {len(orders)}")
+    print(f"📦 Orders: {len(orders)}")
     print("="*60 + "\n")
     
     threading.Thread(target=keep_alive, daemon=True).start()
-    
     port = int(os.environ.get('PORT', 5000))
     app.run(host='0.0.0.0', port=port, debug=False)
