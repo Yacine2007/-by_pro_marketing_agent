@@ -15,11 +15,14 @@ app = Flask(__name__)
 # ========== المتغيرات ==========
 PAGE_ACCESS_TOKEN = os.environ.get('PAGE_ACCESS_TOKEN')
 VERIFY_TOKEN = os.environ.get('VERIFY_TOKEN', 'by_pro_verify')
-OWNER_FB_ID = os.environ.get('OWNER_FB_ID', '61580260328404')
+OWNER_FB_ID = os.environ.get('OWNER_FB_ID', '61580260328404')  # المدير
 AI_API_URL = "http://fi8.bot-hosting.net:20163/elos-gemina"
 
-# ========== تخزين البيانات للتسجيل ==========
-logs = deque(maxlen=100)  # آخر 100 حدث
+# بينانس ID للدفع
+BINANCE_ID = "1074084246"
+
+# ========== تخزين البيانات ==========
+logs = deque(maxlen=100)
 stats = {
     'messages_received': 0,
     'messages_sent': 0,
@@ -27,7 +30,38 @@ stats = {
     'start_time': datetime.now().isoformat()
 }
 
-# ========== البرومبت الجديد (شامل) ==========
+# ملفات التخزين الدائم
+ORDERS_FILE = "orders.json"
+BLOCKED_FILE = "blocked_users.json"
+
+# ========== تحميل/حفظ البيانات ==========
+def load_orders():
+    try:
+        with open(ORDERS_FILE, 'r', encoding='utf-8') as f:
+            return json.load(f)
+    except:
+        return []
+
+def save_orders(orders):
+    with open(ORDERS_FILE, 'w', encoding='utf-8') as f:
+        json.dump(orders, f, ensure_ascii=False, indent=2)
+
+def load_blocked():
+    try:
+        with open(BLOCKED_FILE, 'r') as f:
+            return set(json.load(f))
+    except:
+        return set()
+
+def save_blocked(blocked_set):
+    with open(BLOCKED_FILE, 'w') as f:
+        json.dump(list(blocked_set), f)
+
+# البيانات المحملة
+orders = load_orders()
+blocked_users = load_blocked()
+
+# ========== البرومبت ==========
 SYSTEM_PROMPT = (
     "You are the official sales agent of B.Y PRO, a technology and software company. "
     "You are a seasoned human sales executive: calm, confident, and concise. Do not act like a machine, avoid excessive emojis, and never use repetitive greetings.\n\n"
@@ -80,7 +114,6 @@ class ClientData:
 
 # ========== نظام التسجيل ==========
 def add_log(event_type, message, data=None):
-    """إضافة حدث للسجل"""
     log_entry = {
         'time': datetime.now().strftime('%H:%M:%S'),
         'type': event_type,
@@ -93,17 +126,13 @@ def add_log(event_type, message, data=None):
 
 # ========== فحص التوكن ==========
 def check_token():
-    """فحص التوكن عند بدء التشغيل"""
     add_log('INFO', '🔍 جاري فحص التوكن...')
-    
     if not PAGE_ACCESS_TOKEN:
         add_log('ERROR', '❌ PAGE_ACCESS_TOKEN غير موجود!')
         return False
-    
     try:
         url = f'https://graph.facebook.com/v18.0/me?access_token={PAGE_ACCESS_TOKEN}'
         r = requests.get(url, timeout=5)
-        
         if r.status_code == 200:
             data = r.json()
             add_log('SUCCESS', f'✅ التوكن صالح للحساب: {data.get("name")}')
@@ -118,15 +147,11 @@ def check_token():
 
 # ========== الذكاء الاصطناعي ==========
 def get_ai_response(user_msg, client):
-    """الحصول على رد من الذكاء الاصطناعي مع رسائل انتظار"""
     add_log('AI', '🤖 جاري استدعاء الذكاء الاصطناعي...')
-    
     try:
-        # بناء السياق مع آخر 4 جولات من المحادثة
         context = f"{SYSTEM_PROMPT}\n" + "\n".join(client.conversation[-4:]) + f"\nClient: {user_msg}\nAgent:"
         url = f'{AI_API_URL}?text={requests.utils.quote(context)}'
         response = requests.get(url, timeout=10)
-        
         if response.status_code == 200:
             answer = response.json().get('response', '')
             answer = re.sub(r'(Agent:|Agent Response:)', '', answer).strip()
@@ -134,13 +159,11 @@ def get_ai_response(user_msg, client):
             return answer
         else:
             add_log('WARNING', f'⚠️ الذكاء الاصطناعي رد بـ {response.status_code}')
-            
     except requests.exceptions.Timeout:
         add_log('WARNING', '⏱️ timeout في الذكاء الاصطناعي')
     except Exception as e:
         add_log('ERROR', f'❌ خطأ في الذكاء الاصطناعي: {e}')
     
-    # رسائل انتظار عند الفشل (متعددة اللغات)
     waiting_messages = [
         "شكراً لتواصلك مع B.Y PRO. فريقنا سيراجع طلبك قريباً.",
         "Thank you for contacting B.Y PRO. Our team will review your request shortly.",
@@ -151,10 +174,8 @@ def get_ai_response(user_msg, client):
 
 # ========== دوال فيسبوك ==========
 def send_message(recipient_id, text):
-    """إرسال رسالة مع تسجيل الأخطاء"""
     try:
         add_log('SEND', f'📤 إرسال إلى {recipient_id[:10]}...: {text[:50]}')
-        
         url = f'https://graph.facebook.com/v18.0/me/messages?access_token={PAGE_ACCESS_TOKEN}'
         payload = {
             'recipient': {'id': recipient_id},
@@ -162,7 +183,6 @@ def send_message(recipient_id, text):
             'messaging_type': 'RESPONSE'
         }
         response = requests.post(url, json=payload, timeout=10)
-        
         if response.status_code == 200:
             add_log('SUCCESS', '✅ تم الإرسال بنجاح')
             stats['messages_sent'] += 1
@@ -172,35 +192,132 @@ def send_message(recipient_id, text):
             add_log('ERROR', f'❌ فشل الإرسال: {error_data.get("message")}')
             stats['errors'] += 1
             return False
-            
     except Exception as e:
         add_log('ERROR', f'❌ خطأ في الإرسال: {e}')
         stats['errors'] += 1
         return False
 
-def send_order(client):
-    """إرسال الطلب للمالك"""
-    msg = f"""
-🔔 *New Order!*
-━━━━━━━━━━━━
-👤 Name: {client.name or 'Unknown'}
-🛠 Service: {client.service or 'Not specified'}
-💰 Budget: {client.budget or 'Not specified'}
+# ========== حفظ الطلب في ملف JSON ==========
+def save_order(client, details):
+    global orders
+    order = {
+        'order_id': len(orders) + 1,
+        'client_name': client.name,
+        'service': client.service,
+        'budget': client.budget,
+        'phone': client.phone,
+        'details': details,
+        'timestamp': datetime.now().isoformat(),
+        'sender_id': client.sender_id,
+        'link': client.get_link()
+    }
+    orders.append(order)
+    save_orders(orders)
+    add_log('ORDER_SAVED', f'📁 تم حفظ الطلب #{order["order_id"]} في الملف')
+    return order
+
+# ========== إرسال الطلب للمدير ==========
+def send_order_to_owner(client, details=""):
+    if not details:
+        details = "\n".join(client.conversation[-5:])  # آخر 5 رسائل كملخص
+    order = save_order(client, details)
+    
+    msg = f"""🔔 *New Order Confirmed!*
+━━━━━━━━━━━━━━━━━━━
+📋 Order #{order['order_id']}
+👤 Name: {client.name}
+🛠 Service: {client.service}
+💰 Budget: {client.budget}
 📱 Phone: {client.phone or 'Not provided'}
-━━━━━━━━━━━━
-💬 Last: {client.conversation[-1] if client.conversation else 'No messages'}
+━━━━━━━━━━━━━━━━━━━
+📝 Details:
+{details[:300]}{'...' if len(details)>300 else ''}
+━━━━━━━━━━━━━━━━━━━
 🔗 {client.get_link()}
     """.strip()
     
-    add_log('ORDER', f'📦 إرسال طلب {client.name or "unknown"} للمالك')
+    add_log('OWNER', f'📦 إرسال الطلب #{order["order_id"]} للمدير')
     return send_message(OWNER_FB_ID, msg)
 
-# ========== معالجة الرسالة ==========
+# ========== معالجة أوامر المدير ==========
+def handle_owner_command(text, sender_id):
+    cmd = text.strip().lower()
+    response = ""
+    
+    if cmd in ['تقارير', 'report', 'orders', 'الطلبات']:
+        if not orders:
+            response = "📭 لا توجد طلبات مؤكدة بعد."
+        else:
+            lines = ["📊 *تقرير الطلبات*"]
+            for o in orders[-5:]:  # آخر 5
+                lines.append(f"#{o['order_id']} - {o['client_name']} - {o['service']} - {o['budget']}")
+            response = "\n".join(lines)
+    
+    elif cmd.startswith('حظر ') or cmd.startswith('block '):
+        parts = cmd.split()
+        if len(parts) >= 2:
+            target = parts[1]
+            blocked_users.add(target)
+            save_blocked(blocked_users)
+            response = f"✅ تم حظر المستخدم {target}"
+    
+    elif cmd.startswith('الغاء حظر ') or cmd.startswith('unblock '):
+        parts = cmd.split()
+        if len(parts) >= 2:
+            target = parts[1]
+            if target in blocked_users:
+                blocked_users.remove(target)
+                save_blocked(blocked_users)
+                response = f"✅ تم إلغاء حظر {target}"
+            else:
+                response = f"❌ المستخدم {target} غير موجود في قائمة الحظر"
+    
+    elif cmd.startswith('تفاصيل ') or cmd.startswith('order '):
+        parts = cmd.split()
+        if len(parts) >= 2:
+            try:
+                oid = int(parts[1])
+                order = next((o for o in orders if o['order_id'] == oid), None)
+                if order:
+                    response = f"📋 الطلب #{oid}\nالاسم: {order['client_name']}\nالخدمة: {order['service']}\nالميزانية: {order['budget']}\nالهاتف: {order.get('phone','')}\nالتفاصيل: {order['details'][:200]}..."
+                else:
+                    response = f"❌ لا يوجد طلب رقم {oid}"
+            except:
+                response = "❌ الرقم غير صحيح"
+    
+    elif cmd in ['احصائيات', 'stats']:
+        response = f"📈 إحصائيات:\nالرسائل الواردة: {stats['messages_received']}\nالرسائل المرسلة: {stats['messages_sent']}\nالطلبات: {len(orders)}\nالمحظورين: {len(blocked_users)}"
+    
+    elif cmd == 'مساعدة' or cmd == 'help':
+        response = """🔹 أوامر المدير:
+تقارير - عرض آخر الطلبات
+حظر [معرف] - حظر مستخدم
+الغاء حظر [معرف] - فك الحظر
+تفاصيل [رقم] - تفاصيل طلب
+احصائيات - إحصائيات عامة"""
+    
+    else:
+        response = "👋 مرحباً بك يا مدير. أرسل 'مساعدة' لرؤية الأوامر."
+    
+    send_message(sender_id, response)
+    return True
+
+# ========== معالجة رسالة العميل ==========
 def process_message(sender_id, text):
-    """معالجة رسالة واحدة"""
     add_log('RECEIVE', f'📨 رسالة من {sender_id[:10]}...: {text[:50]}')
     stats['messages_received'] += 1
     
+    # 1. التحقق من الحظر
+    if sender_id in blocked_users:
+        add_log('BLOCKED', f'🚫 مستخدم محظور {sender_id[:10]}... تم تجاهل الرسالة')
+        return
+    
+    # 2. إذا كان المرسل هو المدير
+    if sender_id == OWNER_FB_ID:
+        handle_owner_command(text, sender_id)
+        return
+    
+    # 3. معالجة العميل العادي
     if sender_id not in sessions:
         sessions[sender_id] = ClientData(sender_id)
         add_log('INFO', '🆕 جلسة جديدة')
@@ -209,37 +326,22 @@ def process_message(sender_id, text):
     client.conversation.append(f"Client: {text}")
     client.last_message_time = datetime.now()
     
-    # استخراج سريع للمعلومات
+    # استخراج المعلومات (نفس الكود السابق)
     if not client.name:
         name_match = re.search(r'اسمي[:\s]*([\w\s]{2,20})|my name is[:\s]*([\w\s]{2,20})|je m\'appelle[:\s]*([\w\s]{2,20})', text, re.IGNORECASE)
         if name_match:
             client.name = (name_match.group(1) or name_match.group(2) or name_match.group(3) or "").strip()
             add_log('EXTRACT', f'✅ الاسم: {client.name}')
     
-    # قاموس الخدمات الموسع
     service_keywords = {
-        'شعار': 'Logo design',
-        'logo': 'Logo design',
-        'لوجو': 'Logo design',
-        'موقع': 'Website',
-        'website': 'Website',
-        'web': 'Website',
-        'متجر': 'E-commerce website',
-        'ecommerce': 'E-commerce website',
-        'تطبيق': 'Mobile app',
-        'app': 'Mobile app',
-        'mobile': 'Mobile app',
-        'بوت': 'AI Bot',
-        'bot': 'AI Bot',
-        'ai': 'AI Bot',
-        'ذكاء': 'AI Bot',
-        'تصميم': 'Graphic design',
-        'design': 'Graphic design',
-        'graphic': 'Graphic design',
-        'تسويق': 'Digital marketing',
-        'marketing': 'Digital marketing'
+        'شعار': 'Logo design', 'logo': 'Logo design', 'لوجو': 'Logo design',
+        'موقع': 'Website', 'website': 'Website', 'web': 'Website',
+        'متجر': 'E-commerce website', 'ecommerce': 'E-commerce website',
+        'تطبيق': 'Mobile app', 'app': 'Mobile app', 'mobile': 'Mobile app',
+        'بوت': 'AI Bot', 'bot': 'AI Bot', 'ai': 'AI Bot', 'ذكاء': 'AI Bot',
+        'تصميم': 'Graphic design', 'design': 'Graphic design', 'graphic': 'Graphic design',
+        'تسويق': 'Digital marketing', 'marketing': 'Digital marketing'
     }
-    
     if not client.service:
         for kw, service in service_keywords.items():
             if kw in text.lower():
@@ -247,47 +349,48 @@ def process_message(sender_id, text):
                 add_log('EXTRACT', f'✅ الخدمة: {client.service}')
                 break
     
-    # استخراج الميزانية
     if not client.budget:
         budget_match = re.search(r'(\d+)[\s-]*(usdt|dollar|دولار|\$)', text, re.IGNORECASE)
         if budget_match:
             client.budget = f"{budget_match.group(1)} USDT"
             add_log('EXTRACT', f'✅ الميزانية: {client.budget}')
     
-    # استخراج رقم الجوال
     if not client.phone:
         phone_match = re.search(r'(05[0-9]{8}|5[0-9]{8}|\+966[0-9]{9}|00966[0-9]{9})', text)
         if phone_match:
             client.phone = phone_match.group(1)
             add_log('EXTRACT', f'✅ الجوال: {client.phone}')
     
-    # رد الذكاء الاصطناعي
-    response = get_ai_response(text, client)
+    # إذا كان الطلب مكتملاً بالفعل (confirmed) نرسل رسالة ثابتة ولا نستخدم AI
+    if client.confirmed:
+        # يمكن إرسال تأكيد إضافي إذا أراد العميل إضافة تفاصيل
+        send_message(sender_id, "شكراً لك. سيتم التواصل معك بشأن طلبك قريباً.")
+        return
     
-    # إرسال الرد
+    # التحقق مما إذا كان العميل قد أكمل البيانات (ولم يتم التأكيد بعد)
+    if client.is_complete():
+        # نرسل رسالة تجهيز المحفظة ونؤكد الطلب
+        wallet_msg = f"✅ تم تأكيد طلبك! سنقوم الآن بتجهيز المحفظة لاستقبال الدفع.\n🔹 معرف بينانس للدفع: `{BINANCE_ID}`\n🔹 يرجى إرسال المبلغ على هذا المعرف، وسيتم إعلامك فور استلام الدفع لبدء العمل."
+        send_message(sender_id, wallet_msg)
+        
+        # حفظ الطلب وإرسال إشعار للمدير
+        details = "\n".join(client.conversation[-10:])  # آخر 10 رسائل كوصف تفصيلي
+        send_order_to_owner(client, details)
+        
+        # تحديث حالة العميل
+        client.confirmed = True
+        return
+    
+    # إذا لم يكتمل الطلب، نستخدم الذكاء الاصطناعي
+    response = get_ai_response(text, client)
     if send_message(sender_id, response):
         client.conversation.append(f"Agent: {response[:50]}...")
-    
-    # إرسال للمالك إذا اكتملت البيانات
-    if client.is_complete() and not client.confirmed:
-        add_log('COMPLETE', f'🎯 اكتملت بيانات {client.name or "العميل"}')
-        if send_order(client):
-            client.confirmed = True
-            confirm_msg = (
-                f"Thank you {client.name}! Your request has been recorded.\n\n"
-                f"📋 Summary:\n"
-                f"• Service: {client.service}\n"
-                f"• Budget: {client.budget}\n\n"
-                f"We'll contact you shortly with the next steps."
-            )
-            send_message(sender_id, confirm_msg)
 
-# ========== إبقاء التطبيق نشطاً ==========
+# ========== Keep alive ==========
 def keep_alive():
-    """يبقي التطبيق نشطاً بمنع Render من إيقافه"""
     while True:
         try:
-            time.sleep(600)  # 10 دقائق
+            time.sleep(600)
             requests.get("https://by-pro-marketing-agent.onrender.com", timeout=5)
             add_log('ALIVE', '💓 Keep-alive ping')
         except:
@@ -296,13 +399,10 @@ def keep_alive():
 # ========== مسارات Flask ==========
 @app.route('/webhook', methods=['GET'])
 def verify():
-    """التحقق من Webhook"""
     mode = request.args.get('hub.mode')
     token = request.args.get('hub.verify_token')
     challenge = request.args.get('hub.challenge')
-    
     add_log('VERIFY', f'🔐 تحقق: mode={mode}, token={token}')
-    
     if mode == 'subscribe' and token == VERIFY_TOKEN:
         add_log('SUCCESS', '✅ تحقق ناجح')
         return challenge
@@ -310,31 +410,21 @@ def verify():
 
 @app.route('/webhook', methods=['POST'])
 def webhook():
-    """استقبال الأحداث من فيسبوك"""
     data = request.json
     add_log('WEBHOOK', '🔥 حدث من فيسبوك')
-    
     if data.get('object') == 'page':
         for entry in data.get('entry', []):
             for msg in entry.get('messaging', []):
                 if 'message' in msg and 'text' in msg['message']:
                     sender = msg['sender']['id']
                     text = msg['message']['text']
-                    
-                    if sender != OWNER_FB_ID:
-                        # معالجة في خيط منفصل
-                        threading.Thread(target=process_message, args=(sender, text)).start()
-    
+                    threading.Thread(target=process_message, args=(sender, text)).start()
     return 'OK', 200
 
 @app.route('/test-connection', methods=['GET'])
 def test_connection():
-    """اختبار الاتصال بفيسبوك"""
     add_log('TEST', '🔍 بدء اختبار الاتصال...')
-    
     results = []
-    
-    # اختبار التوكن
     if not PAGE_ACCESS_TOKEN:
         results.append({'test': 'Token', 'status': '❌', 'message': 'Token missing'})
     else:
@@ -348,41 +438,42 @@ def test_connection():
                 results.append({'test': 'Token', 'status': '❌', 'message': error.get('message')})
         except Exception as e:
             results.append({'test': 'Token', 'status': '❌', 'message': str(e)})
-    
-    # اختبار الصفحة
-    try:
-        r = requests.get(f'https://graph.facebook.com/v18.0/923170140890240?access_token={PAGE_ACCESS_TOKEN}', timeout=5)
-        if r.status_code == 200:
-            data = r.json()
-            results.append({'test': 'Page', 'status': '✅', 'message': f"Found: {data.get('name')}"})
-        else:
-            results.append({'test': 'Page', 'status': '❌', 'message': 'Page not accessible'})
-    except Exception as e:
-        results.append({'test': 'Page', 'status': '❌', 'message': str(e)})
-    
-    # اختبار الإرسال
     test_msg = f"🔧 Test message from B.Y PRO Bot at {datetime.now().strftime('%H:%M')}"
     send_result = send_message(OWNER_FB_ID, test_msg)
     results.append({'test': 'Send', 'status': '✅' if send_result else '❌', 'message': 'Message sent to owner' if send_result else 'Failed to send'})
-    
     add_log('TEST', '✅ اختبار الاتصال مكتمل')
     return jsonify({'results': results, 'timestamp': datetime.now().isoformat()})
 
+@app.route('/block/<user_id>', methods=['POST'])
+def block_user(user_id):
+    blocked_users.add(user_id)
+    save_blocked(blocked_users)
+    add_log('BLOCK', f'🔨 تم حظر {user_id}')
+    return jsonify({'status': 'blocked', 'user': user_id})
+
+@app.route('/unblock/<user_id>', methods=['POST'])
+def unblock_user(user_id):
+    if user_id in blocked_users:
+        blocked_users.remove(user_id)
+        save_blocked(blocked_users)
+        add_log('UNBLOCK', f'🔓 تم إلغاء حظر {user_id}')
+    return jsonify({'status': 'unblocked', 'user': user_id})
+
 @app.route('/debug')
 def debug():
-    """صفحة التصحيح"""
     return jsonify({
         'sessions': len(sessions),
         'stats': stats,
         'token_exists': bool(PAGE_ACCESS_TOKEN),
         'owner_id': OWNER_FB_ID,
+        'blocked': list(blocked_users),
+        'orders_count': len(orders),
         'recent_logs': list(logs)[:20],
         'sessions_data': {k[:10]: v.to_dict() for k, v in list(sessions.items())[:5]}
     })
 
 @app.route('/')
 def home():
-    """الصفحة الرئيسية"""
     html = """
     <!DOCTYPE html>
     <html dir='rtl' lang='ar'>
@@ -402,12 +493,14 @@ def home():
             .card .value { font-size: 2.5em; font-weight: bold; color: #667eea; }
             .logs { background: white; border-radius: 15px; padding: 20px; margin-bottom: 20px; max-height: 300px; overflow-y: auto; }
             .log-SUCCESS { color: #059669; } .log-ERROR { color: #dc2626; } .log-WARNING { color: #d97706; }
-            .log-INFO { color: #2563eb; } .log-AI { color: #7c3aed; } .log-EXTRACT { color: #0891b2; }
+            .log-INFO { color: #2563eb; } .log-AI { color: #7c3aed; } .log-EXTRACT { color: #0891b2; } .log-OWNER { color: #b45309; }
             .log-entry { padding: 5px; border-bottom: 1px solid #eee; font-family: monospace; }
-            .clients { background: white; border-radius: 15px; padding: 20px; }
-            .client-row { display: grid; grid-template-columns: 2fr 2fr 1fr 1fr; padding: 10px; border-bottom: 1px solid #eee; }
+            .clients, .blocked-section { background: white; border-radius: 15px; padding: 20px; margin-bottom: 20px; }
+            .client-row, .blocked-row { display: grid; grid-template-columns: 2fr 2fr 1fr 1fr auto; padding: 10px; border-bottom: 1px solid #eee; align-items: center; }
             .client-header { font-weight: bold; background: #f3f4f6; border-radius: 5px; }
-            .button { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; border: none; padding: 12px 30px; border-radius: 25px; font-size: 1em; cursor: pointer; margin: 10px 5px; }
+            .button { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; border: none; padding: 8px 15px; border-radius: 20px; font-size: 0.9em; cursor: pointer; margin: 2px; }
+            .block-btn { background: #ef4444; }
+            .unblock-btn { background: #10b981; }
             .test-result { background: #f3f4f6; border-radius: 10px; padding: 15px; margin-top: 15px; font-family: monospace; white-space: pre-wrap; }
         </style>
     </head>
@@ -417,6 +510,7 @@ def home():
                 <h1>🤖 B.Y PRO AI Marketing Bot</h1>
                 <div class='status'>✅ البوت يعمل</div>
                 <p>⏱ وقت التشغيل: {{ start_time }}</p>
+                <p>💰 بينانس ID: <code>{{ binance_id }}</code></p>
                 <button class='button' onclick='testConnection()'>🔍 فحص الاتصال</button>
                 <div id='testResult' class='test-result' style='display: none;'></div>
             </div>
@@ -424,8 +518,8 @@ def home():
             <div class='grid'>
                 <div class='card'><h3>إجمالي العملاء</h3><div class='value'>{{ total_clients }}</div></div>
                 <div class='card'><h3>عملاء مكتملين</h3><div class='value'>{{ completed_clients }}</div></div>
-                <div class='card'><h3>رسائل واردة</h3><div class='value'>{{ messages_received }}</div></div>
-                <div class='card'><h3>رسائل مرسلة</h3><div class='value'>{{ messages_sent }}</div></div>
+                <div class='card'><h3>الطلبات المحفوظة</h3><div class='value'>{{ orders_count }}</div></div>
+                <div class='card'><h3>المحظورين</h3><div class='value'>{{ blocked_count }}</div></div>
             </div>
             
             <div class='logs'>
@@ -435,15 +529,30 @@ def home():
                 {% endfor %}
             </div>
             
+            <div class='blocked-section'>
+                <h3>🔨 المستخدمون المحظورون (توقف الـ AI)</h3>
+                <div class='client-row client-header'>
+                    <div>معرف المستخدم</div><div></div><div></div><div></div><div>إجراء</div>
+                </div>
+                {% for uid in blocked %}
+                <div class='blocked-row'>
+                    <div>{{ uid[:15] }}...</div><div></div><div></div><div></div>
+                    <div><button class='button unblock-btn' onclick='unblockUser("{{ uid }}")'>إلغاء الحظر</button></div>
+                </div>
+                {% endfor %}
+                {% if not blocked %}<p>لا يوجد محظورين</p>{% endif %}
+            </div>
+            
             <div class='clients'>
                 <h3>👥 العملاء الحاليون</h3>
                 <div class='client-row client-header'>
-                    <div>الاسم</div><div>الخدمة</div><div>الميزانية</div><div>الحالة</div>
+                    <div>الاسم</div><div>الخدمة</div><div>الميزانية</div><div>الحالة</div><div>إجراء</div>
                 </div>
                 {% for client in clients %}
                 <div class='client-row'>
                     <div>{{ client.name }}</div><div>{{ client.service }}</div><div>{{ client.budget }}</div>
                     <div>{{ '✅ مكتمل' if client.confirmed else '⏳ قيد المحادثة' }}</div>
+                    <div><button class='button block-btn' onclick='blockUser("{{ client.sender_id }}")'>حظر</button></div>
                 </div>
                 {% endfor %}
             </div>
@@ -459,6 +568,14 @@ def home():
                     .then(data => resultDiv.innerHTML = '<pre>' + JSON.stringify(data, null, 2) + '</pre>')
                     .catch(e => resultDiv.innerHTML = '❌ خطأ: ' + e);
             }
+            function blockUser(uid) {
+                if(confirm('حظر هذا المستخدم؟')) {
+                    fetch('/block/' + uid, {method:'POST'}).then(()=>location.reload());
+                }
+            }
+            function unblockUser(uid) {
+                fetch('/unblock/' + uid, {method:'POST'}).then(()=>location.reload());
+            }
             setTimeout(() => location.reload(), 30000);
         </script>
     </body>
@@ -466,15 +583,19 @@ def home():
     """
     
     completed = len([c for c in sessions.values() if c.is_complete()])
-    clients_list = [c.to_dict() for c in list(sessions.values())[-10:]]
+    clients_list = [{'sender_id':k, **v.to_dict()} for k, v in list(sessions.items())[-10:]]
     
     return render_template_string(
         html,
         total_clients=len(sessions),
         completed_clients=completed,
+        orders_count=len(orders),
+        blocked_count=len(blocked_users),
+        blocked=list(blocked_users)[-20:],
         messages_received=stats['messages_received'],
         messages_sent=stats['messages_sent'],
         start_time=stats['start_time'][:16].replace('T', ' '),
+        binance_id=BINANCE_ID,
         logs=list(logs)[:20],
         clients=clients_list
     )
@@ -482,13 +603,10 @@ def home():
 # ========== التشغيل ==========
 if __name__ == '__main__':
     print("\n" + "="*60)
-    print("🚀 B.Y PRO AI Marketing Bot - النسخة الكاملة")
+    print("🚀 B.Y PRO AI Marketing Bot - النسخة الكاملة مع الحظر والتقارير")
     print("="*60 + "\n")
     
-    # فحص التوكن
     check_token()
-    
-    # بدء Keep-alive
     threading.Thread(target=keep_alive, daemon=True).start()
     print("✅ تم بدء Keep-alive (كل 10 دقائق)")
     
