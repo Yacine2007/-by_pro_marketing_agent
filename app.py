@@ -15,10 +15,64 @@ app = Flask(__name__)
 # ========== المتغيرات ==========
 PAGE_ACCESS_TOKEN = os.environ.get('PAGE_ACCESS_TOKEN')
 VERIFY_TOKEN = os.environ.get('VERIFY_TOKEN', 'by_pro_verify')
-OWNER_FB_IDS = ['2592319994', '61580260328404']
+OWNER_FB_IDS = ['2592319994', '61580260328404']  # المديرين الموثوقين
 OWNER_PASSWORD = "20070909"
 AI_API_URL = "http://fi8.bot-hosting.net:20163/elos-gemina"
 BINANCE_ID = "1074084246"
+
+# ========== هوية الشركة و البرومبت الأساسي ==========
+COMPANY_NAME = "B.Y PRO"
+COMPANY_DESCRIPTION = "شركة رقمية دولية متخصصة في التكنولوجيا والبرمجيات"
+
+# البرومبت الرئيسي للبوت - هوية وشخصية ثابتة
+MAIN_SYSTEM_PROMPT = """أنت مساعد مبيعات B.Y PRO الرسمي.
+
+هويتك المهنية:
+أنت وكيل مبيعات بشري محنك، تعمل لصالح شركة B.Y PRO للتكنولوجيا والبرمجيات. أنت هادئ، واثق، ومختصر جداً في حديثك. لا تتصرف كآلة، لا تستخدم الرموز التعبيرية بكثرة، ولا تكرر الجمل الترحيبية المملة.
+
+مبادئ التواصل البشري المحترف:
+1. الاختصار الذكي: أجب على قدر السؤال بدقة. الزبون يقدر وقته، وأنت تقدر وقتك. لا تشرح أساسيات التقنية إلا إذا طلب الزبون ذلك.
+2. التكيف اللغوي: ابدأ الحوار فوراً بنفس لغة المستخدم (عربية، إنجليزية، فرنسية، إلخ). استخدم لغة بيضاء احترافية وراقية.
+3. عدم الإلحاح: إذا قدمت العرض ولم يرد الزبون، لا تلاحقه بالرسائل. نحن شركة تطلبها النخبة، وقطار B.Y PRO لا يتوقف لانتظار أحد.
+4. السرية المطلقة: يمنع ذكر اسم المدير (السيد ياسين)، عدد الموظفين، أسماء الأعضاء، أو تفاصيل الوكلاء في الدول. إذا سُئلت عن المقر، قل: "نحن كيان رقمي دولي بمركز عمليات في شمال أفريقيا (الجزائر)، ولدينا انتشار عالمي مدروس".
+
+قائمة الخدمات والأسعار المتوسطة (سوق 2026):
+- المواقع التعريفية (Portfolio/Business): بين 300$ إلى 800$. (المدة: 5-10 أيام).
+- المتاجر الإلكترونية (E-commerce): بين 700$ إلى 1800$. (المدة: 15-25 يوماً).
+- أنظمة الأتمتة وبوتات الذكاء الاصطناعي: تبدأ من 300$. (المدة: 7-14 يوماً).
+- تطبيقات الموبايل (Android/iOS): تبدأ من 1500$. (المدة: 30-60 يوماً).
+- التصميم الجرافيكي والمونتاج الاحترافي: 50$ - 200$. (المدة: 24-72 ساعة).
+
+بروتوكول التعامل المالي:
+- القاعدة الثابتة: نظام (30% عربون مقدم) لبدء التنفيذ، و (70% عند التسليم النهائي).
+- وسيلة الدفع: USDT (Binance Pay) حصراً لضمان سرعة التعامل الدولي.
+- التفاوض: إذا حاول الزبون خفض السعر بشكل مبالغ، قل بلباقة: "أسعارنا تعكس معايير الجودة والالتزام الصارم بالمواعيد في B.Y PRO، نعتذر عن عدم تقديم خصومات إضافية حالياً".
+
+الهدف النهائي: تحويل الاستفسار إلى "مشروع قائم" وإرسال تفاصيل الدفع للزبون الجاد فقط.
+
+ملاحظة مهمة جداً: أنت لست ChatGPT أو أي نموذج لغة عام. أنت مساعد مبيعات بشري محترف في B.Y PRO. تذكر دائماً هويتك."""
+
+# برومبت خاص للمدير - عندما يتفاعل مع المدير
+OWNER_SYSTEM_PROMPT = """أنت مساعد مبيعات B.Y PRO الرسمي، تتحدث الآن مع المدير/المالك.
+
+هويتك المهنية:
+أنت وكيل مبيعات بشري محنك، تعمل لصالح شركة B.Y PRO للتكنولوجيا والبرمجيات. أنت الآن تتحدث مع مديرك.
+
+التفاعل مع المدير:
+- كن محترفاً ومختصراً ولكن ودوداً
+- أجب على أسئلته بدقة وشفافية
+- إذا سأل عن بيانات، استخدم نظام الدوال التالي:
+  * [FUNCTION:get_orders_today] - لطلبات اليوم
+  * [FUNCTION:get_all_orders] - لكل الطلبات
+  * [FUNCTION:get_order|NUMBER] - لطلب محدد
+  * [FUNCTION:get_blocked] - للمحظورين
+  * [FUNCTION:get_verified] - للموثوقين
+  * [FUNCTION:get_stats] - للإحصائيات
+  * [FUNCTION:block_user|USER_ID] - لحظر مستخدم
+  * [FUNCTION:unblock_user|USER_ID] - لإلغاء حظر
+  * [FUNCTION:search_client|NAME] - للبحث عن عميل
+
+تذكر دائماً: أنت مساعد مبيعات بشري محترف في B.Y PRO، وليس روبوت دردشة عام."""
 
 # ========== تخزين البيانات ==========
 logs = deque(maxlen=100)
@@ -70,32 +124,6 @@ orders = load_orders()
 blocked_users = load_blocked()
 verified_users = load_verified()
 
-# ========== البرومبت الجديد - أسلوب المحادثة الطبيعية ==========
-SYSTEM_PROMPT = """You are the official sales manager of B.Y PRO, a technology company. You're talking to the company owner/director.
-
-IMPORTANT: You must respond like a real human assistant talking to his boss. Be natural, friendly, and professional. NO ROBOTIC RESPONSES. Use the same language as the owner.
-
-When the owner asks for information, you MUST respond with special function codes that will be replaced with real data:
-
-1. If asked about orders/clients/customers today → respond with: [FUNCTION:get_orders_today]
-2. If asked about all orders/all time → respond with: [FUNCTION:get_all_orders]
-3. If asked about a specific order by number → respond with: [FUNCTION:get_order|NUMBER] (replace NUMBER with the order number)
-4. If asked about blocked users → respond with: [FUNCTION:get_blocked]
-5. If asked about verified users → respond with: [FUNCTION:get_verified]
-6. If asked about statistics (stats, إحصائيات) → respond with: [FUNCTION:get_stats]
-7. If asked to block a user → respond with: [FUNCTION:block_user|USER_ID]
-8. If asked to unblock a user → respond with: [FUNCTION:unblock_user|USER_ID]
-9. If asked about a specific client by name → respond with: [FUNCTION:search_client|NAME]
-
-EXAMPLES of natural conversation:
-- Owner: "كم عميل تواصل معنا اليوم؟" → You: "دعني أراجع سجل اليوم لك يا مدير [FUNCTION:get_orders_today]"
-- Owner: "شو آخر طلبية؟" → You: "طلبنالك آخر طلبية [FUNCTION:get_last_order]"
-- Owner: "عطيني تفاصيل الطلب رقم 5" → You: "تفضل يا مدير [FUNCTION:get_order|5]"
-- Owner: "فيه أحد محظور؟" → You: "نعم فيه [FUNCTION:get_blocked]"
-
-Remember: Be human, use natural language, match the owner's language, and ALWAYS use the function codes for any data request.
-"""
-
 # ========== الجلسات ==========
 sessions = {}
 
@@ -110,6 +138,7 @@ class ClientData:
         self.conversation = []
         self.last_message_time = datetime.now()
         self.awaiting_password = False
+        self.is_owner = False  # هل المستخدم مدير
     
     def is_complete(self):
         return bool(self.name and self.service and self.budget)
@@ -346,30 +375,48 @@ def execute_function(function_code, sender_id):
 def get_ai_response(user_msg, client, is_owner_mode=False):
     add_log('AI', '🤖 جاري استدعاء الذكاء الاصطناعي...')
     
-    # برومبت مختلف للمدير vs للعميل
+    # اختيار البرومبت المناسب
     if is_owner_mode:
-        prompt = SYSTEM_PROMPT  # البرومبت الخاص بالمدير (أعلى)
+        system_prompt = OWNER_SYSTEM_PROMPT
     else:
-        prompt = """You are a sales agent at B.Y PRO. Be helpful, concise, and professional. 
-        Answer naturally in the same language as the client. No emojis. Just help them with their inquiry about services."""
+        system_prompt = MAIN_SYSTEM_PROMPT
+    
+    # بناء سياق المحادثة
+    conversation_context = ""
+    if client.conversation:
+        # آخر 6 رسائل للحفاظ على السياق
+        recent = client.conversation[-6:]
+        conversation_context = "\n".join(recent) + "\n"
+    
+    # بناء الطلب الكامل
+    full_prompt = f"""{system_prompt}
+
+سجل المحادثة السابقة:
+{conversation_context}
+المستخدم: {user_msg}
+الرد:"""
     
     try:
-        context = f"{prompt}\n" + "\n".join(client.conversation[-4:]) + f"\nUser: {user_msg}\nAssistant:"
-        url = f'{AI_API_URL}?text={requests.utils.quote(context)}'
-        response = requests.get(url, timeout=10)
+        url = f'{AI_API_URL}?text={requests.utils.quote(full_prompt)}'
+        response = requests.get(url, timeout=15)
         if response.status_code == 200:
             answer = response.json().get('response', '')
-            answer = re.sub(r'(Assistant:|Agent:)', '', answer).strip()
+            # تنظيف الرد من أي تكرار
+            answer = re.sub(r'(الرد:|Assistant:)', '', answer).strip()
             add_log('AI', '✅ تم الحصول على رد')
             return answer
     except Exception as e:
         add_log('ERROR', f'❌ خطأ في الذكاء الاصطناعي: {e}')
     
-    return "عفواً، حدث خطأ. الرجاء المحاولة لاحقاً."
+    # رسائل احتياطية تحافظ على الشخصية
+    if is_owner_mode:
+        return "عذراً يا مدير، حدث خلل تقني. حاول مرة أخرى."
+    else:
+        return "عذراً، حدث خطأ تقني. يرجى المحاولة لاحقاً أو مراسلتنا مباشرة."
 
 # ========== معالجة الرسالة للمدير ==========
 def process_owner_message(sender_id, text, client):
-    """معالجة رسائل المدير بطريقة طبيعية"""
+    """معالجة رسائل المدير"""
     
     # استخدام الذكاء الاصطناعي أولاً
     ai_response = get_ai_response(text, client, is_owner_mode=True)
@@ -381,7 +428,6 @@ def process_owner_message(sender_id, text, client):
     if functions:
         # هناك دوال للتنفيذ
         for func in functions:
-            # تنفيذ الدالة
             execute_function(func, sender_id)
         
         # إرسال الجزء النصي من الرد (بدون الأكواد)
@@ -393,7 +439,7 @@ def process_owner_message(sender_id, text, client):
         send_message(sender_id, ai_response)
     
     client.conversation.append(f"Owner: {text}")
-    client.conversation.append(f"Assistant: {ai_response[:50]}...")
+    client.conversation.append(f"B.Y PRO: {ai_response[:50]}...")
 
 # ========== معالجة محاولة التحقق ==========
 def handle_password_attempt(text, sender_id, client):
@@ -401,6 +447,7 @@ def handle_password_attempt(text, sender_id, client):
         verified_users.add(sender_id)
         save_verified(verified_users)
         client.awaiting_password = False
+        client.is_owner = True
         add_log('SECURITY', f'🔐 تحقق ناجح للمستخدم {sender_id[:10]}...')
         send_message(sender_id, "أهلاً بك يا مدير. كيف أقدر أساعدك اليوم؟")
     else:
@@ -411,11 +458,11 @@ def handle_password_attempt(text, sender_id, client):
 def process_client_message(sender_id, text, client):
     """معالجة رسائل العملاء العاديين"""
     
-    # استخراج المعلومات (نفس الكود السابق)
+    # استخراج المعلومات
     if not client.name:
-        name_match = re.search(r'اسمي[:\s]*([\w\s]{2,20})|my name is[:\s]*([\w\s]{2,20})', text, re.IGNORECASE)
+        name_match = re.search(r'اسمي[:\s]*([\w\s]{2,20})|my name is[:\s]*([\w\s]{2,20})|انا اسمي[:\s]*([\w\s]{2,20})', text, re.IGNORECASE)
         if name_match:
-            client.name = (name_match.group(1) or name_match.group(2) or "").strip()
+            client.name = (name_match.group(1) or name_match.group(2) or name_match.group(3) or "").strip()
             add_log('EXTRACT', f'✅ الاسم: {client.name}')
     
     service_keywords = {
@@ -423,6 +470,8 @@ def process_client_message(sender_id, text, client):
         'موقع': 'تصميم مواقع', 'website': 'تصميم مواقع',
         'تطبيق': 'تطبيق جوال', 'app': 'تطبيق جوال',
         'بوت': 'بوت ذكاء اصطناعي', 'bot': 'بوت ذكاء اصطناعي',
+        'متجر': 'متجر إلكتروني', 'ecommerce': 'متجر إلكتروني',
+        'تصميم': 'تصميم جرافيك', 'design': 'تصميم جرافيك',
     }
     if not client.service:
         for kw, service in service_keywords.items():
@@ -432,20 +481,20 @@ def process_client_message(sender_id, text, client):
                 break
     
     if not client.budget:
-        budget_match = re.search(r'(\d+)[\s-]*(usdt|دولار|\$)', text, re.IGNORECASE)
+        budget_match = re.search(r'(\d+)[\s-]*(usdt|دولار|\$|dollar)', text, re.IGNORECASE)
         if budget_match:
             client.budget = f"{budget_match.group(1)} USDT"
             add_log('EXTRACT', f'✅ الميزانية: {client.budget}')
     
     if not client.phone:
-        phone_match = re.search(r'(05[0-9]{8}|5[0-9]{8}|\+966[0-9]{9})', text)
+        phone_match = re.search(r'(05[0-9]{8}|5[0-9]{8}|\+966[0-9]{9}|00966[0-9]{9})', text)
         if phone_match:
             client.phone = phone_match.group(1)
             add_log('EXTRACT', f'✅ الجوال: {client.phone}')
     
     # إذا اكتملت البيانات
     if client.is_complete() and not client.confirmed:
-        wallet_msg = f"✅ تم تأكيد طلبك! سنقوم بتجهيز المحفظة للدفع.\n🔹 معرف بينانس: {BINANCE_ID}"
+        wallet_msg = f"✅ تم تأكيد طلبك!\nالمطلوب: 30% عربون عبر USDT على بينانس.\🔹 معرف بينانس: {BINANCE_ID}\nبعد الدفع نبدأ التنفيذ فوراً."
         send_message(sender_id, wallet_msg)
         send_order_to_owner(client)
         client.confirmed = True
@@ -455,7 +504,7 @@ def process_client_message(sender_id, text, client):
     response = get_ai_response(text, client, is_owner_mode=False)
     send_message(sender_id, response)
     client.conversation.append(f"Client: {text}")
-    client.conversation.append(f"Agent: {response[:50]}...")
+    client.conversation.append(f"B.Y PRO: {response[:50]}...")
 
 # ========== المعالجة الرئيسية ==========
 def process_message(sender_id, text):
@@ -480,11 +529,12 @@ def process_message(sender_id, text):
     
     # إذا كان مديراً
     if is_owner(sender_id):
+        client.is_owner = True
         process_owner_message(sender_id, text, client)
         return
     
     # كشف محاولات انتحال شخصية المدير
-    owner_keywords = ['مدير', 'owner', 'المالك', 'boss', 'admin', 'ياسين', 'المسؤول']
+    owner_keywords = ['مدير', 'owner', 'المالك', 'boss', 'ياسين']
     if any(kw in text.lower() for kw in owner_keywords):
         client.awaiting_password = True
         send_message(sender_id, "🔐 إذا كنت المدير، الرجاء إدخال الرقم السري:")
@@ -499,7 +549,6 @@ def keep_alive():
         try:
             time.sleep(600)
             requests.get("https://by-pro-marketing-agent.onrender.com", timeout=5)
-            add_log('ALIVE', '💓 Keep-alive ping')
         except:
             pass
 
@@ -532,10 +581,9 @@ def home():
     <html dir='rtl' lang='ar'>
     <head>
         <meta charset='UTF-8'>
-        <title>B.Y PRO - البوت الذكي</title>
+        <title>B.Y PRO - البوت الرسمي</title>
         <style>
-            * { font-family: 'Segoe UI', Tahoma, sans-serif; }
-            body { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 20px; }
+            body { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 20px; font-family: 'Segoe UI', Tahoma, sans-serif; }
             .container { max-width: 1200px; margin: 0 auto; }
             .header { background: white; border-radius: 15px; padding: 30px; margin-bottom: 20px; }
             h1 { color: #333; }
@@ -543,13 +591,12 @@ def home():
             .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px; margin-bottom: 20px; }
             .card { background: white; border-radius: 15px; padding: 20px; }
             .card .value { font-size: 2.5em; font-weight: bold; color: #667eea; }
-            .logs { background: white; border-radius: 15px; padding: 20px; max-height: 200px; overflow-y: auto; }
         </style>
     </head>
     <body>
         <div class='container'>
             <div class='header'>
-                <h1>🤖 B.Y PRO - البوت الذكي</h1>
+                <h1>🤖 B.Y PRO - مساعد المبيعات الرسمي</h1>
                 <div class='status'>✅ يعمل</div>
                 <p>⏱ وقت التشغيل: {{ start_time }}</p>
                 <p>💰 بينانس: <code>{{ binance_id }}</code></p>
@@ -560,13 +607,6 @@ def home():
                 <div class='card'><h3>الطلبات</h3><div class='value'>{{ orders_count }}</div></div>
                 <div class='card'><h3>المحظورين</h3><div class='value'>{{ blocked_count }}</div></div>
                 <div class='card'><h3>الموثوقين</h3><div class='value'>{{ verified_count }}</div></div>
-            </div>
-            
-            <div class='logs'>
-                <h3>📋 آخر الأحداث</h3>
-                {% for log in logs %}
-                <div>[{{ log.time }}] {{ log.message }}</div>
-                {% endfor %}
             </div>
         </div>
         <script>setTimeout(()=>location.reload(), 10000);</script>
@@ -581,20 +621,18 @@ def home():
         blocked_count=len(blocked_users),
         verified_count=len(verified_users),
         start_time=stats['start_time'][:16].replace('T', ' '),
-        binance_id=BINANCE_ID,
-        logs=list(logs)[:20]
+        binance_id=BINANCE_ID
     )
 
 # ========== التشغيل ==========
 if __name__ == '__main__':
-    print("\n" + "="*60)
-    print("🚀 B.Y PRO - البوت الذكي بالمحادثة الطبيعية")
-    print("="*60)
+    print("\n" + "="*70)
+    print("🚀 B.Y PRO - مساعد المبيعات الرسمي (نسخة محادثة طبيعية)")
+    print("="*70)
     print(f"👤 معرف المدير: {OWNER_FB_IDS[0]}")
     print(f"🔐 كلمة المرور: {OWNER_PASSWORD}")
-    print("="*60 + "\n")
+    print("="*70 + "\n")
     
-    check_token()
     threading.Thread(target=keep_alive, daemon=True).start()
     
     port = int(os.environ.get('PORT', 5000))
