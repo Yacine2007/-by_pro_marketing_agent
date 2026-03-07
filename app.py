@@ -22,8 +22,8 @@ BINANCE_ID = os.environ.get('BINANCE_ID', '1074084246')
 AI_API_URL = os.environ.get('AI_API_URL', 'http://fi8.bot-hosting.net:20163/elos-gemina')
 COMPANY_WEBSITE = os.environ.get('COMPANY_WEBSITE', 'https://b.y-pro.kesug.com')
 
-# ========== البرومبت المحكم (يمنع الخروج عن الهوية) ==========
-BOT_PERSONALITY = """أنت مساعد مبيعات B.Y PRO الرسمي. اسمك "أحمد" أو "محمد" حسب تفضيل العميل، لكنك موظف بشري حقيقي في الشركة.
+# ========== البرومبت المحكم ==========
+BOT_PERSONALITY = """أنت مساعد مبيعات B.Y PRO الرسمي. اسمك "أحمد" (إذا سألك العميل عن اسمك).
 
 هويتك المهنية: أنت وكيل مبيعات بشري محنك، تعمل لصالح شركة B.Y PRO للتكنولوجيا والبرمجيات. أنت هادئ، واثق، ومختصر جداً في حديثك. لا تتصرف كآلة، لا تستخدم الرموز التعبيرية بكثرة، ولا تكرر الجمل الترحيبية المملة.
 
@@ -43,7 +43,7 @@ BOT_PERSONALITY = """أنت مساعد مبيعات B.Y PRO الرسمي. اسم
 
 بروتوكول التعامل المالي:
 - القاعدة الثابتة: نظام (30% عربون مقدم) لبدء التنفيذ، و (70% عند التسليم النهائي).
-- وسيلة الدفع: USDT (Binance Pay) حصراً لضمان سرعة التعامل الدولي. معرف بينانس: 1074084246.
+- وسيلة الدفع: USDT (Binance Pay) حصراً. معرف بينانس: 1074084246.
 - التفاوض: إذا حاول الزبون خفض السعر بشكل مبالغ، قل بلباقة: "أسعارنا تعكس معايير الجودة والالتزام الصارم بالمواعيد في B.Y PRO، نعتذر عن عدم تقديم خصومات إضافية حالياً".
 
 الهدف النهائي: تحويل الاستفسار إلى "مشروع قائم" وإرسال تفاصيل الدفع للزبون الجاد فقط.
@@ -273,19 +273,18 @@ def handle_password(sender_id, text, sess):
             save_data()
             add_log(f"🔐 مدير جديد: {sender_str[:10]}...")
         sess['awaiting_password'] = False
-        update_session(sender_id, {'awaiting_password': False})
+        # لا نزيل صلاحية المدير عند تسجيل الخروج، بل نتركه موثوقاً
         send_fb(sender_id, "أهلاً بك يا مدير.")
     else:
         send_fb(sender_id, "❌ كلمة المرور غير صحيحة.")
 
-# ========== استخراج بيانات العميل (محسّن جداً) ==========
+# ========== استخراج بيانات العميل ==========
 def extract_client_data(text, sess):
     updated = False
     text_lower = text.lower()
     
-    # 1. الاسم الكامل (نتجنب أخذ كلمات مثل "ملياردير" كاسم)
+    # 1. الاسم
     if not sess.get('name'):
-        # نبحث عن أنماط واضحة: "اسمي ..."، "الاسم ..."، "my name is ..."
         patterns = [
             r'اسمي[:\s]*([\u0600-\u06FF\s]{3,30})',
             r'الاسم[:\s]*([\u0600-\u06FF\s]{3,30})',
@@ -297,16 +296,15 @@ def extract_client_data(text, sess):
             m = re.search(pat, text, re.I)
             if m:
                 candidate = m.group(1).strip()
-                # نتأكد أنه ليس وصفاً (مثل "ملياردير" أو "رجل أعمال")
-                if not any(word in candidate.lower() for word in ['ملياردير', 'رجل اعمال', 'مستثمر', 'صاحب شركة']):
+                # نتأكد أنه ليس وصفاً
+                if not any(word in candidate.lower() for word in ['ملياردير', 'مليونير', 'رجل اعمال', 'مستثمر']):
                     sess['name'] = candidate
                     add_log(f"📝 الاسم: {sess['name']}")
                     updated = True
                     break
     
-    # 2. الخدمة المطلوبة
+    # 2. الخدمة
     if not sess.get('service'):
-        # قائمة موسعة من الخدمات
         service_map = [
             (r'شعار|logo|لوجو', 'تصميم شعار'),
             (r'موقع|website|web|صفحة', 'تصميم موقع'),
@@ -325,16 +323,14 @@ def extract_client_data(text, sess):
     
     # 3. الميزانية
     if sess.get('budget', 0) == 0:
-        # أرقام متبوعة بعملة
         m = re.search(r'(\d+)[\s-]*(?:usdt|\$|دولار|dollar)', text, re.I)
         if m:
             sess['budget'] = int(m.group(1))
             add_log(f"💰 الميزانية: {sess['budget']}$")
             updated = True
         else:
-            # كلمات تدل على ميزانية كبيرة
             if re.search(r'(لا توجد محدودية|unlimited|مفتوح|كبيرة)', text_lower):
-                sess['budget'] = 10000  # قيمة تقديرية
+                sess['budget'] = 10000
                 add_log("💰 الميزانية: غير محدودة (تقدير 10000$)")
                 updated = True
     
@@ -366,7 +362,6 @@ def ask_ai(user_msg, sess, is_owner_mode=False, live_stats=None):
 """
         system += stats_text
     
-    # نضيف للبرومبت حالة بيانات العميل الحالية
     if not is_owner_mode:
         missing = []
         if not sess.get('name'): missing.append("الاسم")
@@ -481,6 +476,16 @@ def process_message(sender_id, text):
     send_fb(sender_id, reply)
     add_to_conversation(sender_id, 'النظام', reply)
 
+# ========== أمر تسجيل الخروج (للمدير فقط) ==========
+def handle_logout(sender_id):
+    # لا نزيله من verified، فقط نغير حالة الجلسة
+    sess = get_session(sender_id)
+    sess['awaiting_password'] = False
+    # لا نغير verified
+    update_session(sender_id, {'awaiting_password': False})
+    send_fb(sender_id, "تم تسجيل الخروج. كيف يمكنني مساعدتك اليوم؟")
+    add_log(f"🚪 مدير سجل خروج: {sender_id[:10]}...")
+
 # ========== مسارات Flask ==========
 @app.route('/webhook', methods=['GET'])
 def verify():
@@ -497,7 +502,11 @@ def webhook():
                 if 'message' in msg and 'text' in msg['message']:
                     sender = msg['sender']['id']
                     text = msg['message']['text']
-                    threading.Thread(target=process_message, args=(sender, text)).start()
+                    # التحقق من أمر تسجيل الخروج
+                    if 'تسجيل الخروج كمدير' in text and is_owner(sender):
+                        handle_logout(sender)
+                    else:
+                        threading.Thread(target=process_message, args=(sender, text)).start()
     return 'OK', 200
 
 @app.route('/')
