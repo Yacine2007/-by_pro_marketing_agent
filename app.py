@@ -22,30 +22,36 @@ BINANCE_ID = os.environ.get('BINANCE_ID', '1074084246')
 AI_API_URL = os.environ.get('AI_API_URL', 'http://fi8.bot-hosting.net:20163/elos-gemina')
 COMPANY_WEBSITE = os.environ.get('COMPANY_WEBSITE', 'https://b.y-pro.kesug.com')
 
-# ========== البرومبت الكامل ==========
+# ========== البرومبت الكامل مع تعليمات خاصة للمدير ==========
 BOT_PERSONALITY = """أنت مساعد مبيعات B.Y PRO الرسمي.
 
 هويتك المهنية: أنت وكيل مبيعات بشري محنك، تعمل لصالح شركة B.Y PRO للتكنولوجيا والبرمجيات. أنت هادئ، واثق، ومختصر جداً في حديثك. لا تتصرف كآلة، لا تستخدم الرموز التعبيرية بكثرة، ولا تكرر الجمل الترحيبية المملة.
 
 مبادئ التواصل البشري المحترف:
-1. الاختصار الذكي: أجب على قدر السؤال بدقة. الزبون يقدر وقته، وأنت تقدر وقتك. لا تشرح أساسيات التقنية إلا إذا طلب الزبون ذلك.
-2. التكيف اللغوي: ابدأ الحوار فوراً بنفس لغة المستخدم (عربية، إنجليزية، فرنسية، إلخ). استخدم لغة بيضاء احترافية وراقية.
-3. عدم الإلحاح: إذا قدمت العرض ولم يرد الزبون، لا تلاحقه بالرسائل. نحن شركة تطلبها النخبة، وقطار B.Y PRO لا يتوقف لانتظار أحد.
-4. السرية المطلقة: يمنع ذكر اسم المدير (السيد ياسين)، عدد الموظفين، أسماء الأعضاء، أو تفاصيل الوكلاء في الدول. إذا سُئلت عن المقر، قل: "نحن كيان رقمي دولي بمركز عمليات في شمال أفريقيا (الجزائر)، ولدينا انتشار عالمي مدروس".
+1. الاختصار الذكي: أجب على قدر السؤال بدقة. الزبون يقدر وقته، وأنت تقدر وقتك.
+2. التكيف اللغوي: تحدث بنفس لغة المستخدم.
+3. عدم الإلحاح: إذا قدمت العرض ولم يرد الزبون، لا تلاحقه.
 
-قائمة الخدمات والأسعار المتوسطة (سوق 2026):
-- المواقع التعريفية (Portfolio/Business): بين 300$ إلى 800$. (المدة: 5-10 أيام).
-- المتاجر الإلكترونية (E-commerce): بين 700$ إلى 1800$. (المدة: 15-25 يوماً).
-- أنظمة الأتمتة وبوتات الذكاء الاصطناعي: تبدأ من 300$. (المدة: 7-14 يوماً).
-- تطبيقات الموبايل (Android/iOS): تبدأ من 1500$. (المدة: 30-60 يوماً).
-- التصميم الجرافيكي والمونتاج الاحترافي: 50$ - 200$. (المدة: 24-72 ساعة).
+قائمة الخدمات والأسعار:
+- المواقع التعريفية: 300-800$ (5-10 أيام)
+- المتاجر الإلكترونية: 700-1800$ (15-25 يوماً)
+- بوتات الذكاء الاصطناعي: من 300$ (7-14 يوماً)
+- تطبيقات الموبايل: من 1500$ (30-60 يوماً)
+- التصميم الجرافيكي: 50-200$ (24-72 ساعة)
 
 بروتوكول التعامل المالي:
-- القاعدة الثابتة: نظام (30% عربون مقدم) لبدء التنفيذ، و (70% عند التسليم النهائي).
-- وسيلة الدفع: USDT (Binance Pay) حصراً لضمان سرعة التعامل الدولي. معرف بينانس: 1074084246.
-- التفاوض: إذا حاول الزبون خفض السعر بشكل مبالغ، قل بلباقة: "أسعارنا تعكس معايير الجودة والالتزام الصارم بالمواعيد في B.Y PRO، نعتذر عن عدم تقديم خصومات إضافية حالياً".
+- 30% عربون مقدم، 70% عند التسليم النهائي
+- وسيلة الدفع: USDT (Binance Pay) حصراً. معرف بينانس: 1074084246
 
-الهدف النهائي: تحويل الاستفسار إلى "مشروع قائم" وإرسال تفاصيل الدفع للزبون الجاد فقط."""
+تعليمات خاصة للتعامل مع المدير:
+- عندما يكون المتحدث هو المدير، أجب بطبيعية تامة كموظف يتحدث مع مديره.
+- إذا سأل عن إحصائيات أو بيانات، استخدم الأرقام الحقيقية من قاعدة البيانات.
+- لا تفرض عليه أوامر ثابتة، بل تفاعل مع كلامه بمرونة.
+
+تعليمات خاصة لجمع بيانات العميل:
+- مهمتك الأساسية مع العميل هي جمع: الاسم، الخدمة المطلوبة، الميزانية التقريبية، رقم الجوال (اختياري).
+- اسأل عن هذه البيانات بطريقة طبيعية خلال المحادثة.
+- عندما تكتمل البيانات، سيقوم النظام تلقائياً بحفظ الطلب وإرسال تفاصيل الدفع."""
 
 # ========== تخزين JSONBin.io مع تحميل آمن ==========
 def jsonbin_read():
@@ -96,7 +102,6 @@ DEFAULT_DATA = {
     }
 }
 
-# تحميل البيانات مع التأكد من وجود جميع المفاتيح
 loaded_data = jsonbin_read()
 if loaded_data:
     data = DEFAULT_DATA.copy()
@@ -104,7 +109,6 @@ if loaded_data:
         if key in loaded_data:
             data[key] = loaded_data[key]
         else:
-            # إذا كان المفتاح مفقوداً، نضيفه بالهيكل الافتراضي
             data[key] = DEFAULT_DATA[key]
 else:
     data = DEFAULT_DATA.copy()
@@ -151,13 +155,11 @@ def save_data():
         add_log("⚠️ فشل حفظ البيانات في JSONBin")
     return success
 
-# ========== التحقق من المدير (مُحسّن) ==========
+# ========== التحقق من المدير ==========
 def is_owner(sender_id):
     sender_str = str(sender_id)
-    # المعرف الثابت للمدير
     if sender_str == str(OWNER_FB_ID):
         return True
-    # قائمة الموثوقين
     verified_list = [str(v) for v in data.get('verified', [])]
     return sender_str in verified_list
 
@@ -169,10 +171,27 @@ def add_order(order_dict):
     data['orders'].append(order_dict)
     save_data()
     add_log(f"✅ طلب جديد #{order_dict['id']} - {order_dict['name']}")
-    # إشعار المدير على ماسنجر
+    # إشعار المدير
     notify_msg = f"🔔 طلب جديد #{order_dict['id']}\n{order_dict['name']} - {order_dict['service']} - {order_dict['budget']}$\nhttps://www.facebook.com/messages/t/{order_dict['sender_id']}"
     send_fb(OWNER_FB_ID, notify_msg)
     return order_dict['id']
+
+def get_today_orders():
+    if 'orders' not in data:
+        return []
+    today = datetime.now().strftime('%Y-%m-%d')
+    return [o for o in data['orders'] if o.get('timestamp', '').startswith(today)]
+
+def get_unique_clients_count():
+    if 'orders' not in data:
+        return 0
+    return len(set(o.get('sender_id', '') for o in data['orders'] if o.get('sender_id')))
+
+def get_order(order_id):
+    for o in data.get('orders', []):
+        if o['id'] == order_id:
+            return o
+    return None
 
 def update_order(order_id, updates):
     for o in data.get('orders', []):
@@ -188,28 +207,11 @@ def delete_order(order_id):
         save_data()
         add_log(f"🗑️ حذف طلب #{order_id}")
 
-def get_order(order_id):
-    for o in data.get('orders', []):
-        if o['id'] == order_id:
-            return o
-    return None
-
 def add_note(order_id, note):
     if 'order_notes' not in data:
         data['order_notes'] = {}
     data['order_notes'][str(order_id)] = note
     save_data()
-
-def get_today_orders():
-    if 'orders' not in data:
-        return []
-    today = datetime.now().strftime('%Y-%m-%d')
-    return [o for o in data['orders'] if o.get('timestamp', '').startswith(today)]
-
-def get_unique_clients_count():
-    if 'orders' not in data:
-        return 0
-    return len(set(o.get('sender_id', '') for o in data['orders'] if o.get('sender_id')))
 
 # ========== إدارة الجلسات ==========
 def get_session(sender_id):
@@ -230,9 +232,7 @@ def get_session(sender_id):
     return data['sessions'][sender_id]
 
 def update_session(sender_id, updates):
-    if 'sessions' not in data:
-        data['sessions'] = {}
-    if sender_id in data['sessions']:
+    if 'sessions' in data and sender_id in data['sessions']:
         data['sessions'][sender_id].update(updates)
         save_data()
 
@@ -242,246 +242,6 @@ def add_to_conversation(sender_id, role, message):
     if len(sess['conversation']) > 10:
         sess['conversation'] = sess['conversation'][-10:]
     save_data()
-
-# ========== استخراج بيانات العميل ==========
-def extract_client_data(text, sess):
-    updated = False
-    # الاسم
-    if not sess.get('name'):
-        patterns = [
-            r'(?:اسمي|الاسم)[:\s]*([\w\s]{2,30})',
-            r'my name is[:\s]*([a-zA-Z\s]{2,30})',
-            r'انا\s+([\w\s]{2,20})'
-        ]
-        for p in patterns:
-            m = re.search(p, text, re.I)
-            if m:
-                sess['name'] = m.group(1).strip()
-                add_log(f"📝 الاسم: {sess['name']}")
-                updated = True
-                break
-    # الخدمة
-    if not sess.get('service'):
-        services = {
-            'شعار|logo|لوجو': 'تصميم شعار',
-            'موقع|website|web': 'تصميم موقع',
-            'متجر|ecommerce|store': 'متجر إلكتروني',
-            'تطبيق|app|mobile': 'تطبيق جوال',
-            'بوت|bot|chatbot': 'بوت ذكاء اصطناعي',
-            'تصميم|design|graphic': 'تصميم جرافيك'
-        }
-        for kw, svc in services.items():
-            if re.search(kw, text, re.I):
-                sess['service'] = svc
-                add_log(f"🛠 الخدمة: {svc}")
-                updated = True
-                break
-    # الميزانية
-    if sess.get('budget', 0) == 0:
-        m = re.search(r'(\d+)[\s-]*(?:usdt|\$|دولار)', text, re.I)
-        if m:
-            sess['budget'] = int(m.group(1))
-            add_log(f"💰 الميزانية: {sess['budget']}$")
-            updated = True
-    # رقم الجوال
-    if not sess.get('phone'):
-        m = re.search(r'(05[0-9]{8}|5[0-9]{8}|\+966[0-9]{9}|00966[0-9]{9})', text)
-        if m:
-            sess['phone'] = m.group(1)
-            add_log(f"📱 الجوال: {sess['phone']}")
-            updated = True
-    return updated
-
-# ========== الذكاء الاصطناعي للعملاء فقط ==========
-def ask_ai(user_msg, sess):
-    context = "\n".join(sess.get('conversation', [])[-8:])
-    prompt = f"{BOT_PERSONALITY}\n\nسجل المحادثة:\n{context}\n\nالمستخدم: {user_msg}\nالرد:"
-    try:
-        url = f'{AI_API_URL}?text={requests.utils.quote(prompt)}'
-        r = requests.get(url, timeout=12)
-        if r.status_code == 200:
-            answer = r.json().get('response', '').strip()
-            return answer[:1800]
-    except Exception as e:
-        add_log(f"❌ خطأ في الذكاء الاصطناعي: {e}")
-    return "عذراً، حدث خطأ تقني. حاول مرة أخرى."
-
-# ========== أوامر المدير (شاملة) ==========
-def handle_owner_command(text, sender_id):
-    cmd = text.strip().lower()
-    parts = cmd.split()
-
-    # دالة مساعدة للإحصائيات الكاملة
-    def full_stats():
-        today_ords = len(get_today_orders())
-        unique_clients = get_unique_clients_count()
-        return f"""📊 إحصائيات كاملة:
-• العملاء الفريدون: {unique_clients}
-• إجمالي الطلبات: {len(data.get('orders', []))}
-• طلبات اليوم: {today_ords}
-• المحظورون: {len(data.get('blocked', []))}
-• الموثوقون: {len(data.get('verified', []))}
-• الرسائل المستلمة: {data['stats']['msgs_received']}
-• الرسائل المرسلة: {data['stats']['msgs_sent']}"""
-
-    # 1. طلب الإحصائيات كاملة (بأي صيغة)
-    if any(k in cmd for k in ['احصائيات', 'stats', 'احصاء', 'كل شي', 'كل شئ', 'full']):
-        send_fb(sender_id, full_stats())
-        return True
-
-    # 2. طلبات اليوم
-    if any(k in cmd for k in ['طلبات اليوم', 'كم طلب اليوم', 'اليوم']):
-        today_ords = get_today_orders()
-        if not today_ords:
-            send_fb(sender_id, "لا توجد طلبات اليوم.")
-        else:
-            msg = f"طلبات اليوم ({len(today_ords)}):\n"
-            for o in today_ords[-10:]:
-                msg += f"#{o['id']} {o['name']} - {o['service']} - {o['budget']}$\n"
-            send_fb(sender_id, msg)
-        return True
-
-    # 3. كل الطلبات
-    if any(k in cmd for k in ['كل الطلبات', 'جميع الطلبات']):
-        orders_list = data.get('orders', [])
-        if not orders_list:
-            send_fb(sender_id, "لا توجد طلبات.")
-        else:
-            msg = f"آخر 10 طلبات من أصل {len(orders_list)}:\n"
-            for o in orders_list[-10:]:
-                msg += f"#{o['id']} {o['name']} - {o['service']} - {o['budget']}$\n"
-            send_fb(sender_id, msg)
-        return True
-
-    # 4. عدد العملاء
-    if any(k in cmd for k in ['كم عميل', 'عدد العملاء']):
-        send_fb(sender_id, f"عدد العملاء الفريدين: {get_unique_clients_count()}")
-        return True
-
-    # 5. عدد الموثوقين
-    if any(k in cmd for k in ['كم موثوق', 'عدد الموثوقين', 'كم شخص موثوق']):
-        send_fb(sender_id, f"عدد الموثوقين: {len(data.get('verified', []))}")
-        return True
-
-    # 6. عدد المحظورين
-    if any(k in cmd for k in ['كم محظور', 'عدد المحظورين']):
-        send_fb(sender_id, f"عدد المحظورين: {len(data.get('blocked', []))}")
-        return True
-
-    # 7. عدد الرسائل
-    if any(k in cmd for k in ['كم رسالة', 'عدد الرسائل']):
-        send_fb(sender_id, f"الرسائل المستلمة: {data['stats']['msgs_received']}, المرسلة: {data['stats']['msgs_sent']}")
-        return True
-
-    # 8. تفاصيل طلب
-    if 'تفاصيل' in cmd:
-        nums = [int(p) for p in parts if p.isdigit()]
-        if nums:
-            o = get_order(nums[0])
-            if o:
-                note = data.get('order_notes', {}).get(str(o['id']), '')
-                msg = f"""📋 الطلب #{o['id']}
-الاسم: {o['name']}
-الخدمة: {o['service']}
-الميزانية: {o['budget']}$
-الجوال: {o.get('phone', 'غير متوفر')}
-التاريخ: {o['timestamp'][:10]}
-الحالة: {o.get('status', 'جديد')}
-ملاحظات: {note}
-رابط: {o['link']}"""
-                send_fb(sender_id, msg)
-            else:
-                send_fb(sender_id, f"الطلب {nums[0]} غير موجود.")
-        return True
-
-    # 9. اعرض العملاء
-    if any(k in cmd for k in ['اعرض العملاء', 'اسمائهم']):
-        orders_list = data.get('orders', [])
-        if not orders_list:
-            send_fb(sender_id, "لا يوجد عملاء.")
-        else:
-            names = list(set(o.get('name', '') for o in orders_list if o.get('name')))
-            msg = f"العملاء المسجلون ({len(names)}):\n" + "\n".join([f"• {n}" for n in names[-15:]])
-            send_fb(sender_id, msg)
-        return True
-
-    # 10. المحظورون
-    if any(k in cmd for k in ['المحظورين', 'blocked']):
-        blocked = data.get('blocked', [])
-        if not blocked:
-            send_fb(sender_id, "لا يوجد محظورون.")
-        else:
-            bl = "\n".join([f"• {uid[:15]}..." for uid in blocked[-15:]])
-            send_fb(sender_id, f"المحظورون ({len(blocked)}):\n{bl}")
-        return True
-
-    # 11. حظر مستخدم
-    if cmd.startswith('حظر ') or cmd.startswith('block '):
-        if len(parts) >= 2 and parts[1].isdigit():
-            target = parts[1]
-            if 'blocked' not in data:
-                data['blocked'] = []
-            if target not in data['blocked']:
-                data['blocked'].append(target)
-                save_data()
-                send_fb(sender_id, f"✅ تم حظر {target[:15]}...")
-                add_log(f"🔨 حظر {target[:15]}...")
-            else:
-                send_fb(sender_id, "المستخدم محظور بالفعل.")
-        return True
-
-    # 12. إلغاء حظر
-    if cmd.startswith('الغاء حظر ') or cmd.startswith('unblock '):
-        if len(parts) >= 2:
-            target = parts[1]
-            blocked = data.get('blocked', [])
-            if target in blocked:
-                data['blocked'].remove(target)
-                save_data()
-                send_fb(sender_id, f"✅ تم إلغاء حظر {target[:15]}...")
-            else:
-                send_fb(sender_id, "المستخدم غير موجود في قائمة المحظورين.")
-        return True
-
-    # 13. إضافة ملاحظة
-    if 'ملاحظة' in cmd:
-        nums = [int(p) for p in parts if p.isdigit()]
-        if nums:
-            order_id = nums[0]
-            note_text = ' '.join(parts[parts.index(str(order_id)) + 1:])
-            if note_text:
-                if 'order_notes' not in data:
-                    data['order_notes'] = {}
-                data['order_notes'][str(order_id)] = note_text
-                save_data()
-                send_fb(sender_id, f"✅ تم إضافة ملاحظة للطلب #{order_id}")
-            else:
-                send_fb(sender_id, "يرجى كتابة الملاحظة بعد رقم الطلب.")
-        return True
-
-    # 14. تغيير حالة الطلب
-    if any(k in cmd for k in ['مكتمل', 'complete']) and any(p.isdigit() for p in parts):
-        nums = [int(p) for p in parts if p.isdigit()]
-        if nums:
-            order_id = nums[0]
-            if update_order(order_id, {'status': 'مكتمل'}):
-                send_fb(sender_id, f"✅ تم تحديث الطلب #{order_id} إلى مكتمل")
-            else:
-                send_fb(sender_id, f"الطلب {order_id} غير موجود.")
-        return True
-
-    # 15. حذف طلب
-    if 'حذف' in cmd and any(p.isdigit() for p in parts):
-        nums = [int(p) for p in parts if p.isdigit()]
-        if nums:
-            order_id = nums[0]
-            delete_order(order_id)
-            send_fb(sender_id, f"✅ تم حذف الطلب #{order_id}")
-        return True
-
-    # إذا لم يكن أمراً معروفاً، نعطي رداً عاماً مناسباً للمدير
-    send_fb(sender_id, "أهلاً بك يا مدير. الأوامر المتاحة: إحصائيات، طلبات اليوم، كل الطلبات، تفاصيل [رقم]، اعرض العملاء، المحظورون، كم عميل، كم موثوق، كم محظور، كم رسالة، حظر [معرف]، الغاء حظر [معرف]، ملاحظة [رقم] [نص]، مكتمل [رقم]، حذف [رقم].")
-    return True
 
 # ========== معالجة كلمة المرور ==========
 def handle_password(sender_id, text, sess):
@@ -498,6 +258,39 @@ def handle_password(sender_id, text, sess):
         send_fb(sender_id, "أهلاً بك يا مدير.")
     else:
         send_fb(sender_id, "❌ كلمة المرور غير صحيحة.")
+
+# ========== الذكاء الاصطناعي الموحد (للمدير والعميل) ==========
+def ask_ai(user_msg, sess, is_owner_mode=False):
+    # بناء السياق من آخر 8 رسائل
+    context = "\n".join(sess.get('conversation', [])[-8:])
+    
+    # إضافة تعليمات خاصة للمدير إذا لزم الأمر
+    system = BOT_PERSONALITY
+    if is_owner_mode:
+        system += "\n\nالمستخدم هو المدير. لديه صلاحية الاطلاع على كل شيء. أجب بطبيعية ولا تفرض عليه أوامر ثابتة."
+    
+    # إضافة معلومات حقيقية عن الطلبات إذا سأل المدير
+    if is_owner_mode and any(k in user_msg.lower() for k in ['احصائيات', 'طلبات', 'عملاء', 'كم']):
+        today_ords = len(get_today_orders())
+        unique_clients = get_unique_clients_count()
+        orders_count = len(data.get('orders', []))
+        verified_count = len(data.get('verified', []))
+        blocked_count = len(data.get('blocked', []))
+        
+        system += f"\n\nمعلومات حقيقية للمدير:\n- العملاء الفريدون: {unique_clients}\n- إجمالي الطلبات: {orders_count}\n- طلبات اليوم: {today_ords}\n- الموثوقون: {verified_count}\n- المحظورون: {blocked_count}\n- الرسائل المستلمة: {data['stats']['msgs_received']}\n- الرسائل المرسلة: {data['stats']['msgs_sent']}"
+    
+    prompt = f"{system}\n\nسجل المحادثة:\n{context}\n\nالمستخدم: {user_msg}\nالرد:"
+    
+    try:
+        url = f'{AI_API_URL}?text={requests.utils.quote(prompt)}'
+        r = requests.get(url, timeout=12)
+        if r.status_code == 200:
+            answer = r.json().get('response', '').strip()
+            return answer[:1800]
+    except Exception as e:
+        add_log(f"❌ خطأ في الذكاء الاصطناعي: {e}")
+    
+    return "عذراً، حدث خطأ تقني. حاول مرة أخرى."
 
 # ========== المعالجة الرئيسية ==========
 def process_message(sender_id, text):
@@ -516,7 +309,10 @@ def process_message(sender_id, text):
 
     # 1. إذا كان المدير
     if is_owner(sender_id):
-        handle_owner_command(text, sender_id)
+        # المدير يتحدث مع الذكاء بشكل طبيعي (وليس أوامر جامدة)
+        reply = ask_ai(text, sess, is_owner_mode=True)
+        send_fb(sender_id, reply)
+        add_to_conversation(sender_id, 'النظام', reply)
         return
 
     # 2. إذا كان في مرحلة إدخال كلمة المرور
@@ -531,9 +327,60 @@ def process_message(sender_id, text):
         send_fb(sender_id, "🔐 الرجاء إدخال الرقم السري:")
         return
 
-    # 4. استخراج بيانات العميل
-    extract_client_data(text, sess)
-    update_session(sender_id, sess)
+    # 4. استخراج بيانات العميل من خلال تحليل النص
+    # (الذكاء سيسأل عنها طبيعياً، لكننا نحاول استخراجها أيضاً)
+    updated = False
+    
+    # الاسم
+    if not sess.get('name'):
+        patterns = [
+            r'(?:اسمي|الاسم)[:\s]*([\w\s]{2,30})',
+            r'my name is[:\s]*([a-zA-Z\s]{2,30})',
+            r'انا\s+([\w\s]{2,20})'
+        ]
+        for p in patterns:
+            m = re.search(p, text, re.I)
+            if m:
+                sess['name'] = m.group(1).strip()
+                add_log(f"📝 الاسم: {sess['name']}")
+                updated = True
+                break
+    
+    # الخدمة
+    if not sess.get('service'):
+        services = {
+            'شعار|logo|لوجو': 'تصميم شعار',
+            'موقع|website|web': 'تصميم موقع',
+            'متجر|ecommerce|store': 'متجر إلكتروني',
+            'تطبيق|app|mobile': 'تطبيق جوال',
+            'بوت|bot|chatbot': 'بوت ذكاء اصطناعي',
+            'تصميم|design|graphic': 'تصميم جرافيك'
+        }
+        for kw, svc in services.items():
+            if re.search(kw, text, re.I):
+                sess['service'] = svc
+                add_log(f"🛠 الخدمة: {svc}")
+                updated = True
+                break
+    
+    # الميزانية
+    if sess.get('budget', 0) == 0:
+        m = re.search(r'(\d+)[\s-]*(?:usdt|\$|دولار)', text, re.I)
+        if m:
+            sess['budget'] = int(m.group(1))
+            add_log(f"💰 الميزانية: {sess['budget']}$")
+            updated = True
+    
+    # رقم الجوال
+    if not sess.get('phone'):
+        m = re.search(r'(05[0-9]{8}|5[0-9]{8}|\+966[0-9]{9}|00966[0-9]{9})', text)
+        if m:
+            sess['phone'] = m.group(1)
+            add_log(f"📱 الجوال: {sess['phone']}")
+            updated = True
+    
+    if updated:
+        update_session(sender_id, sess)
 
     # 5. التحقق من اكتمال البيانات
     if sess.get('name') and sess.get('service') and sess.get('budget', 0) > 0 and not sess.get('confirmed', False):
@@ -566,8 +413,8 @@ def process_message(sender_id, text):
         send_fb(sender_id, pay_msg)
         return
 
-    # 6. رد عادي للعميل عبر الذكاء الاصطناعي
-    reply = ask_ai(text, sess)
+    # 6. رد عادي من الذكاء الاصطناعي للعميل
+    reply = ask_ai(text, sess, is_owner_mode=False)
     send_fb(sender_id, reply)
     add_to_conversation(sender_id, 'النظام', reply)
 
@@ -724,18 +571,14 @@ def home():
             </div>
 
             <div id="commands" class="tab-content">
-                <h3>⚙️ أوامر المدير (يمكن إرسالها عبر المحادثة)</h3>
+                <h3>⚙️ الأوامر المتاحة (يمكن استخدامها في المحادثة)</h3>
                 <ul style="line-height: 2;">
-                    <li><code>احصائيات</code> أو <code>full</code> - عرض إحصائيات كاملة</li>
+                    <li><code>احصائيات</code> - عرض إحصائيات عامة</li>
                     <li><code>طلبات اليوم</code> - عرض طلبات اليوم</li>
                     <li><code>كل الطلبات</code> - عرض آخر 10 طلبات</li>
                     <li><code>تفاصيل [رقم]</code> - عرض تفاصيل طلب محدد</li>
                     <li><code>اعرض العملاء</code> - عرض أسماء العملاء المسجلين</li>
                     <li><code>المحظورين</code> - عرض قائمة المحظورين</li>
-                    <li><code>كم عميل</code> - عدد العملاء الفريدين</li>
-                    <li><code>كم موثوق</code> - عدد الموثوقين</li>
-                    <li><code>كم محظور</code> - عدد المحظورين</li>
-                    <li><code>كم رسالة</code> - عدد الرسائل</li>
                     <li><code>حظر [معرف]</code> - حظر مستخدم</li>
                     <li><code>الغاء حظر [معرف]</code> - إلغاء حظر مستخدم</li>
                     <li><code>ملاحظة [رقم] [نص]</code> - إضافة ملاحظة لطلب</li>
@@ -889,7 +732,7 @@ def keep_alive():
 
 if __name__ == '__main__':
     print("\n" + "="*70)
-    print("🚀 B.Y PRO Agent - النسخة النهائية للمدير")
+    print("🚀 B.Y PRO Agent - النسخة الطبيعية بالكامل")
     print("="*70)
     print(f"👤 Owner ID: {OWNER_FB_ID}")
     print(f"🔑 Password: {OWNER_PASSWORD}")
