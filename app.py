@@ -264,6 +264,18 @@ def add_to_conversation(sender_id, role, message):
         sess['conversation'] = sess['conversation'][-15:]
     save_data()
 
+def reset_session_for_new_order(sender_id):
+    """إعادة تعيين بيانات الجلسة للطلبات المستقبلية مع الاحتفاظ بالاسم ورقم الجوال"""
+    sess = get_session(sender_id)
+    update_session(sender_id, {
+        'service': '',
+        'budget': 0,
+        'duration': '',
+        'details': '',
+        'asked_for_phone': False,
+        'confirmed': False  # نعيد تعيين confirmed للسماح بطلبات جديدة
+    })
+
 # ========== معالجة كلمة المرور ==========
 def handle_password(sender_id, text, sess):
     if text.strip() == OWNER_PASSWORD:
@@ -353,12 +365,6 @@ def extract_client_data(text, sess):
                         sess['budget'] = int(m.group(1))
                         add_log(f"💰 الميزانية: {sess['budget']}$")
                         updated = True
-                    else:
-                        # البحث عن أرقام كبيرة فقط (قد تكون ميزانية بدون عملة)
-                        m2 = re.search(r'\b(\d{3,})\b', text)
-                        if m2 and not sess.get('budget'):
-                            # نطلب تأكيد الميزانية عبر الذكاء، لا نقوم بتعيينها هنا
-                            pass
     
     # 4. رقم الجوال
     if not sess.get('phone'):
@@ -376,17 +382,17 @@ def extract_client_data(text, sess):
             add_log(f"⏱ المدة: {sess['duration']}")
             updated = True
     
-    # 6. تفاصيل إضافية (نخزن جزءاً من المحادثة)
+    # 6. تفاصيل إضافية
     if not sess.get('details'):
         # نأخذ آخر جملة أو اثنتين كتفاصيل مؤقتة
         sentences = re.split(r'[.!?]', text)
-        if sentences:
+        if sentences and sentences[0].strip():
             sess['details'] = sentences[0][:200]
             updated = True
     
     return updated
 
-# ========== الذكاء الاصطناعي الموحد مع معالجة ORDER_READY ==========
+# ========== الذكاء الاصطناعي الموحد ==========
 def ask_ai(user_msg, sess, is_owner_mode=False, live_stats=None):
     context = "\n".join(sess.get('conversation', [])[-12:])
     system = BOT_PERSONALITY
@@ -472,22 +478,20 @@ def process_message(sender_id, text):
         # إزالة العلامة من الرد
         clean_reply = reply.replace('[ORDER_READY]', '').strip()
         
-        # التحقق من اكتمال البيانات الأساسية
-        if sess.get('name') and sess.get('service') and sess.get('budget', 0) > 0 and not sess.get('confirmed', False):
+        # التحقق من اكتمال البيانات الأساسية (الاسم، الخدمة، الميزانية)
+        if sess.get('name') and sess.get('service') and sess.get('budget', 0) > 0:
+            
             # نطلب رقم الجوال مرة واحدة إذا لم يقدمه
             if not sess.get('phone') and not sess.get('asked_for_phone'):
                 send_fb(sender_id, "شكراً لك. هل يمكن تزويدي برقم جوالك للتواصل؟ (اختياري)")
                 sess['asked_for_phone'] = True
                 update_session(sender_id, {'asked_for_phone': True})
-                # نعيد الرد بدون علامة، لأننا لم نحفظ الطلب بعد
+                # نرسل الرد مع طلب رقم الجوال
                 send_fb(sender_id, clean_reply)
                 add_to_conversation(sender_id, 'النظام', clean_reply)
                 return
             
-            # حفظ الطلب
-            sess['confirmed'] = True
-            update_session(sender_id, {'confirmed': True})
-
+            # حفظ الطلب (نسمح بطلبات متعددة لنفس العميل)
             order = {
                 'name': sess['name'],
                 'service': sess['service'],
@@ -501,8 +505,20 @@ def process_message(sender_id, text):
                 'status': 'جديد'
             }
             order_id = add_order(order)
+            add_log(f"✅ تم حفظ الطلب #{order_id} بنجاح")
             
-            # إرسال الرد النظيف (بدون العلامة)
+            # إعادة تعيين بيانات الخدمة والميزانية للطلبات المستقبلية
+            # نحتفظ بالاسم ورقم الجوال
+            update_session(sender_id, {
+                'service': '',
+                'budget': 0,
+                'duration': '',
+                'details': '',
+                'asked_for_phone': False,
+                'confirmed': False
+            })
+            
+            # إرسال الرد النظيف
             send_fb(sender_id, clean_reply)
             add_to_conversation(sender_id, 'النظام', clean_reply)
         else:
@@ -840,7 +856,7 @@ def keep_alive():
 
 if __name__ == '__main__':
     print("\n" + "="*70)
-    print("🚀 B.Y PRO Agent - النسخة المحسنة مع حفظ تلقائي للطلبات")
+    print("🚀 B.Y PRO Agent - النسخة النهائية مع حفظ متعدد الطلبات")
     print("="*70)
     print(f"👤 Owner ID: {OWNER_FB_ID}")
     print(f"🔑 Password: {OWNER_PASSWORD}")
