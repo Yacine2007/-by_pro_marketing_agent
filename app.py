@@ -192,7 +192,7 @@ def add_order(order_dict):
     order_dict['id'] = len(data['orders']) + 1
     data['orders'].append(order_dict)
     save_data()
-    add_log(f"✅ طلب جديد #{order_dict['id']} - {order_dict['name']}")
+    add_log(f"✅ طلب جديد #{order_dict['id']} - {order_dict['name']} - {order_dict['service']} - {order_dict['budget']}$")
     # إشعار المدير
     stats = get_live_stats()
     notify_msg = f"""🔔 طلب جديد #{order_dict['id']}
@@ -273,17 +273,17 @@ def handle_password(sender_id, text, sess):
             save_data()
             add_log(f"🔐 مدير جديد: {sender_str[:10]}...")
         sess['awaiting_password'] = False
-        # لا نزيل صلاحية المدير عند تسجيل الخروج، بل نتركه موثوقاً
+        update_session(sender_id, {'awaiting_password': False})
         send_fb(sender_id, "أهلاً بك يا مدير.")
     else:
         send_fb(sender_id, "❌ كلمة المرور غير صحيحة.")
 
-# ========== استخراج بيانات العميل ==========
+# ========== استخراج بيانات العميل (محسّن جداً) ==========
 def extract_client_data(text, sess):
     updated = False
     text_lower = text.lower()
     
-    # 1. الاسم
+    # 1. الاسم (نتجنب أخذ الصفات)
     if not sess.get('name'):
         patterns = [
             r'اسمي[:\s]*([\u0600-\u06FF\s]{3,30})',
@@ -312,7 +312,8 @@ def extract_client_data(text, sess):
             (r'تطبيق|app|mobile|ابلكيشن', 'تطبيق جوال'),
             (r'بوت|bot|chatbot|ذكاء اصطناعي|ai', 'بوت ذكاء اصطناعي'),
             (r'تصميم|design|جرافيك|graphic', 'تصميم جرافيكي'),
-            (r'فيسبوك|facebook|منصة|social', 'منصة تواصل اجتماعي')
+            (r'فيسبوك|facebook|منصة|social', 'منصة تواصل اجتماعي'),
+            (r'نظام تشغيل|operating system|os', 'نظام تشغيل')
         ]
         for pattern, service_name in service_map:
             if re.search(pattern, text_lower):
@@ -321,18 +322,40 @@ def extract_client_data(text, sess):
                 updated = True
                 break
     
-    # 3. الميزانية
+    # 3. الميزانية (دعم الصيغ النصية)
     if sess.get('budget', 0) == 0:
-        m = re.search(r'(\d+)[\s-]*(?:usdt|\$|دولار|dollar)', text, re.I)
-        if m:
-            sess['budget'] = int(m.group(1))
-            add_log(f"💰 الميزانية: {sess['budget']}$")
+        # البحث عن مليار
+        billion_match = re.search(r'(\d+)\s*مليار', text, re.I)
+        if billion_match:
+            sess['budget'] = int(billion_match.group(1)) * 1000000000
+            add_log(f"💰 الميزانية: {sess['budget']}$ (مليار)")
             updated = True
         else:
-            if re.search(r'(لا توجد محدودية|unlimited|مفتوح|كبيرة)', text_lower):
-                sess['budget'] = 10000
-                add_log("💰 الميزانية: غير محدودة (تقدير 10000$)")
+            # البحث عن مليون
+            million_match = re.search(r'(\d+)\s*مليون', text, re.I)
+            if million_match:
+                sess['budget'] = int(million_match.group(1)) * 1000000
+                add_log(f"💰 الميزانية: {sess['budget']}$ (مليون)")
                 updated = True
+            else:
+                # البحث عن ألف
+                thousand_match = re.search(r'(\d+)\s*ألف', text, re.I)
+                if thousand_match:
+                    sess['budget'] = int(thousand_match.group(1)) * 1000
+                    add_log(f"💰 الميزانية: {sess['budget']}$ (ألف)")
+                    updated = True
+                else:
+                    # البحث عن أرقام عادية
+                    m = re.search(r'(\d+)[\s-]*(?:usdt|\$|دولار|dollar)', text, re.I)
+                    if m:
+                        sess['budget'] = int(m.group(1))
+                        add_log(f"💰 الميزانية: {sess['budget']}$")
+                        updated = True
+                    else:
+                        if re.search(r'(لا توجد محدودية|unlimited|مفتوح|كبيرة)', text_lower):
+                            sess['budget'] = 10000
+                            add_log("💰 الميزانية: غير محدودة (تقدير 10000$)")
+                            updated = True
     
     # 4. رقم الجوال
     if not sess.get('phone'):
@@ -478,10 +501,8 @@ def process_message(sender_id, text):
 
 # ========== أمر تسجيل الخروج (للمدير فقط) ==========
 def handle_logout(sender_id):
-    # لا نزيله من verified، فقط نغير حالة الجلسة
     sess = get_session(sender_id)
     sess['awaiting_password'] = False
-    # لا نغير verified
     update_session(sender_id, {'awaiting_password': False})
     send_fb(sender_id, "تم تسجيل الخروج. كيف يمكنني مساعدتك اليوم؟")
     add_log(f"🚪 مدير سجل خروج: {sender_id[:10]}...")
