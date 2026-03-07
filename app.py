@@ -22,7 +22,7 @@ BINANCE_ID = os.environ.get('BINANCE_ID', '1074084246')
 AI_API_URL = os.environ.get('AI_API_URL', 'http://fi8.bot-hosting.net:20163/elos-gemina')
 COMPANY_WEBSITE = os.environ.get('COMPANY_WEBSITE', 'https://b.y-pro.kesug.com')
 
-# ========== البرومبت المحسن (شخصية مستشار تقني) ==========
+# ========== البرومبت المعدل مع آلية تأكيد الطلب ==========
 BOT_PERSONALITY = """أنت مستشار تقني ومبيعات في B.Y PRO للتكنولوجيا والبرمجيات.
 
 شخصيتك:
@@ -45,12 +45,18 @@ BOT_PERSONALITY = """أنت مستشار تقني ومبيعات في B.Y PRO ل
 مبادئ التواصل:
 1. أجب بدقة واختصار.
 2. تكيف مع لغة العميل.
-3. لا تلح، ولكن اسأل بلطف عن البيانات المطلوبة (الاسم، الخدمة، الميزانية).
+3. لا تلح، ولكن اسأل بلطف عن البيانات المطلوبة (الاسم، الخدمة، الميزانية، رقم الهاتف، المدة المتوقعة، تفاصيل المشروع).
 4. إذا سألك "هل أنت مبرمج؟"، قل: "أنا جزء من فريقنا التقني، وأنا هنا لمساعدتك في كل التفاصيل."
 
-الهدف: تحويل الاستفسار إلى مشروع قائم وحفظ الطلب في النظام."""
+آلية تأكيد الطلب:
+- اجمع البيانات التالية بالتدريج: الاسم الكامل، الخدمة المطلوبة، الميزانية التقريبية، رقم الهاتف (اختياري)، المدة المتوقعة (يمكن اقتراحها)، وتفاصيل المشروع.
+- عندما تتأكد أن جميع البيانات الأساسية (الاسم، الخدمة، الميزانية) متوفرة، أضف في بداية ردك العبارة التالية بالضبط: `[ORDER_READY]` ثم اكتب رسالة تأكيد الطلب مع تفاصيل الدفع.
+- مثال: `[ORDER_READY] تم تأكيد طلبك يا [الاسم]... إلخ`
+- النظام سيتعرف على هذه العبارة ويقوم بحفظ الطلب تلقائياً قبل إرسال الرد.
 
-# ========== تخزين JSONBin.io مع تحميل آمن ==========
+الهدف: تحويل الاستفسار إلى مشروع قائم وتخزين جميع البيانات في النظام."""
+
+# ========== تخزين JSONBin.io ==========
 def jsonbin_read():
     url = f"https://api.jsonbin.io/v3/b/{BIN_ID}"
     headers = {
@@ -190,6 +196,9 @@ def add_order(order_dict):
 الاسم: {order_dict['name']}
 الخدمة: {order_dict['service']}
 الميزانية: {order_dict['budget']}$
+رقم الجوال: {order_dict.get('phone', 'غير متوفر')}
+المدة: {order_dict.get('duration', 'غير محددة')}
+التفاصيل: {order_dict.get('details', '')[:100]}...
 إجمالي الطلبات الآن: {stats['total_orders']}
 طلبات اليوم: {stats['today_orders']}
 {order_dict['link']}"""
@@ -232,6 +241,8 @@ def get_session(sender_id):
             'service': '',
             'budget': 0,
             'phone': '',
+            'duration': '',
+            'details': '',
             'confirmed': False,
             'conversation': [],
             'awaiting_password': False,
@@ -286,9 +297,7 @@ def extract_client_data(text, sess):
         for pat in patterns:
             m = re.search(pat, text, re.I)
             if m:
-                candidate = m.group(1).strip()
-                # قبول الأسماء حتى لو كانت غريبة (لا نستبعدها)
-                sess['name'] = candidate
+                sess['name'] = m.group(1).strip()
                 add_log(f"📝 الاسم: {sess['name']}")
                 updated = True
                 break
@@ -304,7 +313,9 @@ def extract_client_data(text, sess):
             (r'تصميم|design|جرافيك|graphic', 'تصميم جرافيكي'),
             (r'فيسبوك|facebook|منصة|social', 'منصة تواصل اجتماعي'),
             (r'نظام تشغيل|operating system|os', 'نظام تشغيل'),
-            (r'برنامج|software|برمجة', 'برنامج مخصص')
+            (r'برنامج|software|برمجة', 'برنامج مخصص'),
+            (r'كتالوج|catalog', 'كتالوج رقمي'),
+            (r'تسيير مطاعم|restaurant management', 'نظام تسيير مطاعم')
         ]
         for pattern, service_name in service_map:
             if re.search(pattern, text_lower):
@@ -312,7 +323,6 @@ def extract_client_data(text, sess):
                 add_log(f"🛠 الخدمة: {service_name}")
                 updated = True
                 break
-        # إذا لم نجد خدمة محددة، نتركها للذكاء الاصطناعي
     
     # 3. الميزانية (دعم الصيغ النصية)
     if sess.get('budget', 0) == 0:
@@ -337,18 +347,17 @@ def extract_client_data(text, sess):
                     add_log(f"💰 الميزانية: {sess['budget']}$ (ألف)")
                     updated = True
                 else:
-                    # البحث عن أرقام عادية
+                    # البحث عن أرقام عادية مع عملة
                     m = re.search(r'(\d+)[\s-]*(?:usdt|\$|دولار|dollar)', text, re.I)
                     if m:
                         sess['budget'] = int(m.group(1))
                         add_log(f"💰 الميزانية: {sess['budget']}$")
                         updated = True
                     else:
-                        # البحث عن أرقام بدون عملة (مثل 5000)
+                        # البحث عن أرقام كبيرة فقط (قد تكون ميزانية بدون عملة)
                         m2 = re.search(r'\b(\d{3,})\b', text)
-                        if m2:
-                            # نطلب تأكيد الميزانية عبر الذكاء الاصطناعي
-                            # هنا نتركها للذكاء الاصطناعي
+                        if m2 and not sess.get('budget'):
+                            # نطلب تأكيد الميزانية عبر الذكاء، لا نقوم بتعيينها هنا
                             pass
     
     # 4. رقم الجوال
@@ -359,9 +368,25 @@ def extract_client_data(text, sess):
             add_log(f"📱 الجوال: {sess['phone']}")
             updated = True
     
+    # 5. المدة (أسابيع، أيام)
+    if not sess.get('duration'):
+        duration_match = re.search(r'(\d+)\s*(?:يوم|شهر|أسبوع|week|month|day)', text, re.I)
+        if duration_match:
+            sess['duration'] = duration_match.group(0)
+            add_log(f"⏱ المدة: {sess['duration']}")
+            updated = True
+    
+    # 6. تفاصيل إضافية (نخزن جزءاً من المحادثة)
+    if not sess.get('details'):
+        # نأخذ آخر جملة أو اثنتين كتفاصيل مؤقتة
+        sentences = re.split(r'[.!?]', text)
+        if sentences:
+            sess['details'] = sentences[0][:200]
+            updated = True
+    
     return updated
 
-# ========== الذكاء الاصطناعي الموحد ==========
+# ========== الذكاء الاصطناعي الموحد مع معالجة ORDER_READY ==========
 def ask_ai(user_msg, sess, is_owner_mode=False, live_stats=None):
     context = "\n".join(sess.get('conversation', [])[-12:])
     system = BOT_PERSONALITY
@@ -378,16 +403,6 @@ def ask_ai(user_msg, sess, is_owner_mode=False, live_stats=None):
 - الرسائل المرسلة: {live_stats['msgs_sent']}
 """
         system += stats_text
-    
-    if not is_owner_mode:
-        missing = []
-        if not sess.get('name'): missing.append("الاسم")
-        if not sess.get('service'): missing.append("الخدمة")
-        if sess.get('budget', 0) == 0: missing.append("الميزانية")
-        if missing:
-            system += f"\n\nبيانات العميل الناقصة حتى الآن: {', '.join(missing)}. اسأل عنها بلطف إذا كان السياق مناسباً."
-        else:
-            system += "\n\nبيانات العميل مكتملة. يمكنك الآن تأكيد الطلب وإرسال تفاصيل الدفع."
     
     prompt = f"{system}\n\nسجل المحادثة:\n{context}\n\nالمستخدم: {user_msg}\nالرد:"
     
@@ -449,49 +464,55 @@ def process_message(sender_id, text):
     extract_client_data(text, sess)
     update_session(sender_id, sess)
 
-    # 5. التحقق من اكتمال البيانات الأساسية
-    if sess.get('name') and sess.get('service') and sess.get('budget', 0) > 0 and not sess.get('confirmed', False):
-        # نطلب رقم الجوال مرة واحدة (اختياري)
-        if not sess.get('phone') and not sess.get('asked_for_phone'):
-            send_fb(sender_id, "شكراً لك. هل يمكن تزويدي برقم جوالك للتواصل؟ (اختياري)")
-            sess['asked_for_phone'] = True
-            update_session(sender_id, {'asked_for_phone': True})
-            return
-        
-        # تأكيد الطلب وحفظه
-        sess['confirmed'] = True
-        update_session(sender_id, {'confirmed': True})
-
-        order = {
-            'name': sess['name'],
-            'service': sess['service'],
-            'budget': sess['budget'],
-            'phone': sess.get('phone', ''),
-            'timestamp': datetime.now().isoformat(),
-            'sender_id': sender_id,
-            'link': f"https://www.facebook.com/messages/t/{sender_id}",
-            'status': 'جديد'
-        }
-        order_id = add_order(order)
-
-        deposit = int(sess['budget'] * 0.3)
-        pay_msg = f"""تم تأكيد طلبك {sess['name']}.
-
-الخدمة: {sess['service']}
-المبلغ: {sess['budget']}$ (المقدم {deposit}$)
-
-للدفع عبر USDT (Binance):
-المعرف: {BINANCE_ID}
-
-بعد الدفع نبدأ التنفيذ فوراً.
-للاستفسار: {COMPANY_WEBSITE}"""
-        send_fb(sender_id, pay_msg)
-        return
-
-    # 6. رد عادي للعميل
+    # 5. الحصول على رد الذكاء
     reply = ask_ai(text, sess, is_owner_mode=False)
-    send_fb(sender_id, reply)
-    add_to_conversation(sender_id, 'النظام', reply)
+    
+    # 6. التحقق من وجود علامة ORDER_READY
+    if '[ORDER_READY]' in reply:
+        # إزالة العلامة من الرد
+        clean_reply = reply.replace('[ORDER_READY]', '').strip()
+        
+        # التحقق من اكتمال البيانات الأساسية
+        if sess.get('name') and sess.get('service') and sess.get('budget', 0) > 0 and not sess.get('confirmed', False):
+            # نطلب رقم الجوال مرة واحدة إذا لم يقدمه
+            if not sess.get('phone') and not sess.get('asked_for_phone'):
+                send_fb(sender_id, "شكراً لك. هل يمكن تزويدي برقم جوالك للتواصل؟ (اختياري)")
+                sess['asked_for_phone'] = True
+                update_session(sender_id, {'asked_for_phone': True})
+                # نعيد الرد بدون علامة، لأننا لم نحفظ الطلب بعد
+                send_fb(sender_id, clean_reply)
+                add_to_conversation(sender_id, 'النظام', clean_reply)
+                return
+            
+            # حفظ الطلب
+            sess['confirmed'] = True
+            update_session(sender_id, {'confirmed': True})
+
+            order = {
+                'name': sess['name'],
+                'service': sess['service'],
+                'budget': sess['budget'],
+                'phone': sess.get('phone', ''),
+                'duration': sess.get('duration', ''),
+                'details': sess.get('details', ''),
+                'timestamp': datetime.now().isoformat(),
+                'sender_id': sender_id,
+                'link': f"https://www.facebook.com/messages/t/{sender_id}",
+                'status': 'جديد'
+            }
+            order_id = add_order(order)
+            
+            # إرسال الرد النظيف (بدون العلامة)
+            send_fb(sender_id, clean_reply)
+            add_to_conversation(sender_id, 'النظام', clean_reply)
+        else:
+            # البيانات غير مكتملة، نرسل الرد بدون حفظ
+            send_fb(sender_id, clean_reply)
+            add_to_conversation(sender_id, 'النظام', clean_reply)
+    else:
+        # لا توجد علامة، نرسل الرد مباشرة
+        send_fb(sender_id, reply)
+        add_to_conversation(sender_id, 'النظام', reply)
 
 # ========== أمر تسجيل الخروج (للمدير فقط) ==========
 def handle_logout(sender_id):
@@ -819,7 +840,7 @@ def keep_alive():
 
 if __name__ == '__main__':
     print("\n" + "="*70)
-    print("🚀 B.Y PRO Agent - النسخة المحسنة (مرنة واحترافية)")
+    print("🚀 B.Y PRO Agent - النسخة المحسنة مع حفظ تلقائي للطلبات")
     print("="*70)
     print(f"👤 Owner ID: {OWNER_FB_ID}")
     print(f"🔑 Password: {OWNER_PASSWORD}")
