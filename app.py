@@ -24,13 +24,19 @@ COMPANY_WEBSITE = os.environ.get('COMPANY_WEBSITE', 'https://b.y-pro.kesug.com')
 SELF_URL = os.environ.get('SELF_URL', 'https://by-pro-marketing-agent.onrender.com')
 
 # ========== شخصية البوت - بشرية وطبيعية ==========
-BOT_PERSONALITY = """أنت "أحمد"، مستشار مبيعات في شركة B.Y PRO للتكنولوجيا والبرمجيات.
+BOT_PERSONALITY = """أنت "أحمد"، مستشار مبيعات ووكيل تسويق في شركة B.Y PRO للتكنولوجيا والبرمجيات.
 
 شخصيتك:
 - تتحدث كإنسان حقيقي، بأسلوب ودود ومريح، وليس كبوت آلي.
 - مختصر ومباشر، لا تطوّل بدون داعٍ.
 - تفهم احتياج العميل قبل أي شيء.
 - لا تبدأ ردودك بـ "أهلاً وسهلاً" في كل رسالة، تكلّم بشكل طبيعي.
+
+هويتك كوكيل تسويق:
+- أنت بوابة شركة B.Y PRO، تمثّل كل خدماتها (تصميم، برمجة، تطبيقات، ذكاء اصطناعي، جرافيك).
+- إذا سألك عميل: "هل تقدر تصمم لي موقع؟" أو "هل أنت مبرمج؟" أو "هل تعمل تطبيقات؟" - الجواب دائماً إيجابي بثقة: "نعم، هذا تخصصنا" أو "بالتأكيد، نقدم هذه الخدمة".
+- لا تقل أبداً "سأحوّلك للفريق التقني" - أنت تمثّلهم مباشرة وتغلق الصفقة.
+- هدفك جذب العميل وإقناعه وتسجيل طلبه، ثم الفريق يتولى التنفيذ.
 
 طريقة عملك مع العميل:
 1. اسمع طلبه باختصار.
@@ -43,15 +49,20 @@ BOT_PERSONALITY = """أنت "أحمد"، مستشار مبيعات في شركة
 - لا تكرر نفسك.
 - لا تظهر كبوت أبداً.
 - أجب بنفس لغة العميل (عربي أو إنجليزي).
-- إذا سألك عن شيء تقني خارج نطاقك، قل له "أحوّلك للفريق التقني".
+- كن إيجابياً دائماً مع أي طلب ضمن خدمات الشركة.
 
-الخدمات والأسعار التقريبية (استخدمها كمرجع فقط، السعر الفعلي يتحدد حسب التفاصيل):
-- موقع تعريفي: 300-800$ (5-10 أيام)
-- متجر إلكتروني: 700-1800$ (15-25 يوم)
-- بوت ذكاء اصطناعي: 500-2000$ (حسب التعقيد)
-- تطبيق جوال: من 1500$ (30-60 يوم)
-- تصميم جرافيك / شعار: 50-200$ (24-72 ساعة)
-- برنامج مخصص: من 1000$ (حسب المشروع)
+الخدمات والأسعار (بعد تخفيض B.Y PRO - استخدمها كمرجع، السعر الفعلي حسب التفاصيل):
+- موقع تعريفي بسيط: 250-550$ (5-10 أيام) [السوق: 300-600$]
+- موقع تعريفي متقدم: 550-950$ (10-20 يوم) [السوق: 600-1000$]
+- متجر إلكتروني أساسي: 650-1100$ (15-25 يوم) [السوق: 700-1200$]
+- متجر إلكتروني متكامل: 1100-2400$ (25-45 يوم) [السوق: 1200-2500$]
+- تطبيق جوال بسيط (MVP): 1400-2400$ (30-50 يوم) [السوق: 1500-2500$]
+- تطبيق جوال متكامل: 2400-7500$ (50-90 يوم) [السوق: 2500-8000$]
+- بوت ذكاء اصطناعي بسيط: 450-900$ (7-15 يوم) [السوق: 500-1000$]
+- بوت ذكاء اصطناعي متقدم: 900-2900$ (15-40 يوم) [السوق: 1000-3000$]
+- تصميم شعار / هوية بصرية: 80-280$ (24-72 ساعة) [السوق: 100-300$]
+- تصميم جرافيك (مواد تسويقية): 150-450$ (2-5 أيام) [السوق: 200-500$]
+- برنامج / نظام مخصص: 950-4900$ (حسب المشروع) [السوق: 1000-5000$]
 
 طريقة الدفع: 30% مقدماً، 70% بعد التسليم، عبر USDT (Binance Pay) معرف: 1074084246
 
@@ -203,15 +214,17 @@ def add_order(order_dict):
 
     stats = get_live_stats()
     notify_msg = (
-        f"🔔 طلب جديد #{order_dict['id']}\n"
-        f"الاسم: {order_dict['name']}\n"
-        f"الخدمة: {order_dict['service']}\n"
-        f"الميزانية المتفق عليها: {order_dict.get('budget','؟')}$\n"
-        f"رقم الجوال: {order_dict.get('phone', 'غير متوفر')}\n"
-        f"المدة: {order_dict.get('duration', 'غير محددة')}\n"
-        f"التفاصيل: {order_dict.get('details', '')[:150]}\n"
-        f"إجمالي الطلبات: {stats['total_orders']} | اليوم: {stats['today_orders']}\n"
-        f"محادثة: {order_dict['link']}"
+        f"🔔🔔 طلب جديد وصل! #{order_dict['id']}\n"
+        f"━━━━━━━━━━━━━━━━\n"
+        f"👤 الاسم: {order_dict['name']}\n"
+        f"🛠 الخدمة: {order_dict['service']}\n"
+        f"💰 الميزانية: {order_dict.get('budget_range', '') or str(order_dict.get('budget','؟')) + '$'}\n"
+        f"📱 الهاتف: {order_dict.get('phone', 'غير متوفر')}\n"
+        f"⏱ المدة: {order_dict.get('duration', 'غير محددة')}\n"
+        f"📋 التفاصيل: {order_dict.get('details', '')[:100]}\n"
+        f"━━━━━━━━━━━━━━━━\n"
+        f"📊 الإجمالي: {stats['total_orders']} طلب | اليوم: {stats['today_orders']}\n"
+        f"🔗 محادثة: {order_dict['link']}"
     )
     send_fb(OWNER_FB_ID, notify_msg)
     return order_dict['id']
@@ -315,33 +328,41 @@ def extract_phone(text):
 def extract_name_from_text(text):
     """استخراج الاسم من النص"""
     patterns = [
-        r'اسمي[:\s]*([\u0600-\u06FF\s]{3,30})',
-        r'الاسم[:\s]*([\u0600-\u06FF\s]{3,30})',
-        r'انا[:\s]*([\u0600-\u06FF]{3,20})',
-        r'my name is[:\s]*([a-zA-Z\s]{3,30})',
-        r'i\'?m[:\s]*([a-zA-Z\s]{3,25})',
-        r'name[:\s]*([a-zA-Z\s]{3,30})',
-        r'يسمونني[:\s]*([\u0600-\u06FF\s]{3,20})',
+        r'اسمي[:\s]*([\u0600-\u06FF\w\s]{2,30})',
+        r'الاسم[:\s]*([\u0600-\u06FF\w\s]{2,30})',
+        r'انا[:\s]*([\u0600-\u06FF\w]{2,20})',
+        r'my name is[:\s]*([a-zA-Z\u0600-\u06FF\s]{2,30})',
+        r'i\'?m[:\s]*([a-zA-Z\u0600-\u06FF\s]{2,25})',
+        r'name[:\s]*([a-zA-Z\u0600-\u06FF\s]{2,30})',
+        r'يسمونني[:\s]*([\u0600-\u06FF\w\s]{2,20})',
     ]
     for pat in patterns:
         m = re.search(pat, text, re.I)
         if m:
             name = m.group(1).strip()
             # تأكد أنه اسم وليس جملة طويلة
-            if 2 <= len(name.split()) <= 4 and len(name) <= 30:
+            if 1 <= len(name.split()) <= 4 and len(name) <= 30:
                 return name
     return None
 
 def is_price_confirmation(text):
     """هل وافق العميل على السعر؟"""
     confirmations = [
-        'نعم', 'موافق', 'موافقة', 'تمام', 'تمام شكراً', 'اوكي', 'اوك', 'ok', 'yes', 
-        'okay', 'agreed', 'deal', 'ماشي', 'راني موافق', 'حسنا', 'يلا نبدأ', 
+        'نعم', 'موافق', 'موافقة', 'تمام', 'تمام شكراً', 'اوكي', 'اوك', 'ok', 'yes',
+        'okay', 'agreed', 'deal', 'ماشي', 'راني موافق', 'حسنا', 'يلا نبدأ',
         'نبدو', 'نبدأ', 'جيد', 'سنبدأ', 'اتفقنا', 'ممتاز', 'بالتوفيق', 'شكراً',
-        'اشتري', 'مشينا'
+        'اشتري', 'مشينا', 'تمام شكرا', 'اوكي شكرا', 'بالطبع', 'طيب', 'تفضل',
+        'يلا', 'روح', 'ابدأ', 'نعم موافق', 'مو مشكلة', 'مو مشكله', 'لا مشكلة',
+        'راح ارسل', 'سأرسل', 'هيا', 'خلاص', 'اوكى', 'ايه', 'آه', 'يس', 'يوب',
+        'ان شاء الله نبدأ', 'حسناً', 'إيوه', 'أيوه'
     ]
     text_clean = text.lower().strip()
-    return any(w in text_clean for w in confirmations)
+    if any(w in text_clean for w in confirmations):
+        return True
+    # نص قصير جداً يبدو كموافقة
+    if len(text_clean) <= 3 and text_clean not in ['لا', 'لأ', 'no', 'la', 'لو']:
+        return True
+    return False
 
 def is_price_rejection(text):
     """هل رفض العميل السعر؟"""
@@ -589,8 +610,19 @@ def process_message(sender_id, text):
             send_fb(sender_id, "❌ كلمة المرور غير صحيحة.")
         return
 
-    # ====== طلب كلمة المرور - يُعرض فقط عند الكلمات المحددة ======
-    # لا نقبل ادعاءات المدير من مجرد كلام - يجب كلمة السر
+    # ====== التحقق المباشر بكلمة المرور ======
+    # إذا أرسل أي شخص كلمة المرور مباشرة يتم التحقق منه فوراً
+    if text.strip() == OWNER_PASSWORD:
+        if 'verified' not in data:
+            data['verified'] = []
+        if sender_id not in data['verified']:
+            data['verified'].append(sender_id)
+        save_data()
+        add_log(f"🔐 مدير جديد موثق مباشرة: {sender_id[:12]}")
+        send_fb(sender_id, "✅ تم التحقق. أهلاً بك سيدي المدير.")
+        return
+
+    # ====== طلب كلمة المرور - يُعرض عند الكلمات المحددة ======
     if re.search(r'\bكلمة\s*[Ss]ر\b|password|رمز\s*السر|رمز\s*الدخول', text.lower()):
         sess['awaiting_password'] = True
         update_session(sender_id, {'awaiting_password': True})
@@ -642,8 +674,26 @@ def process_message(sender_id, text):
         elif single_price and not sess.get('budget'):
             price = int(single_price.group(1))
             sess['budget'] = price
+            
+            # استخراج الخدمة
+            if not sess.get('service'):
+                service_patterns = [
+                    (r'موقع|website|web', 'موقع إلكتروني'),
+                    (r'متجر|store|ecommerce', 'متجر إلكتروني'),
+                    (r'تطبيق|app|mobile', 'تطبيق جوال'),
+                    (r'بوت|bot|chatbot|ذكاء', 'بوت ذكاء اصطناعي'),
+                    (r'تصميم|design|شعار|logo', 'تصميم'),
+                    (r'برنامج|software|نظام', 'برنامج مخصص'),
+                ]
+                for pat, svc in service_patterns:
+                    if re.search(pat, text + reply, re.I):
+                        sess['service'] = svc
+                        break
+                if not sess.get('service'):
+                    sess['service'] = 'خدمة تقنية'
+            
             sess['stage'] = 'price_proposed'
-            update_session(sender_id, {'budget': price, 'stage': 'price_proposed'})
+            update_session(sender_id, {'budget': price, 'service': sess.get('service','خدمة تقنية'), 'stage': 'price_proposed'})
         
         # استخراج مدة من الرد
         duration_match = re.search(r'(\d+[-–]\d+\s*(?:يوم|أيام|يوماً|day|days|ساعة|hours?))', reply, re.I)
@@ -659,11 +709,12 @@ def process_message(sender_id, text):
     # --- مرحلة: تم اقتراح السعر، ننتظر الموافقة ---
     if stage == 'price_proposed':
         if is_price_confirmation(text):
-            # وافق! انتقل لجمع البيانات
+            # وافق! انتقل لجمع الاسم
             sess['stage'] = 'collecting_name'
             update_session(sender_id, {'stage': 'collecting_name'})
             save_data()
             send_fb(sender_id, "ممتاز! ما اسمك الكريم؟")
+            add_to_conversation(sender_id, 'أحمد', "ممتاز! ما اسمك الكريم؟")
             return
         elif is_price_rejection(text):
             # رفض أو طلب تعديل
@@ -676,7 +727,7 @@ def process_message(sender_id, text):
             return
         else:
             # سؤال إضافي قبل الموافقة
-            reply = ask_ai(text, sess, extra_instruction="\nالعميل يستفسر. أجبه باختصار ثم ذكّره بالسؤال: هل يوافق على السعر والمدة؟")
+            reply = ask_ai(text, sess, extra_instruction="\nالعميل يستفسر. أجبه باختصار ثم اسأله: هل يوافق على السعر والمدة؟ لا تسجّل الطلب ولا تطلب اسمه الآن.")
             send_fb(sender_id, reply)
             add_to_conversation(sender_id, 'أحمد', reply)
             save_data()
@@ -688,9 +739,9 @@ def process_message(sender_id, text):
         name = extract_name_from_text(text)
         
         # إذا لم يُستخرج بالنمط، افترض أن النص كله هو الاسم إذا كان قصيراً
-        if not name and len(text.split()) <= 4 and len(text) <= 30:
+        if not name and len(text.split()) <= 4 and 2 <= len(text.strip()) <= 35:
             # تحقق أنه ليس كلمة موافقة أو سؤال
-            if not any(w in text.lower() for w in ['نعم', 'لا', 'كيف', 'ماذا', 'متى', 'أين']):
+            if not any(w in text.lower() for w in ['نعم', 'لا', 'كيف', 'ماذا', 'متى', 'أين', 'what', 'how', 'when', 'where']):
                 name = text.strip()
         
         if name:
@@ -699,6 +750,7 @@ def process_message(sender_id, text):
             update_session(sender_id, {'name': name, 'stage': 'collecting_phone'})
             save_data()
             send_fb(sender_id, f"تمام {name}، ما هو رقم هاتفك للتواصل؟")
+            add_to_conversation(sender_id, 'أحمد', f"تمام {name}، ما هو رقم هاتفك للتواصل؟")
             return
         else:
             send_fb(sender_id, "ما اسمك الكريم؟ (الاسم فقط من فضلك)")
