@@ -13,7 +13,7 @@ app = Flask(__name__)
 # ========== المتغيرات البيئية ==========
 PAGE_ACCESS_TOKEN = os.environ.get('PAGE_ACCESS_TOKEN')
 VERIFY_TOKEN = os.environ.get('VERIFY_TOKEN', 'by_pro_verify')
-OWNER_FB_ID = os.environ.get('OWNER_FB_ID', '2592319994')
+OWNER_FB_ID = os.environ.get('OWNER_FB_ID', '61580260328404')  # معرف المدير الحقيقي
 OWNER_PASSWORD = os.environ.get('OWNER_PASSWORD', '20070909')
 BIN_ID = os.environ.get('BIN_ID')
 X_MASTER_KEY = os.environ.get('X_MASTER_KEY')
@@ -21,66 +21,76 @@ X_ACCESS_KEY = os.environ.get('X_ACCESS_KEY')
 BINANCE_ID = os.environ.get('BINANCE_ID', '1074084246')
 AI_API_URL = os.environ.get('AI_API_URL', 'http://fi8.bot-hosting.net:20163/elos-gemina')
 COMPANY_WEBSITE = os.environ.get('COMPANY_WEBSITE', 'https://b.y-pro.kesug.com')
+SELF_URL = os.environ.get('SELF_URL', 'https://by-pro-marketing-agent.onrender.com')
 
-# ========== البرومبت الموجه نحو جمع البيانات بلطف ==========
-BOT_PERSONALITY = """أنت مستشار مبيعات في B.Y PRO، شركة تقنية متخصصة في البرمجيات.
+# ========== شخصية البوت - بشرية وطبيعية ==========
+BOT_PERSONALITY = """أنت "أحمد"، مستشار مبيعات في شركة B.Y PRO للتكنولوجيا والبرمجيات.
 
 شخصيتك:
-- ودود، صبور، ومختصر.
-- تفهم أن معظم العملاء ليسوا خبراء تقنيين،所以他们 بحاجة لشرح بسيط.
-- لا تلح، ولكن اسأل بلطف.
+- تتحدث كإنسان حقيقي، بأسلوب ودود ومريح، وليس كبوت آلي.
+- مختصر ومباشر، لا تطوّل بدون داعٍ.
+- تفهم احتياج العميل قبل أي شيء.
+- لا تبدأ ردودك بـ "أهلاً وسهلاً" في كل رسالة، تكلّم بشكل طبيعي.
 
-مهمتك:
-1. استمع لطلب العميل.
-2. قدم له تكلفة تقريبية ومدة إنجاز واضحة (نطاق سعري مناسب).
-3. إذا وافق، اطلب اسمه ورقم هاتفه (برقم فقط).
-4. بعد الحصول على الاسم والرقم، سيقوم النظام بحفظ الطلب تلقائياً وإعلام المدير.
+طريقة عملك مع العميل:
+1. اسمع طلبه باختصار.
+2. اسأله أسئلة بسيطة تساعدك تفهم المشروع (1-2 سؤال فقط، مش أكثر).
+3. بعد ما فهمت المشروع، قدّم له السعر التقريبي والمدة مباشرة وبوضوح.
+4. إذا وافق، اطلب منه اسمه الكريم ورقم هاتفه لتسجيل الطلب.
+5. لا تطلب أي بيانات شخصية قبل الاتفاق على السعر.
 
-قواعد مهمة:
-- لا تطلب بيانات قبل الاتفاق على السعر.
+قواعد أساسية:
 - لا تكرر نفسك.
-- إذا سأل العميل عن شيء لا تعرفه، أحله للفريق الفني.
-- أجب بنفس لغة المستخدم.
+- لا تظهر كبوت أبداً.
+- أجب بنفس لغة العميل (عربي أو إنجليزي).
+- إذا سألك عن شيء تقني خارج نطاقك، قل له "أحوّلك للفريق التقني".
 
-الخدمات والأسعار التقريبية:
-- مواقع تعريفية: 300-800$ (5-10 أيام)
-- متاجر إلكترونية: 700-1800$ (15-25 يوم)
-- بوتات ذكاء اصطناعي: 500-2000$ (حسب التعقيد)
-- تطبيقات جوال: من 1500$ (30-60 يوم)
-- تصميم جرافيك: 50-200$ (24-72 ساعة)
+الخدمات والأسعار التقريبية (استخدمها كمرجع فقط، السعر الفعلي يتحدد حسب التفاصيل):
+- موقع تعريفي: 300-800$ (5-10 أيام)
+- متجر إلكتروني: 700-1800$ (15-25 يوم)
+- بوت ذكاء اصطناعي: 500-2000$ (حسب التعقيد)
+- تطبيق جوال: من 1500$ (30-60 يوم)
+- تصميم جرافيك / شعار: 50-200$ (24-72 ساعة)
+- برنامج مخصص: من 1000$ (حسب المشروع)
 
-طريقة الدفع: 30% مقدماً، 70% بعد التسليم، عبر USDT (Binance Pay) معرف: 1074084246."""
+طريقة الدفع: 30% مقدماً، 70% بعد التسليم، عبر USDT (Binance Pay) معرف: 1074084246
+
+مهم جداً: لا تسجّل الطلب ولا تطلب البيانات إلا بعد أن يوافق العميل صراحةً على السعر والمدة."""
 
 # ========== تخزين JSONBin.io ==========
 def jsonbin_read():
+    if not BIN_ID or not X_MASTER_KEY:
+        return {}
     url = f"https://api.jsonbin.io/v3/b/{BIN_ID}"
-    headers = {
-        'X-Master-Key': X_MASTER_KEY,
-        'X-Access-Key': X_ACCESS_KEY
-    }
+    headers = {'X-Master-Key': X_MASTER_KEY}
+    if X_ACCESS_KEY:
+        headers['X-Access-Key'] = X_ACCESS_KEY
     try:
         resp = requests.get(url, headers=headers, timeout=10)
         if resp.status_code == 200:
             record = resp.json().get('record', {})
             if not isinstance(record, dict):
-                record = {}
+                return {}
             return record
         else:
-            print(f"JSONBin read error: {resp.status_code}")
+            print(f"JSONBin read error: {resp.status_code} - {resp.text[:200]}")
             return {}
     except Exception as e:
         print(f"JSONBin read exception: {e}")
         return {}
 
-def jsonbin_write(data):
+def jsonbin_write(d):
+    if not BIN_ID or not X_MASTER_KEY:
+        return False
     url = f"https://api.jsonbin.io/v3/b/{BIN_ID}"
     headers = {
         'Content-Type': 'application/json',
-        'X-Master-Key': X_MASTER_KEY,
-        'X-Access-Key': X_ACCESS_KEY
+        'X-Master-Key': X_MASTER_KEY
     }
+    if X_ACCESS_KEY:
+        headers['X-Access-Key'] = X_ACCESS_KEY
     try:
-        resp = requests.put(url, json=data, headers=headers, timeout=10)
+        resp = requests.put(url, json=d, headers=headers, timeout=10)
         return resp.status_code == 200
     except Exception as e:
         print(f"JSONBin write exception: {e}")
@@ -100,16 +110,17 @@ DEFAULT_DATA = {
     }
 }
 
+# تحميل البيانات
 loaded_data = jsonbin_read()
 if loaded_data:
     data = DEFAULT_DATA.copy()
-    for key in data:
+    for key in DEFAULT_DATA:
         if key in loaded_data:
             data[key] = loaded_data[key]
         else:
             data[key] = DEFAULT_DATA[key]
 else:
-    data = DEFAULT_DATA.copy()
+    data = {k: v.copy() if isinstance(v, (dict, list)) else v for k, v in DEFAULT_DATA.items()}
     jsonbin_write(data)
 
 # ========== سجل الأحداث المحلي ==========
@@ -134,34 +145,37 @@ def send_fb(recipient_id, text):
         r = requests.post(url, json=payload, timeout=8)
         if r.status_code == 200:
             data['stats']['msgs_sent'] += 1
-            save_data()
-            add_log(f"📤 إلى {recipient_id[:10]}...: {text[:40]}")
+            add_log(f"📤 إلى {str(recipient_id)[:10]}...: {text[:50]}")
             return True
         else:
-            add_log(f"❌ فشل الإرسال: {r.status_code}")
+            add_log(f"❌ فشل الإرسال: {r.status_code} - {r.text[:100]}")
             return False
     except Exception as e:
         add_log(f"❌ خطأ في الإرسال: {e}")
         return False
 
 # ========== حفظ البيانات ==========
+_save_lock = threading.Lock()
+
 def save_data():
-    success = jsonbin_write(data)
-    if success:
-        add_log("💾 تم حفظ البيانات في JSONBin")
-    else:
-        add_log("⚠️ فشل حفظ البيانات في JSONBin")
-    return success
+    with _save_lock:
+        success = jsonbin_write(data)
+        if success:
+            add_log("💾 تم الحفظ")
+        else:
+            add_log("⚠️ فشل الحفظ في JSONBin")
+        return success
 
 # ========== التحقق من المدير ==========
 def is_owner(sender_id):
-    sender_str = str(sender_id)
-    if sender_str == str(OWNER_FB_ID):
-        return True
-    verified_list = [str(v) for v in data.get('verified', [])]
-    return sender_str in verified_list
+    """المدير الحقيقي هو صاحب الـ OWNER_FB_ID فقط - لا أحد غيره"""
+    return str(sender_id) == str(OWNER_FB_ID)
 
-# ========== دوال الطلبات والإحصائيات الحية ==========
+def is_verified_admin(sender_id):
+    """المدراء المضافون بكلمة المرور"""
+    return str(sender_id) in [str(v) for v in data.get('verified', [])]
+
+# ========== دوال الإحصائيات ==========
 def get_live_stats():
     today = datetime.now().strftime('%Y-%m-%d')
     orders_list = data.get('orders', [])
@@ -178,25 +192,27 @@ def get_live_stats():
         'msgs_sent': data['stats']['msgs_sent']
     }
 
+# ========== إدارة الطلبات ==========
 def add_order(order_dict):
     if 'orders' not in data:
         data['orders'] = []
     order_dict['id'] = len(data['orders']) + 1
     data['orders'].append(order_dict)
     save_data()
-    add_log(f"✅ طلب جديد #{order_dict['id']} - {order_dict['name']} - {order_dict['service']} - {order_dict['budget']}$")
-    # إشعار المدير
+    add_log(f"✅ طلب جديد #{order_dict['id']} - {order_dict['name']} - {order_dict['service']} - {order_dict.get('budget','؟')}$")
+
     stats = get_live_stats()
-    notify_msg = f"""🔔 طلب جديد #{order_dict['id']}
-الاسم: {order_dict['name']}
-الخدمة: {order_dict['service']}
-الميزانية: {order_dict['budget']}$
-رقم الجوال: {order_dict.get('phone', 'غير متوفر')}
-المدة: {order_dict.get('duration', 'غير محددة')}
-تفاصيل: {order_dict.get('details', '')[:100]}...
-إجمالي الطلبات الآن: {stats['total_orders']}
-طلبات اليوم: {stats['today_orders']}
-{order_dict['link']}"""
+    notify_msg = (
+        f"🔔 طلب جديد #{order_dict['id']}\n"
+        f"الاسم: {order_dict['name']}\n"
+        f"الخدمة: {order_dict['service']}\n"
+        f"الميزانية المتفق عليها: {order_dict.get('budget','؟')}$\n"
+        f"رقم الجوال: {order_dict.get('phone', 'غير متوفر')}\n"
+        f"المدة: {order_dict.get('duration', 'غير محددة')}\n"
+        f"التفاصيل: {order_dict.get('details', '')[:150]}\n"
+        f"إجمالي الطلبات: {stats['total_orders']} | اليوم: {stats['today_orders']}\n"
+        f"محادثة: {order_dict['link']}"
+    )
     send_fb(OWNER_FB_ID, notify_msg)
     return order_dict['id']
 
@@ -220,7 +236,7 @@ def delete_order(order_id):
         save_data()
         add_log(f"🗑️ حذف طلب #{order_id}")
 
-def add_note(order_id, note):
+def add_note_to_order(order_id, note):
     if 'order_notes' not in data:
         data['order_notes'] = {}
     data['order_notes'][str(order_id)] = note
@@ -228,270 +244,519 @@ def add_note(order_id, note):
 
 # ========== إدارة الجلسات ==========
 def get_session(sender_id):
+    sid = str(sender_id)
     if 'sessions' not in data:
         data['sessions'] = {}
-    if sender_id not in data['sessions']:
-        data['sessions'][sender_id] = {
+    if sid not in data['sessions']:
+        data['sessions'][sid] = {
             'name': '',
             'service': '',
             'budget': 0,
-            'budget_range': '',      # نص النطاق السعري للعرض
+            'budget_range': '',
             'phone': '',
             'duration': '',
             'details': '',
-            'confirmed': False,
+            'stage': 'explore',  # explore -> price_proposed -> awaiting_confirmation -> collecting_data -> done
             'conversation': [],
             'awaiting_password': False,
-            'awaiting_price_confirmation': False,  # بانتظار موافقة العميل على السعر
-            'asked_for_phone': False,
-            'pending_details': {}
         }
-        save_data()
-    return data['sessions'][sender_id]
+    return data['sessions'][sid]
 
 def update_session(sender_id, updates):
-    if 'sessions' in data and sender_id in data['sessions']:
-        data['sessions'][sender_id].update(updates)
-        save_data()
+    sid = str(sender_id)
+    if 'sessions' in data and sid in data['sessions']:
+        data['sessions'][sid].update(updates)
 
 def add_to_conversation(sender_id, role, message):
-    sess = get_session(sender_id)
+    sid = str(sender_id)
+    sess = get_session(sid)
     sess['conversation'].append(f"{role}: {message}")
     if len(sess['conversation']) > 15:
         sess['conversation'] = sess['conversation'][-15:]
-    save_data()
 
-def reset_session_for_new_order(sender_id):
-    sess = get_session(sender_id)
-    update_session(sender_id, {
-        'service': '',
-        'budget': 0,
-        'budget_range': '',
-        'duration': '',
-        'details': '',
-        'confirmed': False,
-        'awaiting_price_confirmation': False,
-        'asked_for_phone': False
-    })
+def reset_session(sender_id):
+    sid = str(sender_id)
+    if 'sessions' in data and sid in data['sessions']:
+        old_conv = data['sessions'][sid].get('conversation', [])[-3:]
+        data['sessions'][sid] = {
+            'name': '',
+            'service': '',
+            'budget': 0,
+            'budget_range': '',
+            'phone': '',
+            'duration': '',
+            'details': '',
+            'stage': 'explore',
+            'conversation': old_conv,
+            'awaiting_password': False,
+        }
 
-# ========== معالجة كلمة المرور ==========
-def handle_password(sender_id, text, sess):
-    if text.strip() == OWNER_PASSWORD:
-        sender_str = str(sender_id)
-        if 'verified' not in data:
-            data['verified'] = []
-        if sender_str not in data['verified']:
-            data['verified'].append(sender_str)
-            save_data()
-            add_log(f"🔐 مدير جديد: {sender_str[:10]}...")
-        sess['awaiting_password'] = False
-        update_session(sender_id, {'awaiting_password': False})
-        send_fb(sender_id, "أهلاً بك يا مدير.")
-    else:
-        send_fb(sender_id, "❌ كلمة المرور غير صحيحة.")
-
-# ========== استخراج بيانات العميل (محسّن للتعامل مع النطاقات) ==========
-def extract_client_data(text, sess):
-    updated = False
-    text_lower = text.lower()
-    
-    # 1. الاسم
-    if not sess.get('name'):
-        patterns = [
-            r'اسمي[:\s]*([\u0600-\u06FF\s]{3,30})',
-            r'الاسم[:\s]*([\u0600-\u06FF\s]{3,30})',
-            r'my name is[:\s]*([a-zA-Z\s]{3,30})',
-            r'i am[:\s]*([a-zA-Z\s]{3,30})',
-            r'انا[:\s]*([\u0600-\u06FF\s]{3,30})'
-        ]
-        for pat in patterns:
-            m = re.search(pat, text, re.I)
-            if m:
-                sess['name'] = m.group(1).strip()
-                add_log(f"📝 الاسم: {sess['name']}")
-                updated = True
-                break
-    
-    # 2. الخدمة
-    if not sess.get('service'):
-        service_map = [
-            (r'شعار|logo|لوجو', 'تصميم شعار'),
-            (r'موقع|website|web|صفحة', 'تطوير موقع'),
-            (r'متجر|ecommerce|store|بيع', 'متجر إلكتروني'),
-            (r'تطبيق|app|mobile|ابلكيشن', 'تطبيق جوال'),
-            (r'بوت|bot|chatbot|ذكاء اصطناعي|ai', 'بوت ذكاء اصطناعي'),
-            (r'تصميم|design|جرافيك|graphic', 'تصميم جرافيكي'),
-            (r'فيسبوك|facebook|منصة|social', 'منصة تواصل اجتماعي'),
-            (r'نظام تشغيل|operating system|os', 'نظام تشغيل'),
-            (r'برنامج|software|برمجة', 'برنامج مخصص'),
-            (r'كتالوج|catalog', 'كتالوج رقمي'),
-            (r'تسيير مطاعم|restaurant management', 'نظام تسيير مطاعم'),
-            (r'مثل chatgpt|مثل chatgpt|chatbot', 'بوت ذكاء اصطناعي متقدم')
-        ]
-        for pattern, service_name in service_map:
-            if re.search(pattern, text_lower):
-                sess['service'] = service_name
-                add_log(f"🛠 الخدمة: {service_name}")
-                updated = True
-                break
-    
-    # 3. رقم الجوال
-    if not sess.get('phone'):
-        m = re.search(r'(05[0-9]{8}|5[0-9]{8}|\+966[0-9]{9}|00966[0-9]{9})', text)
+# ========== استخراج البيانات من النص ==========
+def extract_phone(text):
+    """استخراج رقم الهاتف من النص"""
+    patterns = [
+        r'(\+213[567][0-9]{8})',      # جزائر +213
+        r'(00213[567][0-9]{8})',       # جزائر 00213
+        r'(0[567][0-9]{8})',           # جزائر محلي
+        r'(\+966[0-9]{9})',            # سعودية
+        r'(05[0-9]{8})',               # سعودية محلي
+        r'(\+212[0-9]{9})',            # مغرب
+        r'(\+216[0-9]{8})',            # تونس
+        r'(\+20[0-9]{10})',            # مصر
+        r'(\+[1-9][0-9]{7,14})',       # أي رقم دولي
+        r'([0-9]{10,13})',             # أي رقم طويل
+    ]
+    for pat in patterns:
+        m = re.search(pat, text)
         if m:
-            sess['phone'] = m.group(1)
-            add_log(f"📱 الجوال: {sess['phone']}")
-            updated = True
-    
-    return updated
+            return m.group(1)
+    return None
 
-# ========== الذكاء الاصطناعي الموحد ==========
-def ask_ai(user_msg, sess, is_owner_mode=False, live_stats=None):
+def extract_name_from_text(text):
+    """استخراج الاسم من النص"""
+    patterns = [
+        r'اسمي[:\s]*([\u0600-\u06FF\s]{3,30})',
+        r'الاسم[:\s]*([\u0600-\u06FF\s]{3,30})',
+        r'انا[:\s]*([\u0600-\u06FF]{3,20})',
+        r'my name is[:\s]*([a-zA-Z\s]{3,30})',
+        r'i\'?m[:\s]*([a-zA-Z\s]{3,25})',
+        r'name[:\s]*([a-zA-Z\s]{3,30})',
+        r'يسمونني[:\s]*([\u0600-\u06FF\s]{3,20})',
+    ]
+    for pat in patterns:
+        m = re.search(pat, text, re.I)
+        if m:
+            name = m.group(1).strip()
+            # تأكد أنه اسم وليس جملة طويلة
+            if 2 <= len(name.split()) <= 4 and len(name) <= 30:
+                return name
+    return None
+
+def is_price_confirmation(text):
+    """هل وافق العميل على السعر؟"""
+    confirmations = [
+        'نعم', 'موافق', 'موافقة', 'تمام', 'تمام شكراً', 'اوكي', 'اوك', 'ok', 'yes', 
+        'okay', 'agreed', 'deal', 'ماشي', 'راني موافق', 'حسنا', 'يلا نبدأ', 
+        'نبدو', 'نبدأ', 'جيد', 'سنبدأ', 'اتفقنا', 'ممتاز', 'بالتوفيق', 'شكراً',
+        'اشتري', 'مشينا'
+    ]
+    text_clean = text.lower().strip()
+    return any(w in text_clean for w in confirmations)
+
+def is_price_rejection(text):
+    """هل رفض العميل السعر؟"""
+    rejections = ['لا', 'غالي', 'كثير', 'خصم', 'أرخص', 'يخفض', 'مو مناسب', 'no', 'too much', 'expensive']
+    text_clean = text.lower().strip()
+    return any(w in text_clean for w in rejections)
+
+# ========== الذكاء الاصطناعي ==========
+def ask_ai(user_msg, sess, extra_instruction=""):
     context = "\n".join(sess.get('conversation', [])[-12:])
-    system = BOT_PERSONALITY
     
-    # إضافة معلومات الحالة الحالية للجلسة
-    state_info = ""
-    if sess.get('awaiting_price_confirmation'):
-        state_info = f"\nالعميل وافق على السعر تقريباً. اطلب منه الآن الاسم ورقم الهاتف لتسجيل الطلب."
-    elif sess.get('name') and sess.get('phone'):
-        state_info = f"\nالعميل قدم الاسم ورقم الهاتف. يمكنك الآن حفظ الطلب."
+    stage_hints = {
+        'explore': "أنت تستمع لطلب العميل وتفهم احتياجه. اسأل سؤالاً أو سؤالين بسيطين لتفهم المشروع، ثم قدّم له السعر والمدة.",
+        'price_proposed': "لقد اقترحت سعراً للعميل. انتظر موافقته. لا تضيف معلومات جديدة.",
+        'awaiting_confirmation': "العميل على وشك الموافقة أو الرفض. إذا وافق، اطلب اسمه الكريم فقط.",
+        'collecting_name': "اطلب من العميل اسمه الكريم فقط. رسالة واحدة مختصرة.",
+        'collecting_phone': f"اسم العميل هو: {sess.get('name', '')}. اطلب منه رقم هاتفه الآن. رسالة مختصرة.",
+    }
     
-    prompt = f"{system}{state_info}\n\nسجل المحادثة:\n{context}\n\nالمستخدم: {user_msg}\nالرد:"
+    stage = sess.get('stage', 'explore')
+    hint = stage_hints.get(stage, "")
+    
+    full_prompt = (
+        f"{BOT_PERSONALITY}\n\n"
+        f"[حالة المحادثة الحالية: {hint}]\n"
+        f"{extra_instruction}\n\n"
+        f"سجل المحادثة:\n{context}\n\n"
+        f"المستخدم: {user_msg}\n"
+        f"أحمد:"
+    )
     
     try:
-        url = f'{AI_API_URL}?text={requests.utils.quote(prompt)}'
-        r = requests.get(url, timeout=12)
+        url = f'{AI_API_URL}?text={requests.utils.quote(full_prompt)}'
+        r = requests.get(url, timeout=15)
         if r.status_code == 200:
-            answer = r.json().get('response', '').strip()
-            return answer[:1800]
+            resp = r.json()
+            answer = resp.get('response', '').strip()
+            if answer:
+                return answer[:1800]
     except Exception as e:
-        add_log(f"❌ خطأ في الذكاء الاصطناعي: {e}")
+        add_log(f"❌ خطأ AI: {e}")
     
-    return "عذراً، حدث خطأ تقني. حاول مرة أخرى."
+    return "عذراً، حدث خطأ تقني مؤقت. حاول مرة أخرى."
 
-# ========== المعالجة الرئيسية ==========
+# ========== معالجة أوامر المدير ==========
+def handle_owner_command(sender_id, text):
+    """معالجة أوامر المدير الحقيقي أو المدير الموثق"""
+    text_lower = text.lower().strip()
+    stats = get_live_stats()
+    
+    # إحصائيات
+    if any(k in text_lower for k in ['احصائيات', 'إحصائيات', 'statistics', 'stats']):
+        msg = (
+            f"📊 إحصائيات B.Y PRO\n"
+            f"العملاء الفريدون: {stats['unique_clients']}\n"
+            f"إجمالي الطلبات: {stats['total_orders']}\n"
+            f"طلبات اليوم: {stats['today_orders']}\n"
+            f"المحظورون: {stats['blocked']}\n"
+            f"المدراء: {stats['verified']}\n"
+            f"رسائل واردة: {stats['msgs_received']}\n"
+            f"رسائل صادرة: {stats['msgs_sent']}"
+        )
+        send_fb(sender_id, msg)
+        return True
+    
+    # الطلبات الجديدة
+    if any(k in text_lower for k in ['اي جديد', 'طلبات اليوم', 'الجديد']):
+        if stats['today_orders'] > 0:
+            lines = [f"#{o['id']} {o['name']} - {o['service']} - {o.get('budget','؟')}$" 
+                     for o in stats['today_orders_list']]
+            send_fb(sender_id, f"📦 {stats['today_orders']} طلب اليوم:\n" + "\n".join(lines))
+        else:
+            send_fb(sender_id, "لا توجد طلبات اليوم.")
+        return True
+    
+    # كل الطلبات
+    if any(k in text_lower for k in ['كل الطلبات', 'جميع الطلبات', 'all orders']):
+        orders = data.get('orders', [])[-10:]
+        if orders:
+            lines = [f"#{o['id']} {o['name']} - {o['service']} - {o.get('budget','؟')}$ [{o.get('status','جديد')}]"
+                     for o in reversed(orders)]
+            send_fb(sender_id, "📋 آخر الطلبات:\n" + "\n".join(lines))
+        else:
+            send_fb(sender_id, "لا توجد طلبات بعد.")
+        return True
+    
+    # تفاصيل طلب
+    m = re.search(r'تفاصيل\s+(\d+)', text)
+    if m:
+        oid = int(m.group(1))
+        o = get_order(oid)
+        if o:
+            note = data.get('order_notes', {}).get(str(oid), 'لا يوجد')
+            msg = (
+                f"📋 تفاصيل الطلب #{oid}\n"
+                f"الاسم: {o['name']}\n"
+                f"الخدمة: {o['service']}\n"
+                f"الميزانية: {o.get('budget','؟')}$\n"
+                f"الهاتف: {o.get('phone','غير متوفر')}\n"
+                f"المدة: {o.get('duration','غير محددة')}\n"
+                f"التفاصيل: {o.get('details','')}\n"
+                f"الحالة: {o.get('status','جديد')}\n"
+                f"ملاحظات: {note}\n"
+                f"التاريخ: {o.get('timestamp','')[:16]}\n"
+                f"رابط: {o.get('link','')}"
+            )
+        else:
+            msg = f"❌ لم يُعثر على طلب #{oid}"
+        send_fb(sender_id, msg)
+        return True
+    
+    # حظر مستخدم
+    m = re.search(r'حظر\s+(\d+)', text)
+    if m:
+        uid = m.group(1)
+        if 'blocked' not in data:
+            data['blocked'] = []
+        if uid not in data['blocked']:
+            data['blocked'].append(uid)
+            save_data()
+            send_fb(sender_id, f"✅ تم حظر المستخدم {uid}")
+        else:
+            send_fb(sender_id, "المستخدم محظور مسبقاً.")
+        return True
+    
+    # إلغاء الحظر
+    m = re.search(r'(الغاء حظر|رفع حظر)\s+(\d+)', text)
+    if m:
+        uid = m.group(2)
+        if uid in data.get('blocked', []):
+            data['blocked'].remove(uid)
+            save_data()
+            send_fb(sender_id, f"✅ تم رفع الحظر عن {uid}")
+        else:
+            send_fb(sender_id, "المستخدم غير محظور.")
+        return True
+    
+    # مكتمل
+    m = re.search(r'مكتمل\s+(\d+)', text)
+    if m:
+        oid = int(m.group(1))
+        if update_order(oid, {'status': 'مكتمل'}):
+            send_fb(sender_id, f"✅ تم تحديث طلب #{oid} إلى مكتمل")
+        else:
+            send_fb(sender_id, f"❌ لم يُعثر على طلب #{oid}")
+        return True
+    
+    # حذف طلب
+    m = re.search(r'حذف\s+(\d+)', text)
+    if m:
+        oid = int(m.group(1))
+        delete_order(oid)
+        send_fb(sender_id, f"🗑️ تم حذف طلب #{oid}")
+        return True
+    
+    # ملاحظة
+    m = re.search(r'ملاحظة\s+(\d+)\s+(.+)', text)
+    if m:
+        oid = int(m.group(1))
+        note = m.group(2).strip()
+        add_note_to_order(oid, note)
+        send_fb(sender_id, f"📝 تمت إضافة الملاحظة لطلب #{oid}")
+        return True
+    
+    # المحظورين
+    if 'المحظورين' in text_lower:
+        blocked = data.get('blocked', [])
+        if blocked:
+            send_fb(sender_id, f"🚫 المحظورون ({len(blocked)}):\n" + "\n".join(blocked[-15:]))
+        else:
+            send_fb(sender_id, "لا يوجد مستخدمون محظورون.")
+        return True
+    
+    # العملاء
+    if any(k in text_lower for k in ['العملاء', 'اعرض العملاء', 'clients']):
+        orders = data.get('orders', [])
+        clients = {}
+        for o in orders:
+            name = o.get('name', '')
+            if name and name not in clients:
+                clients[name] = o.get('phone', '')
+        if clients:
+            lines = [f"• {n} - {p}" for n, p in list(clients.items())[-15:]]
+            send_fb(sender_id, "👥 العملاء المسجلون:\n" + "\n".join(lines))
+        else:
+            send_fb(sender_id, "لا يوجد عملاء مسجلون بعد.")
+        return True
+    
+    return False  # لم يُعثر على أمر مطابق
+
+# ========== المعالجة الرئيسية للرسائل ==========
 def process_message(sender_id, text):
+    sender_id = str(sender_id)
     data['stats']['msgs_received'] += 1
-    save_data()
-    add_log(f"📨 من {sender_id[:10]}...: {text[:40]}")
+    add_log(f"📨 من {sender_id[:12]}: {text[:50]}")
 
     # تحقق الحظر
-    if sender_id in data.get('blocked', []):
-        add_log(f"🚫 مستخدم محظور {sender_id[:10]}... تم تجاهل الرسالة")
+    if sender_id in [str(b) for b in data.get('blocked', [])]:
+        add_log(f"🚫 محظور: {sender_id[:12]}")
         return
 
     sess = get_session(sender_id)
     add_to_conversation(sender_id, 'المستخدم', text)
 
-    # 1. المدير
+    # ====== المدير الحقيقي (بالـ ID الثابت فقط) ======
     if is_owner(sender_id):
-        live_stats = get_live_stats()
-        if any(k in text.lower() for k in ['اي جديد', 'what\'s new', 'طلبات جديدة']):
-            if live_stats['today_orders'] > 0:
-                orders_summary = "\n".join([f"#{o['id']} {o['name']} - {o['service']} - {o['budget']}$" for o in live_stats['today_orders_list']])
-                send_fb(sender_id, f"لدينا {live_stats['today_orders']} طلب/طلبات جديدة اليوم:\n{orders_summary}")
-            else:
-                send_fb(sender_id, "لا توجد طلبات جديدة اليوم.")
-            return
-        reply = ask_ai(text, sess, is_owner_mode=True, live_stats=live_stats)
-        send_fb(sender_id, reply)
-        add_to_conversation(sender_id, 'النظام', reply)
+        # المدير الحقيقي لا يحتاج كلمة مرور
+        handled = handle_owner_command(sender_id, text)
+        if not handled:
+            # رد ذكي للمدير
+            stats = get_live_stats()
+            extra = (
+                f"\n[أنت تتحدث مع المدير مباشرة. إحصائيات سريعة: "
+                f"{stats['today_orders']} طلب اليوم، {stats['total_orders']} إجمالاً]"
+            )
+            reply = ask_ai(text, sess, extra_instruction=extra)
+            send_fb(sender_id, reply)
+            add_to_conversation(sender_id, 'أحمد', reply)
+        save_data()
         return
 
-    # 2. كلمة المرور
+    # ====== المدراء الموثقون (بكلمة المرور) ======
+    if is_verified_admin(sender_id):
+        handled = handle_owner_command(sender_id, text)
+        if not handled:
+            reply = ask_ai(text, sess)
+            send_fb(sender_id, reply)
+            add_to_conversation(sender_id, 'أحمد', reply)
+        save_data()
+        return
+
+    # ====== انتظار كلمة المرور ======
     if sess.get('awaiting_password'):
-        handle_password(sender_id, text, sess)
+        if text.strip() == OWNER_PASSWORD:
+            if 'verified' not in data:
+                data['verified'] = []
+            if sender_id not in data['verified']:
+                data['verified'].append(sender_id)
+            sess['awaiting_password'] = False
+            update_session(sender_id, {'awaiting_password': False})
+            save_data()
+            add_log(f"🔐 مدير جديد موثق: {sender_id[:12]}")
+            send_fb(sender_id, "✅ تم التحقق. أهلاً بك.")
+        else:
+            send_fb(sender_id, "❌ كلمة المرور غير صحيحة.")
         return
 
-    # 3. كشف محاولة مدير
-    if any(k in text.lower() for k in ['مدير', 'owner', 'المالك', 'ياسين']):
+    # ====== طلب كلمة المرور - يُعرض فقط عند الكلمات المحددة ======
+    # لا نقبل ادعاءات المدير من مجرد كلام - يجب كلمة السر
+    if re.search(r'\bكلمة\s*[Ss]ر\b|password|رمز\s*السر|رمز\s*الدخول', text.lower()):
         sess['awaiting_password'] = True
         update_session(sender_id, {'awaiting_password': True})
-        send_fb(sender_id, "🔐 الرجاء إدخال الرقم السري:")
+        save_data()
+        send_fb(sender_id, "أدخل كلمة المرور:")
         return
 
-    # 4. استخراج البيانات الأساسية (الاسم والرقم فقط)
-    extract_client_data(text, sess)
-    update_session(sender_id, sess)
+    # ====== معالجة العميل العادي حسب مرحلة المحادثة ======
+    stage = sess.get('stage', 'explore')
 
-    # 5. التحقق من وجود أمر ORDER_READY في رد الذكاء (سنقوم بمعالجته لاحقاً)
-    # لكننا الآن سنعتمد على تدفق أوضح: البوت يقترح السعر، ينتظر الموافقة، ثم يجمع البيانات.
-
-    # 6. إذا كان لدينا الاسم والرقم والخدمة والسعر (رقمي) -> حفظ الطلب
-    if sess.get('name') and sess.get('phone') and sess.get('service') and sess.get('budget', 0) > 0:
-        order = {
-            'name': sess['name'],
-            'service': sess['service'],
-            'budget': sess['budget'],
-            'phone': sess['phone'],
-            'duration': sess.get('duration', ''),
-            'details': sess.get('details', ''),
-            'timestamp': datetime.now().isoformat(),
-            'sender_id': sender_id,
-            'link': f"https://www.facebook.com/messages/t/{sender_id}",
-            'status': 'جديد'
-        }
-        order_id = add_order(order)
-        add_log(f"✅ تم حفظ الطلب #{order_id}")
+    # --- مرحلة: استكشاف / عرض السعر ---
+    if stage == 'explore':
+        reply = ask_ai(text, sess)
         
-        # إعلام العميل بطريقة بسيطة (بدون إظهار أن النظام سجل)
-        send_fb(sender_id, f"شكراً {sess['name']}. سنتواصل معك قريباً لبدء العمل على {sess['service']}.")
+        # هل اقترح الذكاء الاصطناعي سعراً؟
+        price_match = re.search(r'(\d{2,5})\s*[-–]\s*(\d{2,5})\s*\$', reply)
+        single_price = re.search(r'(\d{3,5})\s*\$', reply)
         
-        # إعادة تعيين الجلسة لطلبات مستقبلية
-        reset_session_for_new_order(sender_id)
+        if price_match:
+            low = int(price_match.group(1))
+            high = int(price_match.group(2))
+            sess['budget_range'] = f"{low}-{high}"
+            sess['budget'] = low
+            
+            # استخراج الخدمة من السياق
+            if not sess.get('service'):
+                service_patterns = [
+                    (r'موقع|website|web', 'موقع إلكتروني'),
+                    (r'متجر|store|ecommerce', 'متجر إلكتروني'),
+                    (r'تطبيق|app|mobile', 'تطبيق جوال'),
+                    (r'بوت|bot|chatbot|ذكاء', 'بوت ذكاء اصطناعي'),
+                    (r'تصميم|design|شعار|logo', 'تصميم'),
+                    (r'برنامج|software|نظام', 'برنامج مخصص'),
+                ]
+                for pat, svc in service_patterns:
+                    if re.search(pat, text + reply, re.I):
+                        sess['service'] = svc
+                        break
+                if not sess.get('service'):
+                    sess['service'] = 'خدمة تقنية'
+            
+            sess['stage'] = 'price_proposed'
+            update_session(sender_id, {
+                'budget_range': sess['budget_range'],
+                'budget': sess['budget'],
+                'service': sess['service'],
+                'stage': 'price_proposed'
+            })
+        elif single_price and not sess.get('budget'):
+            price = int(single_price.group(1))
+            sess['budget'] = price
+            sess['stage'] = 'price_proposed'
+            update_session(sender_id, {'budget': price, 'stage': 'price_proposed'})
+        
+        # استخراج مدة من الرد
+        duration_match = re.search(r'(\d+[-–]\d+\s*(?:يوم|أيام|يوماً|day|days|ساعة|hours?))', reply, re.I)
+        if duration_match and not sess.get('duration'):
+            sess['duration'] = duration_match.group(1)
+            update_session(sender_id, {'duration': sess['duration']})
+        
+        send_fb(sender_id, reply)
+        add_to_conversation(sender_id, 'أحمد', reply)
+        save_data()
         return
 
-    # 7. الحصول على رد الذكاء (الذي سيقترح السعر ويطلب البيانات)
-    reply = ask_ai(text, sess, is_owner_mode=False)
-    
-    # 8. تحليل الرد لاستخراج السعر إذا كان قد اقترحه
-    # البحث عن نطاق سعري في الرد
-    price_range = re.search(r'(\d+)\s*-\s*(\d+)\s*\$', reply)
-    if price_range and not sess.get('budget'):
-        # اقترح البوت سعراً، ننتظر موافقة العميل
-        sess['budget_range'] = f"{price_range.group(1)}-{price_range.group(2)}"
-        # لا نعين budget بعد، ننتظر الموافقة
-        update_session(sender_id, {'budget_range': sess['budget_range']})
-    elif re.search(r'(\d+)\s*\$', reply) and not sess.get('budget'):
-        # سعر محدد
-        match = re.search(r'(\d+)\s*\$', reply)
-        if match:
-            sess['budget'] = int(match.group(1))
-            update_session(sender_id, {'budget': sess['budget']})
-    
-    # 9. إذا وافق العميل على السعر (كلمة مثل "موافق"، "نعم"، "ok")
-    if sess.get('budget_range') and any(w in text.lower() for w in ['نعم', 'موافق', 'ok', 'yes', 'تمام']):
-        # تعيين budget كرقم (الحد الأدنى للنطاق)
-        range_match = re.search(r'(\d+)-(\d+)', sess['budget_range'])
-        if range_match:
-            sess['budget'] = int(range_match.group(1))
-            update_session(sender_id, {'budget': sess['budget']})
-            # الآن نطلب الاسم والرقم
-            if not sess.get('name'):
-                send_fb(sender_id, "ما اسمك الكريم؟")
-            elif not sess.get('phone'):
-                send_fb(sender_id, "رقم هاتفك للتواصل؟")
+    # --- مرحلة: تم اقتراح السعر، ننتظر الموافقة ---
+    if stage == 'price_proposed':
+        if is_price_confirmation(text):
+            # وافق! انتقل لجمع البيانات
+            sess['stage'] = 'collecting_name'
+            update_session(sender_id, {'stage': 'collecting_name'})
+            save_data()
+            send_fb(sender_id, "ممتاز! ما اسمك الكريم؟")
             return
-    elif sess.get('budget') and any(w in text.lower() for w in ['نعم', 'موافق', 'ok', 'yes', 'تمام']):
-        # العميل وافق على السعر المحدد
-        if not sess.get('name'):
-            send_fb(sender_id, "ما اسمك الكريم؟")
-        elif not sess.get('phone'):
-            send_fb(sender_id, "رقم هاتفك للتواصل؟")
-        return
-    
-    # 10. إرسال الرد
-    send_fb(sender_id, reply)
-    add_to_conversation(sender_id, 'النظام', reply)
+        elif is_price_rejection(text):
+            # رفض أو طلب تعديل
+            sess['stage'] = 'explore'
+            update_session(sender_id, {'stage': 'explore', 'budget': 0, 'budget_range': ''})
+            reply = ask_ai(text, sess, extra_instruction="\nالعميل يريد تعديلاً في السعر أو لديه استفسار. ناقشه بمرونة.")
+            send_fb(sender_id, reply)
+            add_to_conversation(sender_id, 'أحمد', reply)
+            save_data()
+            return
+        else:
+            # سؤال إضافي قبل الموافقة
+            reply = ask_ai(text, sess, extra_instruction="\nالعميل يستفسر. أجبه باختصار ثم ذكّره بالسؤال: هل يوافق على السعر والمدة؟")
+            send_fb(sender_id, reply)
+            add_to_conversation(sender_id, 'أحمد', reply)
+            save_data()
+            return
 
-# ========== أمر تسجيل الخروج (للمدير فقط) ==========
-def handle_logout(sender_id):
-    sess = get_session(sender_id)
-    sess['awaiting_password'] = False
-    update_session(sender_id, {'awaiting_password': False})
-    send_fb(sender_id, "تم تسجيل الخروج.")
-    add_log(f"🚪 مدير سجل خروج: {sender_id[:10]}...")
+    # --- مرحلة: جمع الاسم ---
+    if stage == 'collecting_name':
+        # استخراج الاسم من النص
+        name = extract_name_from_text(text)
+        
+        # إذا لم يُستخرج بالنمط، افترض أن النص كله هو الاسم إذا كان قصيراً
+        if not name and len(text.split()) <= 4 and len(text) <= 30:
+            # تحقق أنه ليس كلمة موافقة أو سؤال
+            if not any(w in text.lower() for w in ['نعم', 'لا', 'كيف', 'ماذا', 'متى', 'أين']):
+                name = text.strip()
+        
+        if name:
+            sess['name'] = name
+            sess['stage'] = 'collecting_phone'
+            update_session(sender_id, {'name': name, 'stage': 'collecting_phone'})
+            save_data()
+            send_fb(sender_id, f"تمام {name}، ما هو رقم هاتفك للتواصل؟")
+            return
+        else:
+            send_fb(sender_id, "ما اسمك الكريم؟ (الاسم فقط من فضلك)")
+            return
+
+    # --- مرحلة: جمع رقم الهاتف ---
+    if stage == 'collecting_phone':
+        phone = extract_phone(text)
+        if phone:
+            sess['phone'] = phone
+            update_session(sender_id, {'phone': phone})
+            
+            # هل هناك تفاصيل إضافية في النص؟
+            # لا، نسجّل الطلب مباشرة
+            sess['stage'] = 'done'
+            update_session(sender_id, {'stage': 'done'})
+            
+            # === تسجيل الطلب ===
+            order = {
+                'name': sess['name'],
+                'service': sess.get('service', 'خدمة تقنية'),
+                'budget': sess.get('budget', 0),
+                'budget_range': sess.get('budget_range', ''),
+                'phone': sess['phone'],
+                'duration': sess.get('duration', ''),
+                'details': sess.get('details', ''),
+                'timestamp': datetime.now().isoformat(),
+                'sender_id': sender_id,
+                'link': f"https://www.facebook.com/messages/t/{sender_id}",
+                'status': 'جديد'
+            }
+            order_id = add_order(order)
+            
+            # رسالة للعميل طبيعية
+            confirm_msg = (
+                f"شكراً {sess['name']}! تم تسجيل طلبك بنجاح 👌\n"
+                f"سيتواصل معك فريقنا على رقمك قريباً لبدء العمل على {sess.get('service', 'مشروعك')}.\n"
+                f"إذا كان لديك أي سؤال في الوقت الحالي، تواصل معنا على: {COMPANY_WEBSITE}"
+            )
+            send_fb(sender_id, confirm_msg)
+            add_log(f"✅ طلب #{order_id} مسجّل كامل لـ {sess['name']}")
+            
+            # إعادة تعيين الجلسة للطلبات المستقبلية
+            reset_session(sender_id)
+            save_data()
+            return
+        else:
+            send_fb(sender_id, "أرسل لي رقم هاتفك فقط من فضلك (مثال: 0555123456)")
+            return
+
+    # --- أي مرحلة أخرى - إعادة تشغيل ---
+    sess['stage'] = 'explore'
+    update_session(sender_id, {'stage': 'explore'})
+    reply = ask_ai(text, sess)
+    send_fb(sender_id, reply)
+    add_to_conversation(sender_id, 'أحمد', reply)
+    save_data()
+
 
 # ========== مسارات Flask ==========
 @app.route('/webhook', methods=['GET'])
@@ -502,23 +767,20 @@ def verify():
 
 @app.route('/webhook', methods=['POST'])
 def webhook():
-    data_json = request.json
-    if data_json.get('object') == 'page':
-        for entry in data_json.get('entry', []):
+    body = request.json
+    if body and body.get('object') == 'page':
+        for entry in body.get('entry', []):
             for msg in entry.get('messaging', []):
                 if 'message' in msg and 'text' in msg['message']:
-                    sender = msg['sender']['id']
+                    sender = str(msg['sender']['id'])
                     text = msg['message']['text']
-                    if 'تسجيل الخروج كمدير' in text and is_owner(sender):
-                        handle_logout(sender)
-                    else:
-                        threading.Thread(target=process_message, args=(sender, text)).start()
+                    threading.Thread(target=process_message, args=(sender, text), daemon=True).start()
     return 'OK', 200
 
+# ========== لوحة التحكم ==========
 @app.route('/')
 def home():
     stats = get_live_stats()
-    
     html = """
     <!DOCTYPE html>
     <html dir="rtl" lang="ar">
@@ -528,31 +790,35 @@ def home():
         <title>B.Y PRO - لوحة التحكم</title>
         <style>
             * { box-sizing: border-box; font-family: system-ui, 'Segoe UI', Tahoma, sans-serif; }
-            body { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); margin: 0; padding: 20px; min-height: 100vh; }
+            body { background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%); margin: 0; padding: 20px; min-height: 100vh; }
             .container { max-width: 1400px; margin: 0 auto; }
-            .header { background: white; border-radius: 20px; padding: 30px; margin-bottom: 20px; box-shadow: 0 10px 30px rgba(0,0,0,0.2); }
-            h1 { color: #333; margin: 0 0 10px; font-size: 2em; }
-            .badge { background: #4ade80; color: #166534; padding: 5px 15px; border-radius: 25px; display: inline-block; font-weight: bold; }
-            .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px; margin-bottom: 20px; }
-            .card { background: white; border-radius: 15px; padding: 20px; box-shadow: 0 5px 15px rgba(0,0,0,0.1); }
-            .card h3 { margin: 0 0 10px; color: #64748b; font-size: 1em; }
-            .card .value { font-size: 2.5em; font-weight: bold; color: #2563eb; }
-            .logs { background: white; border-radius: 15px; padding: 20px; margin-bottom: 20px; max-height: 250px; overflow-y: auto; }
-            .log-item { padding: 5px; border-bottom: 1px solid #e2e8f0; font-family: monospace; }
+            .header { background: rgba(255,255,255,0.95); border-radius: 20px; padding: 25px 30px; margin-bottom: 20px; box-shadow: 0 10px 40px rgba(0,0,0,0.3); }
+            h1 { color: #1a1a2e; margin: 0 0 8px; font-size: 1.8em; }
+            .badge { background: #4ade80; color: #166534; padding: 4px 14px; border-radius: 20px; display: inline-block; font-weight: bold; font-size: 0.9em; }
+            .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 15px; margin-bottom: 20px; }
+            .card { background: rgba(255,255,255,0.95); border-radius: 15px; padding: 18px; box-shadow: 0 5px 15px rgba(0,0,0,0.15); text-align: center; }
+            .card h3 { margin: 0 0 8px; color: #64748b; font-size: 0.85em; }
+            .card .value { font-size: 2.2em; font-weight: bold; color: #2563eb; }
+            .logs { background: rgba(255,255,255,0.95); border-radius: 15px; padding: 20px; margin-bottom: 20px; max-height: 200px; overflow-y: auto; }
+            .log-item { padding: 4px 0; border-bottom: 1px solid #e2e8f0; font-family: monospace; font-size: 0.85em; }
             .tabs { display: flex; gap: 10px; margin-bottom: 20px; flex-wrap: wrap; }
-            .tab-btn { background: white; border: none; padding: 12px 25px; border-radius: 30px; font-size: 1em; cursor: pointer; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
+            .tab-btn { background: rgba(255,255,255,0.85); border: none; padding: 10px 22px; border-radius: 30px; font-size: 0.95em; cursor: pointer; transition: all 0.2s; }
+            .tab-btn:hover { background: white; }
             .tab-btn.active { background: #2563eb; color: white; }
-            .tab-content { background: white; border-radius: 15px; padding: 20px; display: none; }
+            .tab-content { background: rgba(255,255,255,0.95); border-radius: 15px; padding: 20px; display: none; }
             .tab-content.active { display: block; }
-            table { width: 100%; border-collapse: collapse; }
-            th { text-align: right; padding: 12px; background: #f8fafc; color: #475569; font-weight: 600; }
-            td { padding: 12px; border-bottom: 1px solid #e2e8f0; }
-            .btn { background: #2563eb; color: white; border: none; padding: 5px 15px; border-radius: 20px; cursor: pointer; font-size: 0.9em; margin: 2px; }
+            table { width: 100%; border-collapse: collapse; font-size: 0.9em; }
+            th { text-align: right; padding: 10px 12px; background: #f8fafc; color: #475569; font-weight: 600; }
+            td { padding: 10px 12px; border-bottom: 1px solid #e2e8f0; vertical-align: middle; }
+            .btn { background: #2563eb; color: white; border: none; padding: 5px 14px; border-radius: 15px; cursor: pointer; font-size: 0.85em; margin: 2px; transition: opacity 0.2s; }
+            .btn:hover { opacity: 0.85; }
             .btn-danger { background: #dc2626; }
             .btn-success { background: #16a34a; }
             .btn-warning { background: #d97706; }
-            .modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); justify-content: center; align-items: center; }
+            .status-badge { padding: 3px 10px; border-radius: 12px; font-size: 0.8em; font-weight: bold; color: white; }
+            .modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.6); justify-content: center; align-items: center; z-index: 1000; }
             .modal-content { background: white; padding: 30px; border-radius: 15px; max-width: 500px; width: 90%; }
+            .refresh-note { color: rgba(255,255,255,0.6); font-size: 0.8em; text-align: center; margin-top: 15px; }
         </style>
     </head>
     <body>
@@ -560,7 +826,9 @@ def home():
             <div class="header">
                 <h1>🤵 B.Y PRO - مساعد المبيعات التقني</h1>
                 <div class="badge">✅ النظام يعمل</div>
-                <p style="margin-top: 10px;">⏱ بدء التشغيل: {{ start_time }} | 💰 بينانس: <code style="background:#f1f5f9;padding:3px 8px;border-radius:5px;">{{ binance_id }}</code></p>
+                <p style="margin: 8px 0 0; color: #64748b; font-size: 0.9em;">
+                    ⏱ بدء: {{ start_time }} &nbsp;|&nbsp; 💰 Binance: <code style="background:#f1f5f9;padding:2px 8px;border-radius:5px;">{{ binance_id }}</code>
+                </p>
             </div>
 
             <div class="stats-grid">
@@ -568,41 +836,48 @@ def home():
                 <div class="card"><h3>إجمالي الطلبات</h3><div class="value">{{ orders_count }}</div></div>
                 <div class="card"><h3>طلبات اليوم</h3><div class="value">{{ today_orders }}</div></div>
                 <div class="card"><h3>المحظورون</h3><div class="value">{{ blocked_count }}</div></div>
-                <div class="card"><h3>الموثوقون</h3><div class="value">{{ verified_count }}</div></div>
-                <div class="card"><h3>الرسائل المستلمة</h3><div class="value">{{ msgs_received }}</div></div>
+                <div class="card"><h3>المدراء</h3><div class="value">{{ verified_count }}</div></div>
+                <div class="card"><h3>رسائل واردة</h3><div class="value">{{ msgs_received }}</div></div>
             </div>
 
             <div class="logs">
-                <h3>📋 آخر الأحداث</h3>
+                <h3 style="margin: 0 0 10px; color: #1a1a2e;">📋 آخر الأحداث</h3>
                 {% for log in logs %}
                 <div class="log-item">[{{ log.time }}] {{ log.msg }}</div>
                 {% endfor %}
             </div>
 
             <div class="tabs">
-                <button class="tab-btn active" onclick="showTab('orders')">📦 الطلبات</button>
-                <button class="tab-btn" onclick="showTab('clients')">👥 العملاء</button>
-                <button class="tab-btn" onclick="showTab('blocked')">🔨 المحظورون</button>
-                <button class="tab-btn" onclick="showTab('verified')">🔐 الموثوقون</button>
-                <button class="tab-btn" onclick="showTab('commands')">⚙️ الأوامر</button>
+                <button class="tab-btn active" onclick="showTab('orders', event)">📦 الطلبات ({{ orders_count }})</button>
+                <button class="tab-btn" onclick="showTab('clients', event)">👥 العملاء</button>
+                <button class="tab-btn" onclick="showTab('blocked', event)">🚫 المحظورون ({{ blocked_count }})</button>
+                <button class="tab-btn" onclick="showTab('verified', event)">🔐 المدراء ({{ verified_count }})</button>
+                <button class="tab-btn" onclick="showTab('commands', event)">⚙️ الأوامر</button>
             </div>
 
             <div id="orders" class="tab-content active">
-                <h3>📦 جميع الطلبات ({{ orders_count }})</h3>
+                <h3>📦 جميع الطلبات</h3>
                 <table>
-                    <tr><th>#</th><th>الاسم</th><th>الخدمة</th><th>الميزانية</th><th>الحالة</th><th>ملاحظات</th><th>الإجراءات</th></tr>
+                    <tr><th>#</th><th>الاسم</th><th>الخدمة</th><th>الميزانية</th><th>الهاتف</th><th>المدة</th><th>الحالة</th><th>ملاحظات</th><th>التاريخ</th><th>الإجراءات</th></tr>
                     {% for o in orders %}
                     <tr>
                         <td>{{ o.id }}</td>
-                        <td>{{ o.name }}</td>
+                        <td><a href="{{ o.link }}" target="_blank">{{ o.name }}</a></td>
                         <td>{{ o.service }}</td>
-                        <td>{{ o.budget }}$</td>
-                        <td><span class="badge" style="background: {% if o.status == 'مكتمل' %}#16a34a{% else %}#d97706{% endif %}; color: white;">{{ o.status }}</span></td>
-                        <td>{{ order_notes.get(o.id|string, '') }}</td>
+                        <td>{{ o.get('budget_range', '') or (o.budget|string + '$') }}</td>
+                        <td>{{ o.get('phone', '-') }}</td>
+                        <td>{{ o.get('duration', '-') }}</td>
                         <td>
-                            <button class="btn btn-success" onclick="markComplete({{ o.id }})">✔️ مكتمل</button>
-                            <button class="btn btn-warning" onclick="addNote({{ o.id }})">📝 ملاحظة</button>
-                            <button class="btn btn-danger" onclick="deleteOrder({{ o.id }})">🗑️ حذف</button>
+                            <span class="status-badge" style="background: {% if o.status == 'مكتمل' %}#16a34a{% else %}#d97706{% endif %}">
+                                {{ o.status }}
+                            </span>
+                        </td>
+                        <td>{{ order_notes.get(o.id|string, '') }}</td>
+                        <td style="font-size:0.8em;">{{ o.get('timestamp','')[:16] }}</td>
+                        <td>
+                            <button class="btn btn-success" onclick="markComplete({{ o.id }})">✔️</button>
+                            <button class="btn btn-warning" onclick="addNote({{ o.id }})">📝</button>
+                            <button class="btn btn-danger" onclick="deleteOrder({{ o.id }})">🗑️</button>
                         </td>
                     </tr>
                     {% endfor %}
@@ -612,150 +887,158 @@ def home():
             <div id="clients" class="tab-content">
                 <h3>👥 العملاء المسجلون</h3>
                 <table>
-                    <tr><th>الاسم</th><th>عدد الطلبات</th><th>آخر طلب</th><th>رابط</th></tr>
+                    <tr><th>الاسم</th><th>الهاتف</th><th>عدد الطلبات</th><th>آخر طلب</th><th>محادثة</th></tr>
                     {% for client in clients %}
                     <tr>
                         <td>{{ client.name }}</td>
+                        <td>{{ client.phone }}</td>
                         <td>{{ client.order_count }}</td>
                         <td>{{ client.last_date[:10] }}</td>
-                        <td><a href="{{ client.link }}" target="_blank">محادثة</a></td>
+                        <td><a href="{{ client.link }}" target="_blank">🔗 فتح</a></td>
                     </tr>
                     {% endfor %}
                 </table>
             </div>
 
             <div id="blocked" class="tab-content">
-                <h3>🔨 المستخدمون المحظورون ({{ blocked_count }})</h3>
+                <h3>🚫 المستخدمون المحظورون</h3>
                 <table>
                     <tr><th>معرف المستخدم</th><th>الإجراء</th></tr>
                     {% for uid in blocked_list %}
                     <tr>
-                        <td>{{ uid[:15] }}...</td>
-                        <td><button class="btn btn-success" onclick="unblockUser('{{ uid }}')">إلغاء الحظر</button></td>
+                        <td>{{ uid }}</td>
+                        <td><button class="btn btn-success" onclick="unblockUser('{{ uid }}')">رفع الحظر</button></td>
                     </tr>
                     {% endfor %}
                 </table>
             </div>
 
             <div id="verified" class="tab-content">
-                <h3>🔐 المستخدمون الموثوقون ({{ verified_count }})</h3>
+                <h3>🔐 المدراء الموثقون</h3>
                 <table>
-                    <tr><th>معرف المستخدم</th></tr>
+                    <tr><th>معرف المستخدم</th><th>الإجراء</th></tr>
                     {% for uid in verified_list %}
-                    <tr><td>{{ uid[:15] }}...</td></tr>
+                    <tr>
+                        <td>{{ uid }}</td>
+                        <td><button class="btn btn-danger" onclick="removeAdmin('{{ uid }}')">إزالة</button></td>
+                    </tr>
                     {% endfor %}
                 </table>
             </div>
 
             <div id="commands" class="tab-content">
-                <h3>⚙️ الأوامر المتاحة (يمكن استخدامها في المحادثة)</h3>
-                <ul style="line-height: 2;">
-                    <li><code>اي جديد</code> - عرض الطلبات الجديدة</li>
-                    <li><code>احصائيات</code> - عرض إحصائيات عامة</li>
-                    <li><code>طلبات اليوم</code> - عرض طلبات اليوم</li>
-                    <li><code>كل الطلبات</code> - عرض آخر 10 طلبات</li>
-                    <li><code>تفاصيل [رقم]</code> - عرض تفاصيل طلب محدد</li>
-                    <li><code>اعرض العملاء</code> - عرض أسماء العملاء المسجلين</li>
-                    <li><code>المحظورين</code> - عرض قائمة المحظورين</li>
-                    <li><code>حظر [معرف]</code> - حظر مستخدم</li>
-                    <li><code>الغاء حظر [معرف]</code> - إلغاء حظر مستخدم</li>
-                    <li><code>ملاحظة [رقم] [نص]</code> - إضافة ملاحظة لطلب</li>
-                    <li><code>مكتمل [رقم]</code> - تغيير حالة الطلب إلى مكتمل</li>
-                    <li><code>حذف [رقم]</code> - حذف طلب</li>
-                </ul>
+                <h3>⚙️ أوامر المدير (عبر الماسنجر)</h3>
+                <table>
+                    <tr><th>الأمر</th><th>الوظيفة</th></tr>
+                    <tr><td><code>احصائيات</code></td><td>عرض الإحصائيات الكاملة</td></tr>
+                    <tr><td><code>اي جديد</code></td><td>طلبات اليوم</td></tr>
+                    <tr><td><code>كل الطلبات</code></td><td>آخر 10 طلبات</td></tr>
+                    <tr><td><code>تفاصيل [رقم]</code></td><td>تفاصيل طلب محدد</td></tr>
+                    <tr><td><code>مكتمل [رقم]</code></td><td>تحديث حالة الطلب</td></tr>
+                    <tr><td><code>حذف [رقم]</code></td><td>حذف طلب</td></tr>
+                    <tr><td><code>ملاحظة [رقم] [نص]</code></td><td>إضافة ملاحظة</td></tr>
+                    <tr><td><code>حظر [معرف]</code></td><td>حظر مستخدم</td></tr>
+                    <tr><td><code>الغاء حظر [معرف]</code></td><td>رفع الحظر</td></tr>
+                    <tr><td><code>المحظورين</code></td><td>قائمة المحظورين</td></tr>
+                    <tr><td><code>العملاء</code></td><td>قائمة العملاء</td></tr>
+                </table>
             </div>
         </div>
 
         <div id="noteModal" class="modal">
             <div class="modal-content">
                 <h3>📝 إضافة ملاحظة للطلب #<span id="noteOrderId"></span></h3>
-                <textarea id="noteText" rows="4" style="width: 100%; padding: 10px; border-radius: 8px; border: 1px solid #ccc;"></textarea>
-                <div style="margin-top: 15px; text-align: left;">
+                <textarea id="noteText" rows="4" style="width:100%;padding:10px;border-radius:8px;border:1px solid #ccc;margin-top:10px;"></textarea>
+                <div style="margin-top:15px;text-align:left;">
                     <button class="btn" onclick="submitNote()">حفظ</button>
                     <button class="btn btn-danger" onclick="closeModal()">إلغاء</button>
                 </div>
             </div>
         </div>
 
+        <p class="refresh-note">⟳ تحديث تلقائي كل 30 ثانية</p>
+
         <script>
-            function showTab(tabId) {
+            function showTab(tabId, event) {
                 document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
                 document.getElementById(tabId).classList.add('active');
                 document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
-                event.target.classList.add('active');
+                if (event && event.target) event.target.classList.add('active');
             }
-
-            function markComplete(orderId) {
-                if (confirm(`تأكيد إكمال الطلب #${orderId}؟`)) {
-                    fetch(`/api/order/${orderId}/complete`, { method: 'POST' })
-                        .then(res => res.json())
-                        .then(data => { if(data.success) location.reload(); });
+            function markComplete(id) {
+                if (confirm('تأكيد إكمال الطلب #' + id + '؟')) {
+                    fetch('/api/order/' + id + '/complete', {method:'POST'})
+                        .then(r => r.json()).then(d => { if(d.success) location.reload(); });
                 }
             }
-
-            function deleteOrder(orderId) {
-                if (confirm(`هل أنت متأكد من حذف الطلب #${orderId}؟`)) {
-                    fetch(`/api/order/${orderId}/delete`, { method: 'POST' })
-                        .then(res => res.json())
-                        .then(data => { if(data.success) location.reload(); });
+            function deleteOrder(id) {
+                if (confirm('حذف الطلب #' + id + '؟ لا يمكن التراجع.')) {
+                    fetch('/api/order/' + id + '/delete', {method:'POST'})
+                        .then(r => r.json()).then(d => { if(d.success) location.reload(); });
                 }
             }
-
-            function addNote(orderId) {
-                document.getElementById('noteOrderId').innerText = orderId;
+            function addNote(id) {
+                document.getElementById('noteOrderId').innerText = id;
                 document.getElementById('noteModal').style.display = 'flex';
             }
-
             function submitNote() {
-                const orderId = document.getElementById('noteOrderId').innerText;
+                const id = document.getElementById('noteOrderId').innerText;
                 const note = document.getElementById('noteText').value;
-                fetch(`/api/order/${orderId}/note`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ note: note })
-                }).then(res => res.json()).then(data => {
-                    if(data.success) location.reload();
-                });
+                fetch('/api/order/' + id + '/note', {
+                    method:'POST',
+                    headers:{'Content-Type':'application/json'},
+                    body:JSON.stringify({note:note})
+                }).then(r => r.json()).then(d => { if(d.success) location.reload(); });
             }
-
             function closeModal() {
                 document.getElementById('noteModal').style.display = 'none';
                 document.getElementById('noteText').value = '';
             }
-
             function unblockUser(uid) {
-                if (confirm(`إلغاء حظر ${uid.slice(0,15)}...؟`)) {
-                    fetch(`/api/unblock/${uid}`, { method: 'POST' })
-                        .then(res => res.json())
-                        .then(data => { if(data.success) location.reload(); });
+                if (confirm('رفع الحظر عن ' + uid + '؟')) {
+                    fetch('/api/unblock/' + uid, {method:'POST'})
+                        .then(r => r.json()).then(d => { if(d.success) location.reload(); });
                 }
             }
-
-            window.onclick = function(event) {
-                if (event.target == document.getElementById('noteModal')) {
-                    closeModal();
+            function removeAdmin(uid) {
+                if (confirm('إزالة المدير ' + uid + '؟')) {
+                    fetch('/api/remove_admin/' + uid, {method:'POST'})
+                        .then(r => r.json()).then(d => { if(d.success) location.reload(); });
                 }
             }
+            window.onclick = function(e) {
+                if (e.target == document.getElementById('noteModal')) closeModal();
+            }
+            // تحديث تلقائي كل 30 ثانية
+            setTimeout(() => location.reload(), 30000);
         </script>
     </body>
     </html>
     """
     
     orders_list = sorted(data.get('orders', []), key=lambda x: x.get('id', 0), reverse=True)[:50]
+    
     clients_dict = {}
     for o in data.get('orders', []):
         name = o.get('name', '')
         if name:
             if name not in clients_dict:
-                clients_dict[name] = {'name': name, 'order_count': 0, 'last_date': o.get('timestamp', ''), 'link': o.get('link', '')}
+                clients_dict[name] = {
+                    'name': name,
+                    'phone': o.get('phone', '-'),
+                    'order_count': 0,
+                    'last_date': o.get('timestamp', ''),
+                    'link': o.get('link', '')
+                }
             clients_dict[name]['order_count'] += 1
             if o.get('timestamp', '') > clients_dict[name]['last_date']:
                 clients_dict[name]['last_date'] = o['timestamp']
-    clients_list = list(clients_dict.values())
-    clients_list.sort(key=lambda x: x['last_date'], reverse=True)
+                clients_dict[name]['phone'] = o.get('phone', '-')
+    
+    clients_list = sorted(clients_dict.values(), key=lambda x: x['last_date'], reverse=True)
 
     return render_template_string(html,
-        start_time=data['stats']['start_time'][:16].replace('T', ' '),
+        start_time=data['stats'].get('start_time', '')[:16].replace('T', ' '),
         binance_id=BINANCE_ID,
         unique_clients=stats['unique_clients'],
         orders_count=stats['total_orders'],
@@ -771,54 +1054,64 @@ def home():
         verified_list=data.get('verified', [])[-50:]
     )
 
-# ========== واجهات برمجية للوحة التحكم ==========
+# ========== APIs اللوحة ==========
 @app.route('/api/order/<int:order_id>/complete', methods=['POST'])
-def api_complete_order(order_id):
-    if update_order(order_id, {'status': 'مكتمل'}):
-        return jsonify({'success': True})
-    return jsonify({'success': False}), 404
+def api_complete(order_id):
+    return jsonify({'success': update_order(order_id, {'status': 'مكتمل'})})
 
 @app.route('/api/order/<int:order_id>/delete', methods=['POST'])
-def api_delete_order(order_id):
+def api_delete(order_id):
     delete_order(order_id)
     return jsonify({'success': True})
 
 @app.route('/api/order/<int:order_id>/note', methods=['POST'])
-def api_add_note(order_id):
+def api_note(order_id):
     note = request.json.get('note', '')
-    add_note(order_id, note)
+    add_note_to_order(order_id, note)
     return jsonify({'success': True})
 
 @app.route('/api/unblock/<user_id>', methods=['POST'])
 def api_unblock(user_id):
-    blocked = data.get('blocked', [])
-    if user_id in blocked:
+    if user_id in data.get('blocked', []):
         data['blocked'].remove(user_id)
         save_data()
         return jsonify({'success': True})
     return jsonify({'success': False}), 404
 
-# ========== Keep alive ==========
-def keep_alive():
+@app.route('/api/remove_admin/<user_id>', methods=['POST'])
+def api_remove_admin(user_id):
+    if user_id in data.get('verified', []):
+        data['verified'].remove(user_id)
+        save_data()
+        return jsonify({'success': True})
+    return jsonify({'success': False}), 404
+
+@app.route('/api/stats')
+def api_stats():
+    return jsonify(get_live_stats())
+
+# ========== Keep-Alive كل 30 ثانية ==========
+def keep_alive_loop():
     while True:
-        time.sleep(600)
+        time.sleep(30)
         try:
-            requests.get(f"https://{os.environ.get('RENDER_EXTERNAL_HOSTNAME', 'localhost')}/", timeout=5)
+            requests.get(SELF_URL, timeout=8)
             add_log("💓 Keep-alive ping")
-        except:
-            pass
+        except Exception as e:
+            add_log(f"⚠️ Keep-alive failed: {e}")
 
 if __name__ == '__main__':
     print("\n" + "="*70)
-    print("🚀 B.Y PRO Agent - النسخة المحسنة مع تدفق واضح")
+    print("🚀 B.Y PRO Agent - النسخة المُصلحة الكاملة")
     print("="*70)
     print(f"👤 Owner ID: {OWNER_FB_ID}")
     print(f"🔑 Password: {OWNER_PASSWORD}")
     print(f"💰 Binance: {BINANCE_ID}")
     print(f"📦 Orders in DB: {len(data.get('orders', []))}")
     print(f"📊 JSONBin ID: {BIN_ID}")
+    print(f"🌐 Self URL: {SELF_URL}")
     print("="*70 + "\n")
 
-    threading.Thread(target=keep_alive, daemon=True).start()
+    threading.Thread(target=keep_alive_loop, daemon=True).start()
     port = int(os.environ.get('PORT', 5000))
     app.run(host='0.0.0.0', port=port, debug=False)
