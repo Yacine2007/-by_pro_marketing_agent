@@ -22,38 +22,34 @@ BINANCE_ID = os.environ.get('BINANCE_ID', '1074084246')
 AI_API_URL = os.environ.get('AI_API_URL', 'http://fi8.bot-hosting.net:20163/elos-gemina')
 COMPANY_WEBSITE = os.environ.get('COMPANY_WEBSITE', 'https://b.y-pro.kesug.com')
 
-# ========== البرومبت المعدل ==========
-BOT_PERSONALITY = """أنت مستشار تقني ومبيعات في B.Y PRO للتكنولوجيا والبرمجيات.
+# ========== البرومبت الموجه نحو جمع البيانات بلطف ==========
+BOT_PERSONALITY = """أنت مستشار مبيعات في B.Y PRO، شركة تقنية متخصصة في البرمجيات.
 
 شخصيتك:
-- خبير تقني متمرس، تفهم احتياجات العملاء التقنية بسرعة.
-- ودود، مرن، ومختصر. لا تكرر نفسك.
-- تهدف لكسب العميل وتنفيذ طلبه بأفضل شكل.
+- ودود، صبور، ومختصر.
+- تفهم أن معظم العملاء ليسوا خبراء تقنيين،所以他们 بحاجة لشرح بسيط.
+- لا تلح، ولكن اسأل بلطف.
 
-خدمات الشركة (قابلة للتوسع):
-- تطوير مواقع الويب (تعريفي، متاجر، تطبيقات ويب)
-- تطوير تطبيقات الموبايل (iOS, Android)
-- أنظمة الأتمتة وبوتات الذكاء الاصطناعي
-- التصميم الجرافيكي والهوية البصرية
-- الاستشارات التقنية وحلول البرمجيات المخصصة
+مهمتك:
+1. استمع لطلب العميل.
+2. قدم له تكلفة تقريبية ومدة إنجاز واضحة (نطاق سعري مناسب).
+3. إذا وافق، اطلب اسمه ورقم هاتفه (برقم فقط).
+4. بعد الحصول على الاسم والرقم، سيقوم النظام بحفظ الطلب تلقائياً وإعلام المدير.
 
-سياسة الدفع:
-- 30% دفعة أولى، 70% عند التسليم النهائي.
-- وسيلة الدفع: USDT (Binance Pay) – معرف بينانس: 1074084246.
-- إذا سأل العميل عن وسائل أخرى، اشرح أن USDT هو الأسرع دولياً، ويمكنه استخدام وسطاء إذا لزم الأمر.
+قواعد مهمة:
+- لا تطلب بيانات قبل الاتفاق على السعر.
+- لا تكرر نفسك.
+- إذا سأل العميل عن شيء لا تعرفه، أحله للفريق الفني.
+- أجب بنفس لغة المستخدم.
 
-مبادئ التواصل:
-1. أجب بدقة واختصار.
-2. تكيف مع لغة المستخدم.
-3. لا تلح، ولكن اسأل بلطف عن البيانات المطلوبة: الاسم، الخدمة، الميزانية، رقم الهاتف، المدة، تفاصيل المشروع.
-4. إذا سألك "هل أنت مبرمج؟"، قل: "أنا جزء من فريقنا التقني، وأنا هنا لمساعدتك في كل التفاصيل."
+الخدمات والأسعار التقريبية:
+- مواقع تعريفية: 300-800$ (5-10 أيام)
+- متاجر إلكترونية: 700-1800$ (15-25 يوم)
+- بوتات ذكاء اصطناعي: 500-2000$ (حسب التعقيد)
+- تطبيقات جوال: من 1500$ (30-60 يوم)
+- تصميم جرافيك: 50-200$ (24-72 ساعة)
 
-آلية تأكيد الطلب:
-- اجمع البيانات بالتدريج. عندما تتأكد أن جميع البيانات الأساسية (الاسم، الخدمة، الميزانية) متوفرة، أضف في بداية ردك العبارة التالية بالضبط: `[ORDER_READY]` ثم اكتب رسالة تأكيد الطلب مع تفاصيل الدفع.
-- مثال: `[ORDER_READY] تم تأكيد طلبك يا [الاسم]... إلخ`
-- النظام سيتعرف على هذه العبارة ويقوم بحفظ الطلب تلقائياً قبل إرسال الرد.
-
-الهدف: تحويل الاستفسار إلى مشروع قائم وتخزين جميع البيانات في النظام."""
+طريقة الدفع: 30% مقدماً، 70% بعد التسليم، عبر USDT (Binance Pay) معرف: 1074084246."""
 
 # ========== تخزين JSONBin.io ==========
 def jsonbin_read():
@@ -194,10 +190,10 @@ def add_order(order_dict):
     notify_msg = f"""🔔 طلب جديد #{order_dict['id']}
 الاسم: {order_dict['name']}
 الخدمة: {order_dict['service']}
-الميزانية: {order_dict['budget']}$ (النطاق: {order_dict.get('budget_range', order_dict['budget'])})
+الميزانية: {order_dict['budget']}$
 رقم الجوال: {order_dict.get('phone', 'غير متوفر')}
 المدة: {order_dict.get('duration', 'غير محددة')}
-تفاصيل المشروع: {order_dict.get('details', '')[:100]}...
+تفاصيل: {order_dict.get('details', '')[:100]}...
 إجمالي الطلبات الآن: {stats['total_orders']}
 طلبات اليوم: {stats['today_orders']}
 {order_dict['link']}"""
@@ -239,12 +235,14 @@ def get_session(sender_id):
             'name': '',
             'service': '',
             'budget': 0,
-            'budget_range': '',        # لتخزين النطاق كنص (مثلاً "300-500")
+            'budget_range': '',      # نص النطاق السعري للعرض
             'phone': '',
             'duration': '',
             'details': '',
+            'confirmed': False,
             'conversation': [],
             'awaiting_password': False,
+            'awaiting_price_confirmation': False,  # بانتظار موافقة العميل على السعر
             'asked_for_phone': False,
             'pending_details': {}
         }
@@ -263,6 +261,19 @@ def add_to_conversation(sender_id, role, message):
         sess['conversation'] = sess['conversation'][-15:]
     save_data()
 
+def reset_session_for_new_order(sender_id):
+    sess = get_session(sender_id)
+    update_session(sender_id, {
+        'service': '',
+        'budget': 0,
+        'budget_range': '',
+        'duration': '',
+        'details': '',
+        'confirmed': False,
+        'awaiting_price_confirmation': False,
+        'asked_for_phone': False
+    })
+
 # ========== معالجة كلمة المرور ==========
 def handle_password(sender_id, text, sess):
     if text.strip() == OWNER_PASSWORD:
@@ -279,7 +290,7 @@ def handle_password(sender_id, text, sess):
     else:
         send_fb(sender_id, "❌ كلمة المرور غير صحيحة.")
 
-# ========== استخراج بيانات العميل (محسّن لدعم النطاقات) ==========
+# ========== استخراج بيانات العميل (محسّن للتعامل مع النطاقات) ==========
 def extract_client_data(text, sess):
     updated = False
     text_lower = text.lower()
@@ -315,7 +326,7 @@ def extract_client_data(text, sess):
             (r'برنامج|software|برمجة', 'برنامج مخصص'),
             (r'كتالوج|catalog', 'كتالوج رقمي'),
             (r'تسيير مطاعم|restaurant management', 'نظام تسيير مطاعم'),
-            (r'بورتفوليو|portfolio', 'بورتفوليو')
+            (r'مثل chatgpt|مثل chatgpt|chatbot', 'بوت ذكاء اصطناعي متقدم')
         ]
         for pattern, service_name in service_map:
             if re.search(pattern, text_lower):
@@ -324,82 +335,13 @@ def extract_client_data(text, sess):
                 updated = True
                 break
     
-    # 3. الميزانية (دعم الأرقام والنطاقات)
-    if sess.get('budget', 0) == 0 and not sess.get('budget_range'):
-        # البحث عن نطاق مثل "300-500 دولار"
-        range_match = re.search(r'(\d+)\s*[-–—]\s*(\d+)\s*(?:usdt|\$|دولار|dollar)?', text, re.I)
-        if range_match:
-            min_budget = int(range_match.group(1))
-            max_budget = int(range_match.group(2))
-            sess['budget'] = min_budget  # نأخذ القيمة الدنيا للحسابات
-            sess['budget_range'] = f"{min_budget}-{max_budget}"
-            add_log(f"💰 الميزانية: {sess['budget_range']}$ (نطاق)")
-            updated = True
-        else:
-            # البحث عن مليار
-            billion_match = re.search(r'(\d+)\s*مليار', text, re.I)
-            if billion_match:
-                sess['budget'] = int(billion_match.group(1)) * 1000000000
-                add_log(f"💰 الميزانية: {sess['budget']}$ (مليار)")
-                updated = True
-            else:
-                # البحث عن مليون
-                million_match = re.search(r'(\d+)\s*مليون', text, re.I)
-                if million_match:
-                    sess['budget'] = int(million_match.group(1)) * 1000000
-                    add_log(f"💰 الميزانية: {sess['budget']}$ (مليون)")
-                    updated = True
-                else:
-                    # البحث عن ألف
-                    thousand_match = re.search(r'(\d+)\s*ألف', text, re.I)
-                    if thousand_match:
-                        sess['budget'] = int(thousand_match.group(1)) * 1000
-                        add_log(f"💰 الميزانية: {sess['budget']}$ (ألف)")
-                        updated = True
-                    else:
-                        # البحث عن أرقام عادية مع عملة
-                        m = re.search(r'(\d+)[\s-]*(?:usdt|\$|دولار|dollar)', text, re.I)
-                        if m:
-                            sess['budget'] = int(m.group(1))
-                            add_log(f"💰 الميزانية: {sess['budget']}$")
-                            updated = True
-    
-    # 4. رقم الجوال
+    # 3. رقم الجوال
     if not sess.get('phone'):
         m = re.search(r'(05[0-9]{8}|5[0-9]{8}|\+966[0-9]{9}|00966[0-9]{9})', text)
         if m:
             sess['phone'] = m.group(1)
             add_log(f"📱 الجوال: {sess['phone']}")
             updated = True
-    
-    # 5. المدة
-    if not sess.get('duration'):
-        duration_match = re.search(r'(\d+)\s*(?:يوم|شهر|أسبوع|week|month|day)', text, re.I)
-        if duration_match:
-            sess['duration'] = duration_match.group(0)
-            add_log(f"⏱ المدة: {sess['duration']}")
-            updated = True
-        else:
-            # نطاق مدة مثل "أسبوع إلى أسبوعين"
-            range_duration = re.search(r'(أسبوع|شهر|يوم)\s*(?:إلى|الي)\s*(\d+)\s*(?:أسابيع|شهور|أيام)', text, re.I)
-            if range_duration:
-                sess['duration'] = range_duration.group(0)
-                add_log(f"⏱ المدة: {sess['duration']}")
-                updated = True
-    
-    # 6. تفاصيل إضافية (رابط أو وصف)
-    if not sess.get('details'):
-        # نأخذ الروابط أولاً
-        link_match = re.search(r'(https?://[^\s]+)', text)
-        if link_match:
-            sess['details'] = link_match.group(1)
-            add_log(f"🔗 رابط: {sess['details'][:50]}...")
-            updated = True
-        else:
-            sentences = re.split(r'[.!?]', text)
-            if sentences and sentences[0].strip():
-                sess['details'] = sentences[0][:200]
-                updated = True
     
     return updated
 
@@ -408,20 +350,14 @@ def ask_ai(user_msg, sess, is_owner_mode=False, live_stats=None):
     context = "\n".join(sess.get('conversation', [])[-12:])
     system = BOT_PERSONALITY
     
-    if is_owner_mode and live_stats:
-        stats_text = f"""
-الإحصائيات الحالية (محدثة):
-- العملاء الفريدون: {live_stats['unique_clients']}
-- إجمالي الطلبات: {live_stats['total_orders']}
-- طلبات اليوم: {live_stats['today_orders']}
-- المحظورون: {live_stats['blocked']}
-- الموثوقون: {live_stats['verified']}
-- الرسائل المستلمة: {live_stats['msgs_received']}
-- الرسائل المرسلة: {live_stats['msgs_sent']}
-"""
-        system += stats_text
+    # إضافة معلومات الحالة الحالية للجلسة
+    state_info = ""
+    if sess.get('awaiting_price_confirmation'):
+        state_info = f"\nالعميل وافق على السعر تقريباً. اطلب منه الآن الاسم ورقم الهاتف لتسجيل الطلب."
+    elif sess.get('name') and sess.get('phone'):
+        state_info = f"\nالعميل قدم الاسم ورقم الهاتف. يمكنك الآن حفظ الطلب."
     
-    prompt = f"{system}\n\nسجل المحادثة:\n{context}\n\nالمستخدم: {user_msg}\nالرد:"
+    prompt = f"{system}{state_info}\n\nسجل المحادثة:\n{context}\n\nالمستخدم: {user_msg}\nالرد:"
     
     try:
         url = f'{AI_API_URL}?text={requests.utils.quote(prompt)}'
@@ -475,65 +411,79 @@ def process_message(sender_id, text):
         send_fb(sender_id, "🔐 الرجاء إدخال الرقم السري:")
         return
 
-    # 4. استخراج البيانات
+    # 4. استخراج البيانات الأساسية (الاسم والرقم فقط)
     extract_client_data(text, sess)
     update_session(sender_id, sess)
 
-    # 5. الحصول على رد الذكاء
+    # 5. التحقق من وجود أمر ORDER_READY في رد الذكاء (سنقوم بمعالجته لاحقاً)
+    # لكننا الآن سنعتمد على تدفق أوضح: البوت يقترح السعر، ينتظر الموافقة، ثم يجمع البيانات.
+
+    # 6. إذا كان لدينا الاسم والرقم والخدمة والسعر (رقمي) -> حفظ الطلب
+    if sess.get('name') and sess.get('phone') and sess.get('service') and sess.get('budget', 0) > 0:
+        order = {
+            'name': sess['name'],
+            'service': sess['service'],
+            'budget': sess['budget'],
+            'phone': sess['phone'],
+            'duration': sess.get('duration', ''),
+            'details': sess.get('details', ''),
+            'timestamp': datetime.now().isoformat(),
+            'sender_id': sender_id,
+            'link': f"https://www.facebook.com/messages/t/{sender_id}",
+            'status': 'جديد'
+        }
+        order_id = add_order(order)
+        add_log(f"✅ تم حفظ الطلب #{order_id}")
+        
+        # إعلام العميل بطريقة بسيطة (بدون إظهار أن النظام سجل)
+        send_fb(sender_id, f"شكراً {sess['name']}. سنتواصل معك قريباً لبدء العمل على {sess['service']}.")
+        
+        # إعادة تعيين الجلسة لطلبات مستقبلية
+        reset_session_for_new_order(sender_id)
+        return
+
+    # 7. الحصول على رد الذكاء (الذي سيقترح السعر ويطلب البيانات)
     reply = ask_ai(text, sess, is_owner_mode=False)
     
-    # 6. التحقق من وجود علامة ORDER_READY
-    if '[ORDER_READY]' in reply:
-        clean_reply = reply.replace('[ORDER_READY]', '').strip()
-        
-        # التحقق من اكتمال البيانات الأساسية: الاسم والخدمة ووجود ميزانية (رقم أو نطاق)
-        budget_ok = sess.get('budget', 0) > 0 or sess.get('budget_range') is not None
-        if sess.get('name') and sess.get('service') and budget_ok:
-            
-            # نطلب رقم الجوال مرة واحدة إذا لم يقدمه
-            if not sess.get('phone') and not sess.get('asked_for_phone'):
-                send_fb(sender_id, "شكراً لك. هل يمكن تزويدي برقم جوالك للتواصل؟ (اختياري)")
-                sess['asked_for_phone'] = True
-                update_session(sender_id, {'asked_for_phone': True})
-                send_fb(sender_id, clean_reply)
-                add_to_conversation(sender_id, 'النظام', clean_reply)
-                return
-            
-            # حفظ الطلب
-            order = {
-                'name': sess['name'],
-                'service': sess['service'],
-                'budget': sess['budget'] if sess['budget'] > 0 else 0,
-                'budget_range': sess.get('budget_range', ''),
-                'phone': sess.get('phone', ''),
-                'duration': sess.get('duration', ''),
-                'details': sess.get('details', ''),
-                'timestamp': datetime.now().isoformat(),
-                'sender_id': sender_id,
-                'link': f"https://www.facebook.com/messages/t/{sender_id}",
-                'status': 'جديد'
-            }
-            order_id = add_order(order)
-            add_log(f"✅ تم حفظ الطلب #{order_id} بنجاح")
-            
-            # إعادة تعيين بيانات الخدمة والميزانية للطلبات المستقبلية
-            update_session(sender_id, {
-                'service': '',
-                'budget': 0,
-                'budget_range': '',
-                'duration': '',
-                'details': '',
-                'asked_for_phone': False
-            })
-            
-            send_fb(sender_id, clean_reply)
-            add_to_conversation(sender_id, 'النظام', clean_reply)
-        else:
-            send_fb(sender_id, clean_reply)
-            add_to_conversation(sender_id, 'النظام', clean_reply)
-    else:
-        send_fb(sender_id, reply)
-        add_to_conversation(sender_id, 'النظام', reply)
+    # 8. تحليل الرد لاستخراج السعر إذا كان قد اقترحه
+    # البحث عن نطاق سعري في الرد
+    price_range = re.search(r'(\d+)\s*-\s*(\d+)\s*\$', reply)
+    if price_range and not sess.get('budget'):
+        # اقترح البوت سعراً، ننتظر موافقة العميل
+        sess['budget_range'] = f"{price_range.group(1)}-{price_range.group(2)}"
+        # لا نعين budget بعد، ننتظر الموافقة
+        update_session(sender_id, {'budget_range': sess['budget_range']})
+    elif re.search(r'(\d+)\s*\$', reply) and not sess.get('budget'):
+        # سعر محدد
+        match = re.search(r'(\d+)\s*\$', reply)
+        if match:
+            sess['budget'] = int(match.group(1))
+            update_session(sender_id, {'budget': sess['budget']})
+    
+    # 9. إذا وافق العميل على السعر (كلمة مثل "موافق"، "نعم"، "ok")
+    if sess.get('budget_range') and any(w in text.lower() for w in ['نعم', 'موافق', 'ok', 'yes', 'تمام']):
+        # تعيين budget كرقم (الحد الأدنى للنطاق)
+        range_match = re.search(r'(\d+)-(\d+)', sess['budget_range'])
+        if range_match:
+            sess['budget'] = int(range_match.group(1))
+            update_session(sender_id, {'budget': sess['budget']})
+            # الآن نطلب الاسم والرقم
+            if not sess.get('name'):
+                send_fb(sender_id, "ما اسمك الكريم؟")
+            elif not sess.get('phone'):
+                send_fb(sender_id, "رقم هاتفك للتواصل؟")
+            return
+    elif sess.get('budget') and any(w in text.lower() for w in ['نعم', 'موافق', 'ok', 'yes', 'تمام']):
+        # العميل وافق على السعر المحدد
+        if not sess.get('name'):
+            send_fb(sender_id, "ما اسمك الكريم؟")
+        elif not sess.get('phone'):
+            send_fb(sender_id, "رقم هاتفك للتواصل؟")
+        return
+    
+    # 10. إرسال الرد
+    send_fb(sender_id, reply)
+    add_to_conversation(sender_id, 'النظام', reply)
 
 # ========== أمر تسجيل الخروج (للمدير فقط) ==========
 def handle_logout(sender_id):
@@ -646,7 +596,7 @@ def home():
                         <td>{{ o.id }}</td>
                         <td>{{ o.name }}</td>
                         <td>{{ o.service }}</td>
-                        <td>{% if o.budget_range %}{{ o.budget_range }}{% else %}{{ o.budget }}{% endif %} $</td>
+                        <td>{{ o.budget }}$</td>
                         <td><span class="badge" style="background: {% if o.status == 'مكتمل' %}#16a34a{% else %}#d97706{% endif %}; color: white;">{{ o.status }}</span></td>
                         <td>{{ order_notes.get(o.id|string, '') }}</td>
                         <td>
@@ -860,7 +810,7 @@ def keep_alive():
 
 if __name__ == '__main__':
     print("\n" + "="*70)
-    print("🚀 B.Y PRO Agent - النسخة النهائية مع دعم نطاقات الميزانية")
+    print("🚀 B.Y PRO Agent - النسخة المحسنة مع تدفق واضح")
     print("="*70)
     print(f"👤 Owner ID: {OWNER_FB_ID}")
     print(f"🔑 Password: {OWNER_PASSWORD}")
