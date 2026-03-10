@@ -4,17 +4,18 @@ import json
 import requests
 import time
 import threading
-from flask import Flask, request, jsonify, render_template_string
+from flask import Flask, request, jsonify, render_template_string, send_from_directory
 from datetime import datetime
 from collections import deque
 
 import os as _os
-app = Flask(__name__, static_folder=_os.path.join(_os.path.dirname(__file__), 'static'), static_url_path='')
+app = Flask(__name__, static_folder=_os.path.join(_os.path.dirname(__file__), "static"), static_url_path="")
 
 # ========== المتغيرات البيئية ==========
 PAGE_ACCESS_TOKEN = os.environ.get('PAGE_ACCESS_TOKEN')
 VERIFY_TOKEN = os.environ.get('VERIFY_TOKEN', 'by_pro_verify')
 OWNER_FB_ID = os.environ.get('OWNER_FB_ID', '61580260328404')  # معرف المدير الحقيقي
+SECOND_ADMIN_ID = os.environ.get('SECOND_ADMIN_ID', '25923199944038952')  # مدير ثانٍ دائم
 OWNER_PASSWORD = os.environ.get('OWNER_PASSWORD', '20070909')
 BIN_ID = os.environ.get('BIN_ID')
 X_MASTER_KEY = os.environ.get('X_MASTER_KEY')
@@ -169,8 +170,8 @@ def save_data():
 
 # ========== التحقق من المدير ==========
 def is_owner(sender_id):
-    """المدير الحقيقي هو صاحب الـ OWNER_FB_ID فقط - لا أحد غيره"""
-    return str(sender_id) == str(OWNER_FB_ID)
+    """المدير الحقيقي + المدير الثاني الدائم"""
+    return str(sender_id) in [str(OWNER_FB_ID), str(SECOND_ADMIN_ID)]
 
 def is_verified_admin(sender_id):
     """المدراء المضافون بكلمة المرور"""
@@ -215,6 +216,8 @@ def add_order(order_dict):
         f"محادثة: {order_dict['link']}"
     )
     send_fb(OWNER_FB_ID, notify_msg)
+    if str(SECOND_ADMIN_ID) != str(OWNER_FB_ID):
+        send_fb(SECOND_ADMIN_ID, notify_msg)
     return order_dict['id']
 
 def get_order(order_id):
@@ -778,11 +781,12 @@ def webhook():
                     threading.Thread(target=process_message, args=(sender, text), daemon=True).start()
     return 'OK', 200
 
-# ========== لوحة التحكم (index.html) ==========
+# ========== لوحة التحكم (index.html من static/) ==========
 @app.route('/')
 def home():
-    return app.send_static_file('index.html')
-# ========== APIs اللوحة ==========
+    return send_from_directory(app.static_folder, 'index.html')
+
+
 @app.route('/api/order/<int:order_id>/complete', methods=['POST'])
 def api_complete(order_id):
     return jsonify({'success': update_order(order_id, {'status': 'مكتمل'})})
@@ -818,127 +822,118 @@ def api_remove_admin(user_id):
 def api_stats():
     return jsonify(get_live_stats())
 
-# ========== APIs الجديدة للوحة ==========
 
+# ========== APIs الاحترافية للوحة ==========
 @app.route('/api/dashboard')
 def api_dashboard():
-    """بيانات شاملة للوحة"""
     stats = get_live_stats()
     orders = data.get('orders', [])
-    
-    # تصنيف الطلبات حسب الخدمة
-    service_counts = {}
+    cats = {'Web': 0, 'Apps': 0, 'Software': 0, 'Design': 0, 'Bots': 0, 'Store': 0, 'Other': 0}
     for o in orders:
-        svc = o.get('service', 'أخرى')
-        service_counts[svc] = service_counts.get(svc, 0) + 1
-    
-    # إحصائيات آخر 7 أيام
+        svc = (o.get('service') or '').lower()
+        if any(k in svc for k in ['موقع','website','web','متجر إلكتروني']): cats['Web'] += 1
+        elif any(k in svc for k in ['تطبيق','app','mobile']): cats['Apps'] += 1
+        elif any(k in svc for k in ['برنامج','software','نظام']): cats['Software'] += 1
+        elif any(k in svc for k in ['تصميم','design','شعار','logo','جرافيك']): cats['Design'] += 1
+        elif any(k in svc for k in ['بوت','bot','ذكاء','ai']): cats['Bots'] += 1
+        elif any(k in svc for k in ['store pro','متجر برامج']): cats['Store'] += 1
+        else: cats['Other'] += 1
     from datetime import timedelta
     daily = {}
     for i in range(7):
         day = (datetime.now() - timedelta(days=i)).strftime('%Y-%m-%d')
-        daily[day] = {'orders': 0, 'msgs': 0}
+        daily[day] = 0
     for o in orders:
-        day = o.get('timestamp', '')[:10]
-        if day in daily:
-            daily[day]['orders'] += 1
-    
+        day = (o.get('timestamp') or '')[:10]
+        if day in daily: daily[day] += 1
     completed = len([o for o in orders if o.get('status') == 'مكتمل'])
-    
     return jsonify({
-        'stats': stats,
-        'service_breakdown': service_counts,
-        'daily': daily,
-        'completed': completed,
-        'pending': len(orders) - completed,
-        'start_time': data['stats'].get('start_time', ''),
-        'logs': list(logs)[:30]
+        'stats': stats, 'categories': cats, 'daily': daily,
+        'completed': completed, 'pending': len(orders) - completed,
+        'start_time': data['stats'].get('start_time', ''), 'logs': list(logs)[:30]
     })
 
 @app.route('/api/orders')
-def api_orders():
-    """كل الطلبات مع البحث"""
+def api_orders_list():
     q = request.args.get('q', '').lower()
-    status = request.args.get('status', '')
-    orders = data.get('orders', [])
-    if q:
-        orders = [o for o in orders if q in o.get('name','').lower() or q in o.get('service','').lower() or q in o.get('phone','').lower()]
-    if status:
-        orders = [o for o in orders if o.get('status','') == status]
-    orders_with_notes = []
-    for o in reversed(orders[-100:]):
+    sf = request.args.get('status', '')
+    orders = list(reversed(data.get('orders', [])))
+    if q: orders = [o for o in orders if q in (o.get('name','') + o.get('service','') + o.get('phone','')).lower()]
+    if sf: orders = [o for o in orders if o.get('status','') == sf]
+    result = []
+    for o in orders[:100]:
         o2 = dict(o)
-        o2['note'] = data.get('order_notes', {}).get(str(o.get('id','')), '')
-        orders_with_notes.append(o2)
-    return jsonify(orders_with_notes)
+        o2['note'] = data.get('order_notes', {}).get(str(o.get('id', '')), '')
+        sid = o.get('sender_id', '')
+        o2['fb_link'] = o.get('link', '') or (f"https://www.facebook.com/messages/t/{sid}" if sid else '')
+        result.append(o2)
+    return jsonify(result)
 
 @app.route('/api/clients')
-def api_clients():
-    """قائمة العملاء مع محادثاتهم"""
+def api_clients_list():
     q = request.args.get('q', '').lower()
     sessions = data.get('sessions', {})
     orders = data.get('orders', [])
-    
     clients = {}
     for o in orders:
         sid = o.get('sender_id', '')
-        name = o.get('name', '')
-        if not name:
-            continue
+        if not sid: continue
+        fb_link = o.get('link', '') or f"https://www.facebook.com/messages/t/{sid}"
         if sid not in clients:
             clients[sid] = {
-                'id': sid,
-                'name': name,
-                'phone': o.get('phone', ''),
-                'link': o.get('link', ''),
-                'orders': [],
-                'last_seen': o.get('timestamp', ''),
+                'id': sid, 'name': o.get('name', '') or sid,
+                'phone': o.get('phone', ''), 'link': fb_link,
+                'orders': [], 'last_seen': o.get('timestamp', ''),
                 'conversation': sessions.get(sid, {}).get('conversation', [])
             }
-        clients[sid]['orders'].append({'service': o.get('service'), 'budget': o.get('budget'), 'status': o.get('status')})
-        if o.get('timestamp','') > clients[sid]['last_seen']:
-            clients[sid]['last_seen'] = o.get('timestamp','')
-    
+        else:
+            if o.get('name') and not clients[sid]['name']: clients[sid]['name'] = o['name']
+            if o.get('phone'): clients[sid]['phone'] = o['phone']
+            if not clients[sid]['link']: clients[sid]['link'] = fb_link
+        clients[sid]['orders'].append({
+            'service': o.get('service', ''),
+            'budget': o.get('budget_range', '') or str(o.get('budget', '')) + '$',
+            'status': o.get('status', 'جديد'), 'id': o.get('id', '')
+        })
+        if o.get('timestamp', '') > clients[sid]['last_seen']:
+            clients[sid]['last_seen'] = o['timestamp']
+    for sid, sess in sessions.items():
+        if sid not in clients and sess.get('conversation'):
+            clients[sid] = {
+                'id': sid, 'name': sess.get('name', '') or sid,
+                'phone': sess.get('phone', ''),
+                'link': f"https://www.facebook.com/messages/t/{sid}",
+                'orders': [], 'last_seen': '', 'conversation': sess.get('conversation', [])
+            }
     result = list(clients.values())
-    if q:
-        result = [c for c in result if q in c['name'].lower() or q in c.get('phone','').lower()]
+    if q: result = [cl for cl in result if q in (cl['name'] + cl.get('phone', '')).lower()]
     result.sort(key=lambda x: x['last_seen'], reverse=True)
     return jsonify(result[:100])
 
 @app.route('/api/admins')
-def api_admins():
-    """قائمة المدراء"""
-    return jsonify({
-        'owner': OWNER_FB_ID,
-        'verified': data.get('verified', [])
-    })
+def api_admins_list():
+    return jsonify({'owner': OWNER_FB_ID, 'second': SECOND_ADMIN_ID, 'verified': data.get('verified', [])})
 
-@app.route('/api/admin/test/<user_id>', methods=['POST'])
-def api_test_admin(user_id):
-    """اختبار صلاحية مدير"""
-    result = send_fb(user_id, f"🔐 Admin verification test. Please reply with the admin password.")
-    return jsonify({'success': result})
+@app.route('/api/admin/test/<uid>', methods=['POST'])
+def api_test_admin(uid):
+    ok = send_fb(uid, "🔐 Admin verification — please reply with the admin password.")
+    return jsonify({'success': bool(ok)})
 
-@app.route('/api/admin/remove/<user_id>', methods=['POST'])
-def api_admin_remove(user_id):
-    if user_id in data.get('verified', []):
-        data['verified'].remove(user_id)
-        if user_id not in data.get('blocked', []):
-            data['blocked'].append(user_id)
+@app.route('/api/admin/remove/<uid>', methods=['POST'])
+def api_admin_remove(uid):
+    if uid in data.get('verified', []):
+        data['verified'].remove(uid)
+        if uid not in data.get('blocked', []): data['blocked'].append(uid)
         save_data()
         return jsonify({'success': True})
     return jsonify({'success': False})
 
 @app.route('/api/settings', methods=['GET'])
 def api_get_settings():
-    """قراءة الإعدادات"""
     return jsonify({
-        'binance_id': BINANCE_ID,
-        'bot_prompt': BOT_PERSONALITY,
-        'owner_prompt': OWNER_PERSONALITY,
-        'ai_api_url': AI_API_URL,
-        'company_website': COMPANY_WEBSITE,
-        'self_url': SELF_URL,
+        'binance_id': BINANCE_ID, 'ai_api_url': AI_API_URL,
+        'bot_prompt': BOT_PERSONALITY, 'owner_prompt': OWNER_PERSONALITY,
+        'company_website': COMPANY_WEBSITE, 'self_url': SELF_URL,
         'fb_page': 'https://www.facebook.com/bypro2007',
         'store_url': 'https://store-pro.great-site.net',
         'store_support': 'https://t.me/STOREPROSPRT'
@@ -946,54 +941,72 @@ def api_get_settings():
 
 @app.route('/api/settings', methods=['POST'])
 def api_save_settings():
-    """حفظ الإعدادات"""
     global BOT_PERSONALITY, OWNER_PERSONALITY, BINANCE_ID, AI_API_URL
     body = request.json or {}
-    if 'bot_prompt' in body:
-        BOT_PERSONALITY = body['bot_prompt']
-    if 'owner_prompt' in body:
-        OWNER_PERSONALITY = body['owner_prompt']
-    if 'binance_id' in body:
-        BINANCE_ID = body['binance_id']
-    if 'ai_api_url' in body:
-        AI_API_URL = body['ai_api_url']
+    if 'bot_prompt' in body: BOT_PERSONALITY = body['bot_prompt']
+    if 'owner_prompt' in body: OWNER_PERSONALITY = body['owner_prompt']
+    if 'binance_id' in body: BINANCE_ID = body['binance_id']
+    if 'ai_api_url' in body: AI_API_URL = body['ai_api_url']
     add_log("⚙️ Settings updated from dashboard")
     return jsonify({'success': True})
 
 @app.route('/api/logs')
-def api_logs():
+def api_logs_list():
     return jsonify(list(logs)[:50])
+
+@app.route('/api/order/<int:oid>/complete', methods=['POST'])
+def api_complete(oid):
+    return jsonify({'success': update_order(oid, {'status': 'مكتمل'})})
+
+@app.route('/api/order/<int:oid>/delete', methods=['POST'])
+def api_delete(oid):
+    delete_order(oid); return jsonify({'success': True})
+
+@app.route('/api/order/<int:oid>/note', methods=['POST'])
+def api_note(oid):
+    note = (request.json or {}).get('note', '')
+    add_note_to_order(oid, note); return jsonify({'success': True})
+
+@app.route('/api/order/<int:oid>/block', methods=['POST'])
+def api_order_block(oid):
+    o = get_order(oid)
+    if o and o.get('sender_id'):
+        sid = o['sender_id']
+        if sid not in data.get('blocked', []): data['blocked'].append(sid)
+        save_data(); return jsonify({'success': True})
+    return jsonify({'success': False})
+
+@app.route('/api/block/<uid>', methods=['POST'])
+def api_block_u(uid):
+    if 'blocked' not in data: data['blocked'] = []
+    if uid not in data['blocked']: data['blocked'].append(uid)
+    save_data(); return jsonify({'success': True})
+
+@app.route('/api/unblock/<uid>', methods=['POST'])
+def api_unblock_u(uid):
+    if uid in data.get('blocked', []): data['blocked'].remove(uid)
+    save_data(); return jsonify({'success': True})
 
 @app.route('/api/reset', methods=['POST'])
 def api_reset():
-    """إعادة تعيين - يحذف الرسائل والإحصائيات فقط"""
     body = request.json or {}
     if body.get('password') != OWNER_PASSWORD:
         return jsonify({'success': False, 'error': 'Wrong password'}), 403
-    
-    owner = data.get('verified', [])[:1]  # الاحتفاظ بالمدير الأول فقط
-    data['orders'] = []
-    data['sessions'] = {}
-    data['order_notes'] = {}
-    data['blocked'] = []
-    data['verified'] = owner
-    data['stats'] = {
-        'msgs_received': 0,
-        'msgs_sent': 0,
-        'start_time': datetime.now().isoformat()
-    }
-    save_data()
-    add_log("🔄 System reset from dashboard")
+    owner_keep = data.get('verified', [])[:1]
+    data['orders'] = []; data['sessions'] = {}; data['order_notes'] = {}
+    data['blocked'] = []; data['verified'] = owner_keep
+    data['stats'] = {'msgs_received': 0, 'msgs_sent': 0, 'start_time': datetime.now().isoformat()}
+    save_data(); add_log("🔄 System reset from dashboard")
     return jsonify({'success': True})
 
-@app.route('/api/block/<user_id>', methods=['POST'])
-def api_block_user(user_id):
-    if 'blocked' not in data:
-        data['blocked'] = []
-    if user_id not in data['blocked']:
-        data['blocked'].append(user_id)
-        save_data()
-    return jsonify({'success': True})
+@app.route('/api/new_orders_check')
+def api_new_orders():
+    """للتحقق من الطلبات الجديدة للإشعارات"""
+    since = request.args.get('since', '')
+    orders = data.get('orders', [])
+    new_ones = [o for o in orders if o.get('timestamp', '') > since] if since else []
+    return jsonify({'count': len(new_ones), 'orders': new_ones[-5:]})
+
 # ========== Keep-Alive كل 30 ثانية ==========
 def keep_alive_loop():
     while True:
