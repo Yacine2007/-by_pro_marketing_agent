@@ -422,48 +422,72 @@ def ask_ai(user_msg, sess, extra_instruction="", personality=None):
 
 # ========== معالجة أوامر المدير ==========
 def handle_owner_command(sender_id, text):
-    """معالجة أوامر المدير الحقيقي أو المدير الموثق"""
-    text_lower = text.lower().strip()
+    """معالجة أوامر المدير — يتعرف على اللغة الطبيعية ويمنع الـ AI من اختراع بيانات"""
+    t = text.lower().strip()
     stats = get_live_stats()
-    
-    # إحصائيات
-    if any(k in text_lower for k in ['احصائيات', 'إحصائيات', 'statistics', 'stats']):
+
+    # ====== إحصائيات (يتعرف على أي صياغة) ======
+    if any(k in t for k in [
+        'احصائيات', 'إحصائيات', 'statistics', 'stats',
+        'احصاء', 'الأرقام', 'الارقام', 'ارقام', 'نظرة عامة',
+        'اليوم كيف', 'كيف اليوم', 'ما الجديد', 'ما جديد',
+        'وضع', 'الوضع', 'ايش صاير', 'شو صاير', 'كيف الامور',
+        'كيف الأمور', 'اعطني احصائيات', 'اعطني الاحصائيات',
+        'اعطني إحصائيات', 'احصائيات اليوم', 'تقرير'
+    ]):
+        completed = len([o for o in data.get('orders', []) if o.get('status') == 'مكتمل'])
+        pending = stats['total_orders'] - completed
         msg = (
             f"📊 إحصائيات B.Y PRO\n"
-            f"العملاء الفريدون: {stats['unique_clients']}\n"
-            f"إجمالي الطلبات: {stats['total_orders']}\n"
-            f"طلبات اليوم: {stats['today_orders']}\n"
-            f"المحظورون: {stats['blocked']}\n"
-            f"المدراء: {stats['verified']}\n"
-            f"رسائل واردة: {stats['msgs_received']}\n"
-            f"رسائل صادرة: {stats['msgs_sent']}"
+            f"━━━━━━━━━━━━━━━\n"
+            f"📦 إجمالي الطلبات: {stats['total_orders']}\n"
+            f"📅 طلبات اليوم: {stats['today_orders']}\n"
+            f"✅ مكتملة: {completed}\n"
+            f"⏳ معلقة: {pending}\n"
+            f"👥 عملاء فريدون: {stats['unique_clients']}\n"
+            f"🚫 محظورون: {stats['blocked']}\n"
+            f"🔐 مدراء: {stats['verified']}\n"
+            f"📨 رسائل واردة: {stats['msgs_received']}\n"
+            f"📤 رسائل صادرة: {stats['msgs_sent']}"
         )
         send_fb(sender_id, msg)
         return True
-    
-    # الطلبات الجديدة
-    if any(k in text_lower for k in ['اي جديد', 'طلبات اليوم', 'الجديد']):
+
+    # ====== طلبات اليوم ======
+    if any(k in t for k in ['اي جديد', 'طلبات اليوم', 'الجديد', 'جديد اليوم']):
         if stats['today_orders'] > 0:
-            lines = [f"#{o['id']} {o['name']} - {o['service']} - {o.get('budget','؟')}$" 
-                     for o in stats['today_orders_list']]
+            lines = [
+                f"#{o['id']} {o['name']} — {o['service']} — {o.get('budget','؟')}$"
+                for o in stats['today_orders_list']
+            ]
             send_fb(sender_id, f"📦 {stats['today_orders']} طلب اليوم:\n" + "\n".join(lines))
         else:
             send_fb(sender_id, "لا توجد طلبات اليوم.")
         return True
-    
-    # كل الطلبات
-    if any(k in text_lower for k in ['كل الطلبات', 'جميع الطلبات', 'all orders']):
-        orders = data.get('orders', [])[-10:]
-        if orders:
-            lines = [f"#{o['id']} {o['name']} - {o['service']} - {o.get('budget','؟')}$ [{o.get('status','جديد')}]"
-                     for o in reversed(orders)]
-            send_fb(sender_id, "📋 آخر الطلبات:\n" + "\n".join(lines))
-        else:
+
+    # ====== كل الطلبات / عرض الطلبات ======
+    if any(k in t for k in [
+        'كل الطلبات', 'جميع الطلبات', 'all orders', 'الطلبات الموجودة',
+        'الطلبات', 'اعرض الطلبات', 'عرض الطلبات', 'كا الطلبات',
+        'كل الطلبات', 'قائمة الطلبات', 'اظهر الطلبات', 'شوف الطلبات',
+        'طلبات موجودة', 'كم طلب', 'عدد الطلبات'
+    ]):
+        orders = data.get('orders', [])
+        if not orders:
             send_fb(sender_id, "لا توجد طلبات بعد.")
+        else:
+            show = list(reversed(orders[-15:]))
+            lines = [
+                f"#{o['id']} {o.get('name','؟')} — {o.get('service','؟')} — "
+                f"{o.get('budget','؟')}$ [{o.get('status','جديد')}]"
+                for o in show
+            ]
+            send_fb(sender_id,
+                f"📋 الطلبات ({len(orders)} إجمالاً)، آخر {len(show)}:\n" + "\n".join(lines))
         return True
-    
-    # تفاصيل طلب
-    m = re.search(r'تفاصيل\s+(\d+)', text)
+
+    # ====== تفاصيل طلب بالرقم ======
+    m = re.search(r'(?:تفاصيل|تفصيل|طلب)\s*#?\s*(\d+)', text)
     if m:
         oid = int(m.group(1))
         o = get_order(oid)
@@ -471,28 +495,27 @@ def handle_owner_command(sender_id, text):
             note = data.get('order_notes', {}).get(str(oid), 'لا يوجد')
             msg = (
                 f"📋 تفاصيل الطلب #{oid}\n"
-                f"الاسم: {o['name']}\n"
-                f"الخدمة: {o['service']}\n"
-                f"الميزانية: {o.get('budget','؟')}$\n"
-                f"الهاتف: {o.get('phone','غير متوفر')}\n"
-                f"المدة: {o.get('duration','غير محددة')}\n"
-                f"التفاصيل: {o.get('details','')}\n"
-                f"الحالة: {o.get('status','جديد')}\n"
-                f"ملاحظات: {note}\n"
-                f"التاريخ: {o.get('timestamp','')[:16]}\n"
-                f"رابط: {o.get('link','')}"
+                f"━━━━━━━━━━━━━━━\n"
+                f"👤 الاسم: {o['name']}\n"
+                f"🛠 الخدمة: {o['service']}\n"
+                f"💰 الميزانية: {o.get('budget','؟')}$\n"
+                f"📞 الهاتف: {o.get('phone','غير متوفر')}\n"
+                f"⏱ المدة: {o.get('duration','غير محددة')}\n"
+                f"📝 ملاحظات: {note}\n"
+                f"🔖 الحالة: {o.get('status','جديد')}\n"
+                f"📅 التاريخ: {o.get('timestamp','')[:16]}\n"
+                f"🔗 رابط: {o.get('link','')}"
             )
         else:
             msg = f"❌ لم يُعثر على طلب #{oid}"
         send_fb(sender_id, msg)
         return True
-    
-    # حظر مستخدم
+
+    # ====== حظر مستخدم ======
     m = re.search(r'حظر\s+(\d+)', text)
     if m:
         uid = m.group(1)
-        if 'blocked' not in data:
-            data['blocked'] = []
+        data.setdefault('blocked', [])
         if uid not in data['blocked']:
             data['blocked'].append(uid)
             save_data()
@@ -500,11 +523,11 @@ def handle_owner_command(sender_id, text):
         else:
             send_fb(sender_id, "المستخدم محظور مسبقاً.")
         return True
-    
-    # إلغاء الحظر
-    m = re.search(r'(الغاء حظر|رفع حظر)\s+(\d+)', text)
+
+    # ====== إلغاء الحظر ======
+    m = re.search(r'(?:الغاء حظر|رفع حظر|فك حظر)\s+(\d+)', text)
     if m:
-        uid = m.group(2)
+        uid = m.group(1)
         if uid in data.get('blocked', []):
             data['blocked'].remove(uid)
             save_data()
@@ -512,9 +535,9 @@ def handle_owner_command(sender_id, text):
         else:
             send_fb(sender_id, "المستخدم غير محظور.")
         return True
-    
-    # مكتمل
-    m = re.search(r'مكتمل\s+(\d+)', text)
+
+    # ====== تحديث طلب مكتمل ======
+    m = re.search(r'(?:مكتمل|اكتمل|انجز|انتهى)\s+#?(\d+)', text)
     if m:
         oid = int(m.group(1))
         if update_order(oid, {'status': 'مكتمل'}):
@@ -522,35 +545,35 @@ def handle_owner_command(sender_id, text):
         else:
             send_fb(sender_id, f"❌ لم يُعثر على طلب #{oid}")
         return True
-    
-    # حذف طلب
-    m = re.search(r'حذف\s+(\d+)', text)
+
+    # ====== حذف طلب ======
+    m = re.search(r'حذف\s+#?(\d+)', text)
     if m:
         oid = int(m.group(1))
         delete_order(oid)
         send_fb(sender_id, f"🗑️ تم حذف طلب #{oid}")
         return True
-    
-    # ملاحظة
-    m = re.search(r'ملاحظة\s+(\d+)\s+(.+)', text)
+
+    # ====== ملاحظة على طلب ======
+    m = re.search(r'ملاحظة\s+#?(\d+)\s+(.+)', text)
     if m:
         oid = int(m.group(1))
         note = m.group(2).strip()
         add_note_to_order(oid, note)
         send_fb(sender_id, f"📝 تمت إضافة الملاحظة لطلب #{oid}")
         return True
-    
-    # المحظورين
-    if 'المحظورين' in text_lower:
+
+    # ====== قائمة المحظورين ======
+    if any(k in t for k in ['المحظورين', 'محظورين', 'المحظورون', 'blocked']):
         blocked = data.get('blocked', [])
         if blocked:
             send_fb(sender_id, f"🚫 المحظورون ({len(blocked)}):\n" + "\n".join(blocked[-15:]))
         else:
             send_fb(sender_id, "لا يوجد مستخدمون محظورون.")
         return True
-    
-    # العملاء
-    if any(k in text_lower for k in ['العملاء', 'اعرض العملاء', 'clients']):
+
+    # ====== قائمة العملاء ======
+    if any(k in t for k in ['العملاء', 'اعرض العملاء', 'clients', 'قائمة العملاء', 'الزبائن']):
         orders = data.get('orders', [])
         clients = {}
         for o in orders:
@@ -558,13 +581,29 @@ def handle_owner_command(sender_id, text):
             if name and name not in clients:
                 clients[name] = o.get('phone', '')
         if clients:
-            lines = [f"• {n} - {p}" for n, p in list(clients.items())[-15:]]
-            send_fb(sender_id, "👥 العملاء المسجلون:\n" + "\n".join(lines))
+            lines = [f"• {n} — {p}" for n, p in list(clients.items())[-15:]]
+            send_fb(sender_id, f"👥 العملاء ({len(clients)}):\n" + "\n".join(lines))
         else:
             send_fb(sender_id, "لا يوجد عملاء مسجلون بعد.")
         return True
-    
-    return False  # لم يُعثر على أمر مطابق
+
+    # ====== أي سؤال عن أرقام / بيانات = لا يخترع ======
+    if any(k in t for k in [
+        'طلب', 'order', 'عميل', 'client', 'كم', 'عدد',
+        'مبيعات', 'دخل', 'ربح', 'revenue', 'sales'
+    ]):
+        # أرجع إحصائيات مباشرة بدل تمريرها للـ AI
+        completed = len([o for o in data.get('orders', []) if o.get('status') == 'مكتمل'])
+        send_fb(sender_id,
+            f"📊 ملخص سريع:\n"
+            f"الطلبات: {stats['total_orders']} (اليوم: {stats['today_orders']})\n"
+            f"مكتملة: {completed} | معلقة: {stats['total_orders']-completed}\n"
+            f"عملاء: {stats['unique_clients']}\n"
+            f"اكتب 'كل الطلبات' لعرض القائمة الكاملة."
+        )
+        return True
+
+    return False
 
 # ========== المعالجة الرئيسية للرسائل ==========
 def process_message(sender_id, text):
