@@ -8,7 +8,8 @@ from flask import Flask, request, jsonify, render_template_string
 from datetime import datetime
 from collections import deque
 
-app = Flask(__name__)
+import os as _os
+app = Flask(__name__, static_folder=_os.path.join(_os.path.dirname(__file__), 'static'), static_url_path='')
 
 # ========== المتغيرات البيئية ==========
 PAGE_ACCESS_TOKEN = os.environ.get('PAGE_ACCESS_TOKEN')
@@ -23,60 +24,39 @@ AI_API_URL = os.environ.get('AI_API_URL', 'http://fi8.bot-hosting.net:20163/elos
 COMPANY_WEBSITE = os.environ.get('COMPANY_WEBSITE', 'https://b.y-pro.kesug.com')
 SELF_URL = os.environ.get('SELF_URL', 'https://by-pro-marketing-agent.onrender.com')
 
-# ========== شخصية البوت ==========
-BOT_PERSONALITY = """أنت "أحمد"، وكيل تسويق ومبيعات في شركة B.Y PRO للتكنولوجيا والبرمجيات.
+# ========== شخصية البوت - بشرية وطبيعية ==========
+BOT_PERSONALITY = """أنت "أحمد"، مستشار مبيعات في شركة B.Y PRO للتكنولوجيا والبرمجيات.
 
-=== قاعدة اللغة - الأهم ===
-تحدّث دائماً بنفس لغة العميل التي بدأ بها المحادثة. إذا بدأ بالعربية فأنت عربي طوال المحادثة. إذا بدأ بالإنجليزية فأنت إنجليزي طوال المحادثة. لا تخلط اللغتين أبداً.
+شخصيتك:
+- تتحدث كإنسان حقيقي، بأسلوب ودود ومريح، وليس كبوت آلي.
+- مختصر ومباشر، لا تطوّل بدون داعٍ.
+- تفهم احتياج العميل قبل أي شيء.
+- لا تبدأ ردودك بـ "أهلاً وسهلاً" في كل رسالة، تكلّم بشكل طبيعي.
 
-=== هويتك ===
-أنت تمثّل شركة B.Y PRO بالكامل: تصميم، برمجة، تطبيقات، ذكاء اصطناعي، جرافيك.
-عندما يسألك عميل "هل تقدر تبرمج؟" أو "هل تصمم؟" الجواب دائماً بإيجاب: "نعم، هذا تخصصنا".
-لا تقل "سأحوّلك للفريق التقني" أبداً. أنت من يغلق الصفقة مباشرة.
-لا تكشف أنك بوت أو ذكاء اصطناعي.
+طريقة عملك مع العميل:
+1. اسمع طلبه باختصار.
+2. اسأله أسئلة بسيطة تساعدك تفهم المشروع (1-2 سؤال فقط، مش أكثر).
+3. بعد ما فهمت المشروع، قدّم له السعر التقريبي والمدة مباشرة وبوضوح.
+4. إذا وافق، اطلب منه اسمه الكريم ورقم هاتفه لتسجيل الطلب.
+5. لا تطلب أي بيانات شخصية قبل الاتفاق على السعر.
 
-=== أسلوبك ===
-تكلّم بطبيعية كإنسان، ودود ومختصر. لا تبدأ كل رسالة بـ "أهلاً". ردود قصيرة ومباشرة.
+قواعد أساسية:
+- لا تكرر نفسك.
+- لا تظهر كبوت أبداً.
+- أجب بنفس لغة العميل (عربي أو إنجليزي).
+- إذا سألك عن شيء تقني خارج نطاقك، قل له "أحوّلك للفريق التقني".
 
-=== مسار البيع (اتبعه بدقة) ===
-1. اسمع العميل واسأل سؤالاً أو اثنين لفهم المشروع.
-2. قدّم السعر والمدة بوضوح (مثال: "120$ وتاخذ 24 ساعة").
-3. انتظر موافقته فقط. النظام يجمع بياناته تلقائياً بعد موافقته.
+الخدمات والأسعار التقريبية (استخدمها كمرجع فقط، السعر الفعلي يتحدد حسب التفاصيل):
+- موقع تعريفي: 300-800$ (5-10 أيام)
+- متجر إلكتروني: 700-1800$ (15-25 يوم)
+- بوت ذكاء اصطناعي: 500-2000$ (حسب التعقيد)
+- تطبيق جوال: من 1500$ (30-60 يوم)
+- تصميم جرافيك / شعار: 50-200$ (24-72 ساعة)
+- برنامج مخصص: من 1000$ (حسب المشروع)
 
-=== ممنوع منعاً باتاً ===
-لا تطلب اسم العميل أو رقمه - النظام يفعل ذلك تلقائياً.
-لا تقل "تم تسجيل طلبك" - النظام هو من يسجّل.
-لا تعطِ وعوداً بالتسجيل قبل إعطاء البيانات.
-
-=== خدمات B.Y PRO والأسعار ===
-- شعار / لوجو بسيط: 80-180$ (24-48 ساعة)
-- هوية بصرية كاملة: 200-450$ (3-5 أيام)
-- تصميم جرافيك / مواد تسويقية: 100-350$ (1-3 أيام)
-- موقع تعريفي بسيط: 250-500$ (5-10 أيام)
-- موقع تعريفي متقدم: 500-950$ (10-20 يوم)
-- متجر إلكتروني أساسي: 650-1100$ (15-25 يوم)
-- متجر إلكتروني متكامل: 1100-2400$ (25-45 يوم)
-- تطبيق جوال بسيط MVP: 1400-2400$ (30-50 يوم)
-- تطبيق جوال متكامل: 2400-7500$ (50-90 يوم)
-- بوت ذكاء اصطناعي بسيط: 450-900$ (7-15 يوم)
-- بوت ذكاء اصطناعي متقدم: 900-2900$ (15-40 يوم)
-- برنامج / نظام مخصص: 950-4900$ (حسب المشروع)
 طريقة الدفع: 30% مقدماً، 70% بعد التسليم، عبر USDT (Binance Pay) معرف: 1074084246
 
-=== متجر STORE PRO (ميزة إضافية) ===
-نمتلك متجراً لبيع المشاريع والبرامج الجاهزة: https://store-pro.great-site.net/
-يمكن لأي شخص رفع مشروعه أو برنامجه على المتجر للبيع:
-- المشاريع المجانية: تبدأ من 1$ فقط
-- المشاريع المدفوعة: تبدأ من 3$
-- باقي التسعيرات والميزات موجودة في المتجر
-- للدعم والتواصل: https://t.me/STOREPROSPRT
-لا تُعرض هذه الخدمة من تلقاء نفسك، فقط أجب عنها إذا سأل العميل."""
-
-# ========== برومبت المدير ==========
-OWNER_PERSONALITY = """أنت "أحمد"، مساعد ذكي لصاحب شركة B.Y PRO.
-المدير هو صاحب الشركة - صلاحياته مطلقة. أجبه مباشرة وبدون تحفظات.
-لا تقل له "هذا حساس" أو "ثواني" أو "سأتحقق" - أعطه المعلومة فوراً.
-مختصر وجاد معه دائماً. تحدث معه بالعربية دائماً."""
+مهم جداً: لا تسجّل الطلب ولا تطلب البيانات إلا بعد أن يوافق العميل صراحةً على السعر والمدة."""
 
 # ========== تخزين JSONBin.io ==========
 def jsonbin_read():
@@ -277,8 +257,7 @@ def get_session(sender_id):
             'phone': '',
             'duration': '',
             'details': '',
-            'stage': 'explore',
-            'lang': 'ar',  # لغة العميل المكتشفة
+            'stage': 'explore',  # explore -> price_proposed -> awaiting_confirmation -> collecting_data -> done
             'conversation': [],
             'awaiting_password': False,
         }
@@ -314,151 +293,87 @@ def reset_session(sender_id):
         }
 
 # ========== استخراج البيانات من النص ==========
-
-def is_valid_phone(phone):
-    """التحقق من صحة رقم الهاتف - يرفض الأرقام العشوائية"""
-    digits = re.sub(r'\D', '', phone)
-    if len(digits) < 8 or len(digits) > 15:
-        return False
-    # رفض الأرقام المتكررة (0000000, 1111111, 1234567890)
-    if len(set(digits)) <= 2:
-        return False
-    if digits in ['1234567890', '0123456789', '9876543210']:
-        return False
-    # تحقق من بادئات معقولة
-    if digits.startswith('0') and len(digits) < 9:
-        return False
-    return True
-
 def extract_phone(text):
-    """استخراج رقم الهاتف من النص مع التحقق من الصحة"""
+    """استخراج رقم الهاتف من النص"""
     patterns = [
-        r'(\+213[5-7][0-9]{8})',      # جزائر +213
-        r'(00213[5-7][0-9]{8})',       # جزائر 00213
-        r'(0[5-7][0-9]{8})',           # جزائر/مغرب محلي
-        r'(\+966[5][0-9]{8})',         # سعودية +966
-        r'(05[0-9]{8})',               # خليجي محلي
-        r'(\+971[5][0-9]{8})',         # إمارات
-        r'(\+212[5-7][0-9]{8})',       # مغرب
-        r'(\+216[2-9][0-9]{7})',       # تونس
+        r'(\+213[567][0-9]{8})',      # جزائر +213
+        r'(00213[567][0-9]{8})',       # جزائر 00213
+        r'(0[567][0-9]{8})',           # جزائر محلي
+        r'(\+966[0-9]{9})',            # سعودية
+        r'(05[0-9]{8})',               # سعودية محلي
+        r'(\+212[0-9]{9})',            # مغرب
+        r'(\+216[0-9]{8})',            # تونس
         r'(\+20[0-9]{10})',            # مصر
-        r'(\+962[7][0-9]{8})',         # أردن
-        r'(\+[1-9][0-9]{7,13})',       # أي رقم دولي
-        r'(07[0-9]{8,9})',             # العراق/الأردن
+        r'(\+[1-9][0-9]{7,14})',       # أي رقم دولي
         r'([0-9]{10,13})',             # أي رقم طويل
     ]
     for pat in patterns:
         m = re.search(pat, text)
         if m:
-            phone = m.group(1)
-            if is_valid_phone(phone):
-                return phone
+            return m.group(1)
     return None
-
-def is_valid_name(name):
-    """التحقق من صحة الاسم"""
-    name = name.strip()
-    if len(name) < 2 or len(name) > 40:
-        return False
-    # يجب أن يحتوي على حروف فعلية (عربية أو لاتينية)
-    if not re.search(r'[\u0600-\u06FFa-zA-Z]', name):
-        return False
-    # رفض الأرقام فقط
-    if re.match(r'^[\d\s]+$', name):
-        return False
-    # رفض الرموز العشوائية
-    if re.match(r'^[^a-zA-Z\u0600-\u06FF]+$', name):
-        return False
-    # رفض الكلمات العشوائية (حروف مكررة جداً)
-    if len(name) > 3 and len(set(name.replace(' ', ''))) <= 2:
-        return False
-    # رفض الكلمات الشائعة التي ليست أسماء
-    non_names = ['نعم', 'لا', 'اوكي', 'تمام', 'كيف', 'ماذا', 'متى', 'yes', 'no', 'ok', 'okay', 'hello', 'مرحبا', 'هلا']
-    if name.lower() in non_names:
-        return False
-    return True
 
 def extract_name_from_text(text):
     """استخراج الاسم من النص"""
     patterns = [
-        r'(?:اسمي|الاسم|أنا|انا)[:\s]+([\u0600-\u06FF\w]{2,25}(?:\s[\u0600-\u06FF\w]{2,20}){0,3})',
-        r'(?:my name is|name is|im called|i am)[:\s]+([\w]{2,25}(?:\s[\w]{2,20}){0,2})',
+        r'اسمي[:\s]*([\u0600-\u06FF\s]{3,30})',
+        r'الاسم[:\s]*([\u0600-\u06FF\s]{3,30})',
+        r'انا[:\s]*([\u0600-\u06FF]{3,20})',
+        r'my name is[:\s]*([a-zA-Z\s]{3,30})',
+        r'i\'?m[:\s]*([a-zA-Z\s]{3,25})',
+        r'name[:\s]*([a-zA-Z\s]{3,30})',
+        r'يسمونني[:\s]*([\u0600-\u06FF\s]{3,20})',
     ]
     for pat in patterns:
         m = re.search(pat, text, re.I)
         if m:
-            candidate = m.group(1).strip()
-            if is_valid_name(candidate):
-                return candidate
+            name = m.group(1).strip()
+            # تأكد أنه اسم وليس جملة طويلة
+            if 2 <= len(name.split()) <= 4 and len(name) <= 30:
+                return name
     return None
-
-def detect_language(text):
-    """كشف لغة النص الأساسية"""
-    arabic_chars = len(re.findall(r'[\u0600-\u06FF]', text))
-    latin_chars = len(re.findall(r'[a-zA-Z]', text))
-    if arabic_chars > latin_chars:
-        return 'ar'
-    elif latin_chars > arabic_chars:
-        return 'en'
-    return 'ar'  # افتراضي
 
 def is_price_confirmation(text):
     """هل وافق العميل على السعر؟"""
     confirmations = [
-        'نعم', 'موافق', 'موافقة', 'تمام', 'اوكي', 'اوك', 'ok', 'yes', 'okay',
-        'agreed', 'deal', 'ماشي', 'حسنا', 'يلا', 'نبدأ', 'جيد', 'اتفقنا',
-        'ممتاز', 'مشينا', 'بالطبع', 'طيب', 'خلاص', 'ايه', 'آه', 'يس',
-        'ان شاء الله نبدأ', 'حسناً', 'مو مشكلة', 'لا مشكلة', 'نعم موافق',
-        'sure', 'let\'s go', 'proceed', 'sounds good', 'perfect', 'great'
+        'نعم', 'موافق', 'موافقة', 'تمام', 'تمام شكراً', 'اوكي', 'اوك', 'ok', 'yes', 
+        'okay', 'agreed', 'deal', 'ماشي', 'راني موافق', 'حسنا', 'يلا نبدأ', 
+        'نبدو', 'نبدأ', 'جيد', 'سنبدأ', 'اتفقنا', 'ممتاز', 'بالتوفيق', 'شكراً',
+        'اشتري', 'مشينا'
     ]
     text_clean = text.lower().strip()
-    if any(w in text_clean for w in confirmations):
-        return True
-    if len(text_clean) <= 3 and text_clean not in ['لا', 'لأ', 'no', 'la', 'لو', 'لن']:
-        return True
-    return False
+    return any(w in text_clean for w in confirmations)
 
 def is_price_rejection(text):
     """هل رفض العميل السعر؟"""
-    rejections = ['غالي', 'كثير', 'خصم', 'أرخص', 'يخفض', 'مو مناسب',
-                  'too much', 'expensive', 'reduce', 'discount', 'cheaper']
+    rejections = ['لا', 'غالي', 'كثير', 'خصم', 'أرخص', 'يخفض', 'مو مناسب', 'no', 'too much', 'expensive']
     text_clean = text.lower().strip()
-    if text_clean in ['لا', 'لأ', 'no', 'nope']:
-        return True
     return any(w in text_clean for w in rejections)
 
 # ========== الذكاء الاصطناعي ==========
-def ask_ai(user_msg, sess, extra_instruction="", is_owner_mode=False):
+def ask_ai(user_msg, sess, extra_instruction=""):
     context = "\n".join(sess.get('conversation', [])[-12:])
-    lang = sess.get('lang', 'ar')
-    lang_hint = "تحدث بالعربية فقط." if lang == 'ar' else "Respond in English only."
-
-    if is_owner_mode:
-        full_prompt = (
-            f"{OWNER_PERSONALITY}\n\n"
-            f"{extra_instruction}\n\n"
-            f"سجل المحادثة:\n{context}\n\n"
-            f"المدير: {user_msg}\n"
-            f"أحمد:"
-        )
-    else:
-        stage_hints = {
-            'explore': "استمع للعميل، اسأل سؤالاً واحداً أو اثنين لفهم المشروع، ثم قدّم السعر والمدة مباشرة.",
-            'price_proposed': "اقترحت سعراً. فقط انتظر موافقته. لا تضيف جديداً. لا تطلب اسمه أو رقمه.",
-        }
-        stage = sess.get('stage', 'explore')
-        hint = stage_hints.get(stage, "")
-
-        full_prompt = (
-            f"{BOT_PERSONALITY}\n\n"
-            f"[{lang_hint}]\n"
-            f"[التعليمة الحالية: {hint}]\n"
-            f"{extra_instruction}\n\n"
-            f"سجل المحادثة:\n{context}\n\n"
-            f"العميل: {user_msg}\n"
-            f"أحمد:"
-        )
-
+    
+    stage_hints = {
+        'explore': "أنت تستمع لطلب العميل وتفهم احتياجه. اسأل سؤالاً أو سؤالين بسيطين لتفهم المشروع، ثم قدّم له السعر والمدة.",
+        'price_proposed': "لقد اقترحت سعراً للعميل. انتظر موافقته. لا تضيف معلومات جديدة.",
+        'awaiting_confirmation': "العميل على وشك الموافقة أو الرفض. إذا وافق، اطلب اسمه الكريم فقط.",
+        'collecting_name': "اطلب من العميل اسمه الكريم فقط. رسالة واحدة مختصرة.",
+        'collecting_phone': f"اسم العميل هو: {sess.get('name', '')}. اطلب منه رقم هاتفه الآن. رسالة مختصرة.",
+    }
+    
+    stage = sess.get('stage', 'explore')
+    hint = stage_hints.get(stage, "")
+    
+    full_prompt = (
+        f"{BOT_PERSONALITY}\n\n"
+        f"[حالة المحادثة الحالية: {hint}]\n"
+        f"{extra_instruction}\n\n"
+        f"سجل المحادثة:\n{context}\n\n"
+        f"المستخدم: {user_msg}\n"
+        f"أحمد:"
+    )
+    
     try:
         url = f'{AI_API_URL}?text={requests.utils.quote(full_prompt)}'
         r = requests.get(url, timeout=15)
@@ -469,9 +384,7 @@ def ask_ai(user_msg, sess, extra_instruction="", is_owner_mode=False):
                 return answer[:1800]
     except Exception as e:
         add_log(f"❌ خطأ AI: {e}")
-
-    if lang == 'en':
-        return "Sorry, a temporary technical error occurred. Please try again."
+    
     return "عذراً، حدث خطأ تقني مؤقت. حاول مرة أخرى."
 
 # ========== معالجة أوامر المدير ==========
@@ -632,15 +545,6 @@ def process_message(sender_id, text):
         return
 
     sess = get_session(sender_id)
-
-    # كشف لغة العميل عند أول رسالة حقيقية (غير المدير)
-    if not is_owner(sender_id) and not is_verified_admin(sender_id):
-        if not sess.get('lang') or sess.get('lang') == 'ar':
-            detected = detect_language(text)
-            if detected != sess.get('lang', 'ar'):
-                update_session(sender_id, {'lang': detected})
-                sess['lang'] = detected
-
     add_to_conversation(sender_id, 'المستخدم', text)
 
     # ====== المدير الحقيقي (بالـ ID الثابت فقط) ======
@@ -756,23 +660,24 @@ def process_message(sender_id, text):
     # --- مرحلة: تم اقتراح السعر، ننتظر الموافقة ---
     if stage == 'price_proposed':
         if is_price_confirmation(text):
+            # وافق! انتقل لجمع البيانات
             sess['stage'] = 'collecting_name'
             update_session(sender_id, {'stage': 'collecting_name'})
             save_data()
-            msg = "Great! What's your name?" if sess.get('lang') == 'en' else "ممتاز! ما اسمك الكريم؟"
-            send_fb(sender_id, msg)
-            add_to_conversation(sender_id, 'أحمد', msg)
+            send_fb(sender_id, "ممتاز! ما اسمك الكريم؟")
             return
         elif is_price_rejection(text):
+            # رفض أو طلب تعديل
             sess['stage'] = 'explore'
             update_session(sender_id, {'stage': 'explore', 'budget': 0, 'budget_range': ''})
-            reply = ask_ai(text, sess, extra_instruction="العميل يريد تعديل السعر. ناقشه بمرونة وقدّم بديلاً.")
+            reply = ask_ai(text, sess, extra_instruction="\nالعميل يريد تعديلاً في السعر أو لديه استفسار. ناقشه بمرونة.")
             send_fb(sender_id, reply)
             add_to_conversation(sender_id, 'أحمد', reply)
             save_data()
             return
         else:
-            reply = ask_ai(text, sess, extra_instruction="أجب باختصار ثم اسأله: هل يوافق على السعر؟ لا تطلب اسمه أو رقمه.")
+            # سؤال إضافي قبل الموافقة
+            reply = ask_ai(text, sess, extra_instruction="\nالعميل يستفسر. أجبه باختصار ثم ذكّره بالسؤال: هل يوافق على السعر والمدة؟")
             send_fb(sender_id, reply)
             add_to_conversation(sender_id, 'أحمد', reply)
             save_data()
@@ -780,46 +685,45 @@ def process_message(sender_id, text):
 
     # --- مرحلة: جمع الاسم ---
     if stage == 'collecting_name':
-        lang = sess.get('lang', 'ar')
-        # محاولة استخراج الاسم بالأنماط أولاً
+        # استخراج الاسم من النص
         name = extract_name_from_text(text)
-
-        # إذا لم يُستخرج، افترض أن النص كله هو الاسم إذا كان قصيراً وصالحاً
-        if not name:
-            candidate = text.strip()
-            words = candidate.split()
-            if 1 <= len(words) <= 4 and 2 <= len(candidate) <= 40:
-                if is_valid_name(candidate):
-                    name = candidate
-
+        
+        # إذا لم يُستخرج بالنمط، افترض أن النص كله هو الاسم إذا كان قصيراً
+        if not name and len(text.split()) <= 4 and len(text) <= 30:
+            # تحقق أنه ليس كلمة موافقة أو سؤال
+            if not any(w in text.lower() for w in ['نعم', 'لا', 'كيف', 'ماذا', 'متى', 'أين']):
+                name = text.strip()
+        
         if name:
+            sess['name'] = name
+            sess['stage'] = 'collecting_phone'
             update_session(sender_id, {'name': name, 'stage': 'collecting_phone'})
-            sess.update({'name': name, 'stage': 'collecting_phone'})
             save_data()
-            msg = f"Got it {name}! Please send your phone number." if lang == 'en' else f"تمام {name}، أرسل رقم هاتفك للتواصل."
-            send_fb(sender_id, msg)
-            add_to_conversation(sender_id, 'أحمد', msg)
+            send_fb(sender_id, f"تمام {name}، ما هو رقم هاتفك للتواصل؟")
+            return
         else:
-            msg = "Please enter your name only." if lang == 'en' else "أدخل اسمك فقط من فضلك."
-            send_fb(sender_id, msg)
-        return
+            send_fb(sender_id, "ما اسمك الكريم؟ (الاسم فقط من فضلك)")
+            return
 
     # --- مرحلة: جمع رقم الهاتف ---
     if stage == 'collecting_phone':
-        lang = sess.get('lang', 'ar')
         phone = extract_phone(text)
-
         if phone:
-            update_session(sender_id, {'phone': phone, 'stage': 'done'})
-            sess.update({'phone': phone, 'stage': 'done'})
-
-            # === تسجيل الطلب الفعلي ===
+            sess['phone'] = phone
+            update_session(sender_id, {'phone': phone})
+            
+            # هل هناك تفاصيل إضافية في النص؟
+            # لا، نسجّل الطلب مباشرة
+            sess['stage'] = 'done'
+            update_session(sender_id, {'stage': 'done'})
+            
+            # === تسجيل الطلب ===
             order = {
-                'name': sess.get('name', ''),
+                'name': sess['name'],
                 'service': sess.get('service', 'خدمة تقنية'),
                 'budget': sess.get('budget', 0),
                 'budget_range': sess.get('budget_range', ''),
-                'phone': phone,
+                'phone': sess['phone'],
                 'duration': sess.get('duration', ''),
                 'details': sess.get('details', ''),
                 'timestamp': datetime.now().isoformat(),
@@ -828,30 +732,26 @@ def process_message(sender_id, text):
                 'status': 'جديد'
             }
             order_id = add_order(order)
-
-            if lang == 'en':
-                confirm_msg = (
-                    f"Your order has been registered successfully {sess.get('name','')} 👌\n"
-                    f"Our team will contact you shortly to start working on your {sess.get('service','project')}.\n"
-                    f"Any questions: {COMPANY_WEBSITE}"
-                )
-            else:
-                confirm_msg = (
-                    f"تم تسجيل طلبك بنجاح يا {sess.get('name','')} 👌\n"
-                    f"فريقنا سيتواصل معك قريباً على رقمك لبدء العمل على {sess.get('service','مشروعك')}.\n"
-                    f"أي سؤال: {COMPANY_WEBSITE}"
-                )
+            
+            # رسالة للعميل طبيعية
+            confirm_msg = (
+                f"شكراً {sess['name']}! تم تسجيل طلبك بنجاح 👌\n"
+                f"سيتواصل معك فريقنا على رقمك قريباً لبدء العمل على {sess.get('service', 'مشروعك')}.\n"
+                f"إذا كان لديك أي سؤال في الوقت الحالي، تواصل معنا على: {COMPANY_WEBSITE}"
+            )
             send_fb(sender_id, confirm_msg)
-            add_log(f"✅ طلب #{order_id} مسجّل لـ {sess.get('name','')}")
+            add_log(f"✅ طلب #{order_id} مسجّل كامل لـ {sess['name']}")
+            
+            # إعادة تعيين الجلسة للطلبات المستقبلية
             reset_session(sender_id)
             save_data()
+            return
         else:
-            # رقم غير صالح - أخبره بالسبب
-            msg = "That doesn't look like a valid phone number. Please send your real phone number (e.g. +1234567890)." if lang == 'en' else "هذا لا يبدو رقم هاتف صحيح. أرسل رقمك الحقيقي (مثال: 0555123456)."
-            send_fb(sender_id, msg)
-        return
+            send_fb(sender_id, "أرسل لي رقم هاتفك فقط من فضلك (مثال: 0555123456)")
+            return
 
     # --- أي مرحلة أخرى - إعادة تشغيل ---
+    sess['stage'] = 'explore'
     update_session(sender_id, {'stage': 'explore'})
     reply = ask_ai(text, sess)
     send_fb(sender_id, reply)
@@ -878,283 +778,10 @@ def webhook():
                     threading.Thread(target=process_message, args=(sender, text), daemon=True).start()
     return 'OK', 200
 
-# ========== لوحة التحكم ==========
+# ========== لوحة التحكم (index.html) ==========
 @app.route('/')
 def home():
-    stats = get_live_stats()
-    html = """
-    <!DOCTYPE html>
-    <html dir="rtl" lang="ar">
-    <head>
-        <meta charset="UTF-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>B.Y PRO - لوحة التحكم</title>
-        <style>
-            * { box-sizing: border-box; font-family: system-ui, 'Segoe UI', Tahoma, sans-serif; }
-            body { background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%); margin: 0; padding: 20px; min-height: 100vh; }
-            .container { max-width: 1400px; margin: 0 auto; }
-            .header { background: rgba(255,255,255,0.95); border-radius: 20px; padding: 25px 30px; margin-bottom: 20px; box-shadow: 0 10px 40px rgba(0,0,0,0.3); }
-            h1 { color: #1a1a2e; margin: 0 0 8px; font-size: 1.8em; }
-            .badge { background: #4ade80; color: #166534; padding: 4px 14px; border-radius: 20px; display: inline-block; font-weight: bold; font-size: 0.9em; }
-            .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 15px; margin-bottom: 20px; }
-            .card { background: rgba(255,255,255,0.95); border-radius: 15px; padding: 18px; box-shadow: 0 5px 15px rgba(0,0,0,0.15); text-align: center; }
-            .card h3 { margin: 0 0 8px; color: #64748b; font-size: 0.85em; }
-            .card .value { font-size: 2.2em; font-weight: bold; color: #2563eb; }
-            .logs { background: rgba(255,255,255,0.95); border-radius: 15px; padding: 20px; margin-bottom: 20px; max-height: 200px; overflow-y: auto; }
-            .log-item { padding: 4px 0; border-bottom: 1px solid #e2e8f0; font-family: monospace; font-size: 0.85em; }
-            .tabs { display: flex; gap: 10px; margin-bottom: 20px; flex-wrap: wrap; }
-            .tab-btn { background: rgba(255,255,255,0.85); border: none; padding: 10px 22px; border-radius: 30px; font-size: 0.95em; cursor: pointer; transition: all 0.2s; }
-            .tab-btn:hover { background: white; }
-            .tab-btn.active { background: #2563eb; color: white; }
-            .tab-content { background: rgba(255,255,255,0.95); border-radius: 15px; padding: 20px; display: none; }
-            .tab-content.active { display: block; }
-            table { width: 100%; border-collapse: collapse; font-size: 0.9em; }
-            th { text-align: right; padding: 10px 12px; background: #f8fafc; color: #475569; font-weight: 600; }
-            td { padding: 10px 12px; border-bottom: 1px solid #e2e8f0; vertical-align: middle; }
-            .btn { background: #2563eb; color: white; border: none; padding: 5px 14px; border-radius: 15px; cursor: pointer; font-size: 0.85em; margin: 2px; transition: opacity 0.2s; }
-            .btn:hover { opacity: 0.85; }
-            .btn-danger { background: #dc2626; }
-            .btn-success { background: #16a34a; }
-            .btn-warning { background: #d97706; }
-            .status-badge { padding: 3px 10px; border-radius: 12px; font-size: 0.8em; font-weight: bold; color: white; }
-            .modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.6); justify-content: center; align-items: center; z-index: 1000; }
-            .modal-content { background: white; padding: 30px; border-radius: 15px; max-width: 500px; width: 90%; }
-            .refresh-note { color: rgba(255,255,255,0.6); font-size: 0.8em; text-align: center; margin-top: 15px; }
-        </style>
-    </head>
-    <body>
-        <div class="container">
-            <div class="header">
-                <h1>🤵 B.Y PRO - مساعد المبيعات التقني</h1>
-                <div class="badge">✅ النظام يعمل</div>
-                <p style="margin: 8px 0 0; color: #64748b; font-size: 0.9em;">
-                    ⏱ بدء: {{ start_time }} &nbsp;|&nbsp; 💰 Binance: <code style="background:#f1f5f9;padding:2px 8px;border-radius:5px;">{{ binance_id }}</code>
-                </p>
-            </div>
-
-            <div class="stats-grid">
-                <div class="card"><h3>العملاء الفريدون</h3><div class="value">{{ unique_clients }}</div></div>
-                <div class="card"><h3>إجمالي الطلبات</h3><div class="value">{{ orders_count }}</div></div>
-                <div class="card"><h3>طلبات اليوم</h3><div class="value">{{ today_orders }}</div></div>
-                <div class="card"><h3>المحظورون</h3><div class="value">{{ blocked_count }}</div></div>
-                <div class="card"><h3>المدراء</h3><div class="value">{{ verified_count }}</div></div>
-                <div class="card"><h3>رسائل واردة</h3><div class="value">{{ msgs_received }}</div></div>
-            </div>
-
-            <div class="logs">
-                <h3 style="margin: 0 0 10px; color: #1a1a2e;">📋 آخر الأحداث</h3>
-                {% for log in logs %}
-                <div class="log-item">[{{ log.time }}] {{ log.msg }}</div>
-                {% endfor %}
-            </div>
-
-            <div class="tabs">
-                <button class="tab-btn active" onclick="showTab('orders', event)">📦 الطلبات ({{ orders_count }})</button>
-                <button class="tab-btn" onclick="showTab('clients', event)">👥 العملاء</button>
-                <button class="tab-btn" onclick="showTab('blocked', event)">🚫 المحظورون ({{ blocked_count }})</button>
-                <button class="tab-btn" onclick="showTab('verified', event)">🔐 المدراء ({{ verified_count }})</button>
-                <button class="tab-btn" onclick="showTab('commands', event)">⚙️ الأوامر</button>
-            </div>
-
-            <div id="orders" class="tab-content active">
-                <h3>📦 جميع الطلبات</h3>
-                <table>
-                    <tr><th>#</th><th>الاسم</th><th>الخدمة</th><th>الميزانية</th><th>الهاتف</th><th>المدة</th><th>الحالة</th><th>ملاحظات</th><th>التاريخ</th><th>الإجراءات</th></tr>
-                    {% for o in orders %}
-                    <tr>
-                        <td>{{ o.id }}</td>
-                        <td><a href="{{ o.link }}" target="_blank">{{ o.name }}</a></td>
-                        <td>{{ o.service }}</td>
-                        <td>{{ o.get('budget_range', '') or (o.budget|string + '$') }}</td>
-                        <td>{{ o.get('phone', '-') }}</td>
-                        <td>{{ o.get('duration', '-') }}</td>
-                        <td>
-                            <span class="status-badge" style="background: {% if o.status == 'مكتمل' %}#16a34a{% else %}#d97706{% endif %}">
-                                {{ o.status }}
-                            </span>
-                        </td>
-                        <td>{{ order_notes.get(o.id|string, '') }}</td>
-                        <td style="font-size:0.8em;">{{ o.get('timestamp','')[:16] }}</td>
-                        <td>
-                            <button class="btn btn-success" onclick="markComplete({{ o.id }})">✔️</button>
-                            <button class="btn btn-warning" onclick="addNote({{ o.id }})">📝</button>
-                            <button class="btn btn-danger" onclick="deleteOrder({{ o.id }})">🗑️</button>
-                        </td>
-                    </tr>
-                    {% endfor %}
-                </table>
-            </div>
-
-            <div id="clients" class="tab-content">
-                <h3>👥 العملاء المسجلون</h3>
-                <table>
-                    <tr><th>الاسم</th><th>الهاتف</th><th>عدد الطلبات</th><th>آخر طلب</th><th>محادثة</th></tr>
-                    {% for client in clients %}
-                    <tr>
-                        <td>{{ client.name }}</td>
-                        <td>{{ client.phone }}</td>
-                        <td>{{ client.order_count }}</td>
-                        <td>{{ client.last_date[:10] }}</td>
-                        <td><a href="{{ client.link }}" target="_blank">🔗 فتح</a></td>
-                    </tr>
-                    {% endfor %}
-                </table>
-            </div>
-
-            <div id="blocked" class="tab-content">
-                <h3>🚫 المستخدمون المحظورون</h3>
-                <table>
-                    <tr><th>معرف المستخدم</th><th>الإجراء</th></tr>
-                    {% for uid in blocked_list %}
-                    <tr>
-                        <td>{{ uid }}</td>
-                        <td><button class="btn btn-success" onclick="unblockUser('{{ uid }}')">رفع الحظر</button></td>
-                    </tr>
-                    {% endfor %}
-                </table>
-            </div>
-
-            <div id="verified" class="tab-content">
-                <h3>🔐 المدراء الموثقون</h3>
-                <table>
-                    <tr><th>معرف المستخدم</th><th>الإجراء</th></tr>
-                    {% for uid in verified_list %}
-                    <tr>
-                        <td>{{ uid }}</td>
-                        <td><button class="btn btn-danger" onclick="removeAdmin('{{ uid }}')">إزالة</button></td>
-                    </tr>
-                    {% endfor %}
-                </table>
-            </div>
-
-            <div id="commands" class="tab-content">
-                <h3>⚙️ أوامر المدير (عبر الماسنجر)</h3>
-                <table>
-                    <tr><th>الأمر</th><th>الوظيفة</th></tr>
-                    <tr><td><code>احصائيات</code></td><td>عرض الإحصائيات الكاملة</td></tr>
-                    <tr><td><code>اي جديد</code></td><td>طلبات اليوم</td></tr>
-                    <tr><td><code>كل الطلبات</code></td><td>آخر 10 طلبات</td></tr>
-                    <tr><td><code>تفاصيل [رقم]</code></td><td>تفاصيل طلب محدد</td></tr>
-                    <tr><td><code>مكتمل [رقم]</code></td><td>تحديث حالة الطلب</td></tr>
-                    <tr><td><code>حذف [رقم]</code></td><td>حذف طلب</td></tr>
-                    <tr><td><code>ملاحظة [رقم] [نص]</code></td><td>إضافة ملاحظة</td></tr>
-                    <tr><td><code>حظر [معرف]</code></td><td>حظر مستخدم</td></tr>
-                    <tr><td><code>الغاء حظر [معرف]</code></td><td>رفع الحظر</td></tr>
-                    <tr><td><code>المحظورين</code></td><td>قائمة المحظورين</td></tr>
-                    <tr><td><code>العملاء</code></td><td>قائمة العملاء</td></tr>
-                </table>
-            </div>
-        </div>
-
-        <div id="noteModal" class="modal">
-            <div class="modal-content">
-                <h3>📝 إضافة ملاحظة للطلب #<span id="noteOrderId"></span></h3>
-                <textarea id="noteText" rows="4" style="width:100%;padding:10px;border-radius:8px;border:1px solid #ccc;margin-top:10px;"></textarea>
-                <div style="margin-top:15px;text-align:left;">
-                    <button class="btn" onclick="submitNote()">حفظ</button>
-                    <button class="btn btn-danger" onclick="closeModal()">إلغاء</button>
-                </div>
-            </div>
-        </div>
-
-        <p class="refresh-note">⟳ تحديث تلقائي كل 30 ثانية</p>
-
-        <script>
-            function showTab(tabId, event) {
-                document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
-                document.getElementById(tabId).classList.add('active');
-                document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
-                if (event && event.target) event.target.classList.add('active');
-            }
-            function markComplete(id) {
-                if (confirm('تأكيد إكمال الطلب #' + id + '؟')) {
-                    fetch('/api/order/' + id + '/complete', {method:'POST'})
-                        .then(r => r.json()).then(d => { if(d.success) location.reload(); });
-                }
-            }
-            function deleteOrder(id) {
-                if (confirm('حذف الطلب #' + id + '؟ لا يمكن التراجع.')) {
-                    fetch('/api/order/' + id + '/delete', {method:'POST'})
-                        .then(r => r.json()).then(d => { if(d.success) location.reload(); });
-                }
-            }
-            function addNote(id) {
-                document.getElementById('noteOrderId').innerText = id;
-                document.getElementById('noteModal').style.display = 'flex';
-            }
-            function submitNote() {
-                const id = document.getElementById('noteOrderId').innerText;
-                const note = document.getElementById('noteText').value;
-                fetch('/api/order/' + id + '/note', {
-                    method:'POST',
-                    headers:{'Content-Type':'application/json'},
-                    body:JSON.stringify({note:note})
-                }).then(r => r.json()).then(d => { if(d.success) location.reload(); });
-            }
-            function closeModal() {
-                document.getElementById('noteModal').style.display = 'none';
-                document.getElementById('noteText').value = '';
-            }
-            function unblockUser(uid) {
-                if (confirm('رفع الحظر عن ' + uid + '؟')) {
-                    fetch('/api/unblock/' + uid, {method:'POST'})
-                        .then(r => r.json()).then(d => { if(d.success) location.reload(); });
-                }
-            }
-            function removeAdmin(uid) {
-                if (confirm('إزالة المدير ' + uid + '؟')) {
-                    fetch('/api/remove_admin/' + uid, {method:'POST'})
-                        .then(r => r.json()).then(d => { if(d.success) location.reload(); });
-                }
-            }
-            window.onclick = function(e) {
-                if (e.target == document.getElementById('noteModal')) closeModal();
-            }
-            // تحديث تلقائي كل 30 ثانية
-            setTimeout(() => location.reload(), 30000);
-        </script>
-    </body>
-    </html>
-    """
-    
-    orders_list = sorted(data.get('orders', []), key=lambda x: x.get('id', 0), reverse=True)[:50]
-    
-    clients_dict = {}
-    for o in data.get('orders', []):
-        name = o.get('name', '')
-        if name:
-            if name not in clients_dict:
-                clients_dict[name] = {
-                    'name': name,
-                    'phone': o.get('phone', '-'),
-                    'order_count': 0,
-                    'last_date': o.get('timestamp', ''),
-                    'link': o.get('link', '')
-                }
-            clients_dict[name]['order_count'] += 1
-            if o.get('timestamp', '') > clients_dict[name]['last_date']:
-                clients_dict[name]['last_date'] = o['timestamp']
-                clients_dict[name]['phone'] = o.get('phone', '-')
-    
-    clients_list = sorted(clients_dict.values(), key=lambda x: x['last_date'], reverse=True)
-
-    return render_template_string(html,
-        start_time=data['stats'].get('start_time', '')[:16].replace('T', ' '),
-        binance_id=BINANCE_ID,
-        unique_clients=stats['unique_clients'],
-        orders_count=stats['total_orders'],
-        today_orders=stats['today_orders'],
-        blocked_count=stats['blocked'],
-        verified_count=stats['verified'],
-        msgs_received=stats['msgs_received'],
-        logs=list(logs)[:20],
-        orders=orders_list,
-        order_notes=data.get('order_notes', {}),
-        clients=clients_list[:50],
-        blocked_list=data.get('blocked', [])[-50:],
-        verified_list=data.get('verified', [])[-50:]
-    )
-
+    return app.send_static_file('index.html')
 # ========== APIs اللوحة ==========
 @app.route('/api/order/<int:order_id>/complete', methods=['POST'])
 def api_complete(order_id):
@@ -1191,6 +818,182 @@ def api_remove_admin(user_id):
 def api_stats():
     return jsonify(get_live_stats())
 
+# ========== APIs الجديدة للوحة ==========
+
+@app.route('/api/dashboard')
+def api_dashboard():
+    """بيانات شاملة للوحة"""
+    stats = get_live_stats()
+    orders = data.get('orders', [])
+    
+    # تصنيف الطلبات حسب الخدمة
+    service_counts = {}
+    for o in orders:
+        svc = o.get('service', 'أخرى')
+        service_counts[svc] = service_counts.get(svc, 0) + 1
+    
+    # إحصائيات آخر 7 أيام
+    from datetime import timedelta
+    daily = {}
+    for i in range(7):
+        day = (datetime.now() - timedelta(days=i)).strftime('%Y-%m-%d')
+        daily[day] = {'orders': 0, 'msgs': 0}
+    for o in orders:
+        day = o.get('timestamp', '')[:10]
+        if day in daily:
+            daily[day]['orders'] += 1
+    
+    completed = len([o for o in orders if o.get('status') == 'مكتمل'])
+    
+    return jsonify({
+        'stats': stats,
+        'service_breakdown': service_counts,
+        'daily': daily,
+        'completed': completed,
+        'pending': len(orders) - completed,
+        'start_time': data['stats'].get('start_time', ''),
+        'logs': list(logs)[:30]
+    })
+
+@app.route('/api/orders')
+def api_orders():
+    """كل الطلبات مع البحث"""
+    q = request.args.get('q', '').lower()
+    status = request.args.get('status', '')
+    orders = data.get('orders', [])
+    if q:
+        orders = [o for o in orders if q in o.get('name','').lower() or q in o.get('service','').lower() or q in o.get('phone','').lower()]
+    if status:
+        orders = [o for o in orders if o.get('status','') == status]
+    orders_with_notes = []
+    for o in reversed(orders[-100:]):
+        o2 = dict(o)
+        o2['note'] = data.get('order_notes', {}).get(str(o.get('id','')), '')
+        orders_with_notes.append(o2)
+    return jsonify(orders_with_notes)
+
+@app.route('/api/clients')
+def api_clients():
+    """قائمة العملاء مع محادثاتهم"""
+    q = request.args.get('q', '').lower()
+    sessions = data.get('sessions', {})
+    orders = data.get('orders', [])
+    
+    clients = {}
+    for o in orders:
+        sid = o.get('sender_id', '')
+        name = o.get('name', '')
+        if not name:
+            continue
+        if sid not in clients:
+            clients[sid] = {
+                'id': sid,
+                'name': name,
+                'phone': o.get('phone', ''),
+                'link': o.get('link', ''),
+                'orders': [],
+                'last_seen': o.get('timestamp', ''),
+                'conversation': sessions.get(sid, {}).get('conversation', [])
+            }
+        clients[sid]['orders'].append({'service': o.get('service'), 'budget': o.get('budget'), 'status': o.get('status')})
+        if o.get('timestamp','') > clients[sid]['last_seen']:
+            clients[sid]['last_seen'] = o.get('timestamp','')
+    
+    result = list(clients.values())
+    if q:
+        result = [c for c in result if q in c['name'].lower() or q in c.get('phone','').lower()]
+    result.sort(key=lambda x: x['last_seen'], reverse=True)
+    return jsonify(result[:100])
+
+@app.route('/api/admins')
+def api_admins():
+    """قائمة المدراء"""
+    return jsonify({
+        'owner': OWNER_FB_ID,
+        'verified': data.get('verified', [])
+    })
+
+@app.route('/api/admin/test/<user_id>', methods=['POST'])
+def api_test_admin(user_id):
+    """اختبار صلاحية مدير"""
+    result = send_fb(user_id, f"🔐 Admin verification test. Please reply with the admin password.")
+    return jsonify({'success': result})
+
+@app.route('/api/admin/remove/<user_id>', methods=['POST'])
+def api_admin_remove(user_id):
+    if user_id in data.get('verified', []):
+        data['verified'].remove(user_id)
+        if user_id not in data.get('blocked', []):
+            data['blocked'].append(user_id)
+        save_data()
+        return jsonify({'success': True})
+    return jsonify({'success': False})
+
+@app.route('/api/settings', methods=['GET'])
+def api_get_settings():
+    """قراءة الإعدادات"""
+    return jsonify({
+        'binance_id': BINANCE_ID,
+        'bot_prompt': BOT_PERSONALITY,
+        'owner_prompt': OWNER_PERSONALITY,
+        'ai_api_url': AI_API_URL,
+        'company_website': COMPANY_WEBSITE,
+        'self_url': SELF_URL,
+        'fb_page': 'https://www.facebook.com/bypro2007',
+        'store_url': 'https://store-pro.great-site.net',
+        'store_support': 'https://t.me/STOREPROSPRT'
+    })
+
+@app.route('/api/settings', methods=['POST'])
+def api_save_settings():
+    """حفظ الإعدادات"""
+    global BOT_PERSONALITY, OWNER_PERSONALITY, BINANCE_ID, AI_API_URL
+    body = request.json or {}
+    if 'bot_prompt' in body:
+        BOT_PERSONALITY = body['bot_prompt']
+    if 'owner_prompt' in body:
+        OWNER_PERSONALITY = body['owner_prompt']
+    if 'binance_id' in body:
+        BINANCE_ID = body['binance_id']
+    if 'ai_api_url' in body:
+        AI_API_URL = body['ai_api_url']
+    add_log("⚙️ Settings updated from dashboard")
+    return jsonify({'success': True})
+
+@app.route('/api/logs')
+def api_logs():
+    return jsonify(list(logs)[:50])
+
+@app.route('/api/reset', methods=['POST'])
+def api_reset():
+    """إعادة تعيين - يحذف الرسائل والإحصائيات فقط"""
+    body = request.json or {}
+    if body.get('password') != OWNER_PASSWORD:
+        return jsonify({'success': False, 'error': 'Wrong password'}), 403
+    
+    owner = data.get('verified', [])[:1]  # الاحتفاظ بالمدير الأول فقط
+    data['orders'] = []
+    data['sessions'] = {}
+    data['order_notes'] = {}
+    data['blocked'] = []
+    data['verified'] = owner
+    data['stats'] = {
+        'msgs_received': 0,
+        'msgs_sent': 0,
+        'start_time': datetime.now().isoformat()
+    }
+    save_data()
+    add_log("🔄 System reset from dashboard")
+    return jsonify({'success': True})
+
+@app.route('/api/block/<user_id>', methods=['POST'])
+def api_block_user(user_id):
+    if 'blocked' not in data:
+        data['blocked'] = []
+    if user_id not in data['blocked']:
+        data['blocked'].append(user_id)
+        save_data()
+    return jsonify({'success': True})
 # ========== Keep-Alive كل 30 ثانية ==========
 def keep_alive_loop():
     while True:
