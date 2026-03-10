@@ -24,7 +24,7 @@ COMPANY_WEBSITE = os.environ.get('COMPANY_WEBSITE', 'https://b.y-pro.kesug.com')
 SELF_URL = os.environ.get('SELF_URL', 'https://by-pro-marketing-agent.onrender.com')
 
 # ========== شخصية البوت - بشرية وطبيعية ==========
-BOT_PERSONALITY = """أنت "أحمد"، مستشار مبيعات في شركة B.Y PRO للتكنولوجيا والبرمجيات.
+BOT_PERSONALITY = """أنت وكيل تسويق خدمات شركة B.Y PRO للتكنولوجيا والبرمجيات.
 
 شخصيتك:
 - تتحدث كإنسان حقيقي، بأسلوب ودود ومريح، وليس كبوت آلي.
@@ -1053,6 +1053,45 @@ def home():
         blocked_list=data.get('blocked', [])[-50:],
         verified_list=data.get('verified', [])[-50:]
     )
+
+
+# ========== API Routes ==========
+@app.route('/api/order/<int:oid>/complete', methods=['POST'])
+def api_complete(oid):
+    update_order(oid, {'status': 'completed'})
+    save_data()
+    return {'success': True}
+
+@app.route('/api/order/<int:oid>/delete', methods=['POST'])
+def api_delete_order(oid):
+    delete_order(oid)
+    save_data()
+    return {'success': True}
+
+@app.route('/api/order/<int:oid>/note', methods=['POST'])
+def api_add_note(oid):
+    note = request.json.get('note', '')
+    add_note_to_order(oid, note)
+    save_data()
+    return {'success': True}
+
+@app.route('/api/unblock/<uid>', methods=['POST'])
+def api_unblock(uid):
+    blocked = data.get('blocked', [])
+    if uid in blocked:
+        blocked.remove(uid)
+        data['blocked'] = blocked
+        save_data()
+    return {'success': True}
+
+@app.route('/api/remove_admin/<uid>', methods=['POST'])
+def api_remove_admin(uid):
+    verified = data.get('verified', [])
+    if uid in verified:
+        verified.remove(uid)
+        data['verified'] = verified
+        save_data()
+    return {'success': True}
 
 
 # ========== Keep-Alive كل 30 ثانية ==========
