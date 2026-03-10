@@ -12,19 +12,23 @@ app = Flask(__name__)
 
 # ========== المتغيرات البيئية ==========
 PAGE_ACCESS_TOKEN = os.environ.get('PAGE_ACCESS_TOKEN')
-VERIFY_TOKEN = os.environ.get('VERIFY_TOKEN', 'by_pro_verify')
-OWNER_FB_ID = os.environ.get('OWNER_FB_ID', '61580260328404')  # معرف المدير الحقيقي
-OWNER_PASSWORD = os.environ.get('OWNER_PASSWORD', '20070909')
-BIN_ID = os.environ.get('BIN_ID')
-X_MASTER_KEY = os.environ.get('X_MASTER_KEY')
-X_ACCESS_KEY = os.environ.get('X_ACCESS_KEY')
-BINANCE_ID = os.environ.get('BINANCE_ID', '1074084246')
-AI_API_URL = os.environ.get('AI_API_URL', 'http://fi8.bot-hosting.net:20163/elos-gemina')
-COMPANY_WEBSITE = os.environ.get('COMPANY_WEBSITE', 'https://b.y-pro.kesug.com')
-SELF_URL = os.environ.get('SELF_URL', 'https://by-pro-marketing-agent.onrender.com')
+VERIFY_TOKEN      = os.environ.get('VERIFY_TOKEN', 'by_pro_verify')
+OWNER_FB_ID       = os.environ.get('OWNER_FB_ID', '61580260328404')
+OWNER_THREAD_ID   = os.environ.get('OWNER_THREAD_ID', '1319343656265410')
+OWNER_PASSWORD    = os.environ.get('OWNER_PASSWORD', '20070909')
+BIN_ID            = os.environ.get('BIN_ID')
+X_MASTER_KEY      = os.environ.get('X_MASTER_KEY')
+X_ACCESS_KEY      = os.environ.get('X_ACCESS_KEY')
+BINANCE_ID        = os.environ.get('BINANCE_ID', '1074084246')
+AI_API_URL        = os.environ.get('AI_API_URL', 'http://fi8.bot-hosting.net:20163/elos-gemina')
+COMPANY_WEBSITE   = os.environ.get('COMPANY_WEBSITE', 'https://b.y-pro.kesug.com')
+FB_PAGE_URL       = os.environ.get('FB_PAGE_URL', 'https://www.facebook.com/bypro2007')
+STORE_URL         = os.environ.get('STORE_URL', 'https://store-pro.great-site.net')
+STORE_SUPPORT     = os.environ.get('STORE_SUPPORT', 'https://t.me/STOREPROSPRT')
+SELF_URL          = os.environ.get('SELF_URL', 'https://by-pro-marketing-agent.onrender.com')
 
-# ========== شخصية البوت - بشرية وطبيعية ==========
-BOT_PERSONALITY = """أنت "أحمد"، مستشار مبيعات في شركة B.Y PRO للتكنولوجيا والبرمجيات.
+# ========== شخصية البوت - للعملاء ==========
+BOT_PERSONALITY = """أنت "أحمد"، وكيل تسويق خدمات شركة B.Y PRO للتكنولوجيا والبرمجيات.
 
 شخصيتك:
 - تتحدث كإنسان حقيقي، بأسلوب ودود ومريح، وليس كبوت آلي.
@@ -42,20 +46,47 @@ BOT_PERSONALITY = """أنت "أحمد"، مستشار مبيعات في شركة
 قواعد أساسية:
 - لا تكرر نفسك.
 - لا تظهر كبوت أبداً.
-- أجب بنفس لغة العميل (عربي أو إنجليزي).
+- أجب بنفس لغة العميل (عربي أو إنجليزي أو فرنسي).
 - إذا سألك عن شيء تقني خارج نطاقك، قل له "أحوّلك للفريق التقني".
 
 الخدمات والأسعار التقريبية (استخدمها كمرجع فقط، السعر الفعلي يتحدد حسب التفاصيل):
-- موقع تعريفي: 300-800$ (5-10 أيام)
+- موقع ويب عادي: 300-800$ (5-10 أيام)
 - متجر إلكتروني: 700-1800$ (15-25 يوم)
 - بوت ذكاء اصطناعي: 500-2000$ (حسب التعقيد)
 - تطبيق جوال: من 1500$ (30-60 يوم)
 - تصميم جرافيك / شعار: 50-200$ (24-72 ساعة)
 - برنامج مخصص: من 1000$ (حسب المشروع)
+- متجر برامج ومشاريع: من 1$ للمشروع المجاني / 3$ للمشروع المدفوع — رابط المتجر: https://store-pro.great-site.net
+
+روابط الشركة:
+- صفحة فيسبوك: https://www.facebook.com/bypro2007
+- الموقع الرسمي: https://b.y-pro.kesug.com
+- المتجر: https://store-pro.great-site.net
+- دعم المتجر: https://t.me/STOREPROSPRT
 
 طريقة الدفع: 30% مقدماً، 70% بعد التسليم، عبر USDT (Binance Pay) معرف: 1074084246
 
 مهم جداً: لا تسجّل الطلب ولا تطلب البيانات إلا بعد أن يوافق العميل صراحةً على السعر والمدة."""
+
+# ========== برومبت المدير ==========
+OWNER_PERSONALITY = """أنت "أحمد"، وكيل تسويق خدمات شركة B.Y PRO للتكنولوجيا والبرمجيات.
+
+الشخص الذي تتحدث معه الآن هو المدير العام للشركة:
+الاسم: ياسين بن مقران (Yacine Ben Mokrane)
+معرف فيسبوك: 61580260328404
+رابط الصفحة الشخصية: https://www.facebook.com/profile.php?id=61580260328404
+الصفة: مؤسس ومدير شركة B.Y PRO — هو صاحبك ومديرك المباشر.
+
+قواعد التعامل مع المدير ياسين:
+- ناده دائماً بـ "سيدي المدير" أو "سيدي ياسين"
+- تعامل معه باحترام كامل وأسلوب مهني راقٍ
+- هو مديرك وليس عميلاً — لا تعرض عليه خدمات أبداً
+- لا تسأله عن مشاريع أو ميزانيات أو بيانات شخصية
+- لا تطلب منه اسمه أو هاتفه — أنت تعرفه مسبقاً
+- ردودك معه مختصرة ومباشرة وتخص إدارة البوت والشركة فقط
+- إذا سألك عن إحصائيات أو طلبات أو عملاء، قدّم المعلومات بشكل منظم وواضح
+- أجبه بنفس اللغة التي يكتب بها (عربي أو إنجليزي أو فرنسي)
+- لا تبدأ كل رد بـ "سيدي المدير" — استخدمها بشكل طبيعي وليس في كل جملة"""
 
 # ========== تخزين JSONBin.io ==========
 def jsonbin_read():
@@ -350,7 +381,7 @@ def is_price_rejection(text):
     return any(w in text_clean for w in rejections)
 
 # ========== الذكاء الاصطناعي ==========
-def ask_ai(user_msg, sess, extra_instruction=""):
+def ask_ai(user_msg, sess, extra_instruction="", personality=None):
     context = "\n".join(sess.get('conversation', [])[-12:])
     
     stage_hints = {
@@ -361,11 +392,14 @@ def ask_ai(user_msg, sess, extra_instruction=""):
         'collecting_phone': f"اسم العميل هو: {sess.get('name', '')}. اطلب منه رقم هاتفه الآن. رسالة مختصرة.",
     }
     
+    # اختر الشخصية المناسبة
+    active_personality = personality or BOT_PERSONALITY
+    
     stage = sess.get('stage', 'explore')
     hint = stage_hints.get(stage, "")
     
     full_prompt = (
-        f"{BOT_PERSONALITY}\n\n"
+        f"{active_personality}\n\n"
         f"[حالة المحادثة الحالية: {hint}]\n"
         f"{extra_instruction}\n\n"
         f"سجل المحادثة:\n{context}\n\n"
@@ -548,16 +582,16 @@ def process_message(sender_id, text):
 
     # ====== المدير الحقيقي (بالـ ID الثابت فقط) ======
     if is_owner(sender_id):
-        # المدير الحقيقي لا يحتاج كلمة مرور
         handled = handle_owner_command(sender_id, text)
         if not handled:
-            # رد ذكي للمدير
             stats = get_live_stats()
+            # استخدم owner_prompt المحفوظ إن وجد، وإلا استخدم OWNER_PERSONALITY الافتراضي
+            active_owner_prompt = data.get('owner_prompt') or OWNER_PERSONALITY
             extra = (
-                f"\n[أنت تتحدث مع المدير مباشرة. إحصائيات سريعة: "
-                f"{stats['today_orders']} طلب اليوم، {stats['total_orders']} إجمالاً]"
+                f"\n[إحصائيات سريعة: {stats['today_orders']} طلب اليوم، "
+                f"{stats['total_orders']} إجمالاً، {stats['unique_clients']} عميل]"
             )
-            reply = ask_ai(text, sess, extra_instruction=extra)
+            reply = ask_ai(text, sess, extra_instruction=extra, personality=active_owner_prompt)
             send_fb(sender_id, reply)
             add_to_conversation(sender_id, 'أحمد', reply)
         save_data()
@@ -567,7 +601,8 @@ def process_message(sender_id, text):
     if is_verified_admin(sender_id):
         handled = handle_owner_command(sender_id, text)
         if not handled:
-            reply = ask_ai(text, sess)
+            active_owner_prompt = data.get('owner_prompt') or OWNER_PERSONALITY
+            reply = ask_ai(text, sess, personality=active_owner_prompt)
             send_fb(sender_id, reply)
             add_to_conversation(sender_id, 'أحمد', reply)
         save_data()
@@ -778,20 +813,16 @@ def webhook():
     return 'OK', 200
 
 # ========== لوحة التحكم ==========
-
-# ========== لوحة التحكم - يخدم index.html ==========
 @app.route('/')
 def home():
     return send_from_directory('.', 'index.html')
 
-# ========== API: Dashboard Analytics ==========
+# ========== API: Dashboard ==========
 @app.route('/api/dashboard')
 def api_dashboard():
+    from datetime import timedelta
     stats = get_live_stats()
     orders = data.get('orders', [])
-
-    # Daily orders - last 14 days
-    from datetime import timedelta
     daily = {}
     for i in range(13, -1, -1):
         day = (datetime.now() - timedelta(days=i)).strftime('%Y-%m-%d')
@@ -800,8 +831,6 @@ def api_dashboard():
         ts = o.get('timestamp', '')[:10]
         if ts in daily:
             daily[ts] += 1
-
-    # Categories
     cats = {'Web': 0, 'Store': 0, 'Apps': 0, 'Bots': 0, 'Design': 0, 'Software': 0, 'Other': 0}
     for o in orders:
         svc = o.get('service', '').lower()
@@ -812,10 +841,8 @@ def api_dashboard():
         elif any(k in svc for k in ['تصميم', 'design', 'شعار', 'logo']): cats['Design'] += 1
         elif any(k in svc for k in ['برنامج', 'software', 'نظام']): cats['Software'] += 1
         else: cats['Other'] += 1
-
     completed = len([o for o in orders if o.get('status') == 'مكتمل'])
     pending = len([o for o in orders if o.get('status') != 'مكتمل'])
-
     return jsonify({
         'stats': stats,
         'daily': daily,
@@ -841,7 +868,7 @@ def api_orders():
 @app.route('/api/order/<int:oid>/complete', methods=['POST'])
 def api_complete(oid):
     update_order(oid, {'status': 'مكتمل'})
-    add_log(f"✅ تم تحديث طلب #{oid} → مكتمل")
+    add_log(f"✅ طلب #{oid} → مكتمل")
     save_data()
     return jsonify({'success': True})
 
@@ -857,7 +884,6 @@ def api_add_note(oid):
     add_log(f"📝 ملاحظة على طلب #{oid}")
     return jsonify({'success': True})
 
-# ========== API: New Orders Check ==========
 @app.route('/api/new_orders_check')
 def api_new_orders_check():
     since = request.args.get('since', '')
@@ -870,14 +896,12 @@ def api_new_orders_check():
 def api_clients():
     sessions = data.get('sessions', {})
     orders = data.get('orders', [])
-
-    # Build client map from orders
     clients_map = {}
     for o in orders:
         sid = o.get('sender_id', '')
-        name = o.get('name', '') or sid
         if not sid:
             continue
+        name = o.get('name', '') or sid
         if sid not in clients_map:
             clients_map[sid] = {
                 'id': sid,
@@ -896,12 +920,9 @@ def api_clients():
         if o.get('timestamp', '') > clients_map[sid]['last_seen']:
             clients_map[sid]['last_seen'] = o['timestamp']
             clients_map[sid]['phone'] = o.get('phone', '') or clients_map[sid]['phone']
-
-    # Add conversation from sessions
     for sid, c in clients_map.items():
         sess = sessions.get(sid, {})
         c['conversation'] = sess.get('conversation', [])
-
     result = sorted(clients_map.values(), key=lambda x: x['last_seen'], reverse=True)
     return jsonify(result)
 
@@ -926,8 +947,9 @@ def api_admin_remove(uid):
     if uid in verified:
         verified.remove(uid)
         data['verified'] = verified
-    if uid not in data.get('blocked', []):
-        data.setdefault('blocked', []).append(uid)
+    data.setdefault('blocked', [])
+    if uid not in data['blocked']:
+        data['blocked'].append(uid)
     save_data()
     add_log(f"🚫 تم إزالة المدير وحظره: {uid[:12]}")
     return jsonify({'success': True})
@@ -957,28 +979,28 @@ def api_settings_get():
     return jsonify({
         'binance_id': BINANCE_ID,
         'ai_api_url': AI_API_URL,
-        'fb_page': os.environ.get('FB_PAGE_URL', ''),
+        'fb_page': FB_PAGE_URL,
         'company_website': COMPANY_WEBSITE,
-        'store_url': os.environ.get('STORE_URL', ''),
-        'store_support': os.environ.get('STORE_SUPPORT', ''),
+        'store_url': STORE_URL,
+        'store_support': STORE_SUPPORT,
         'bot_prompt': BOT_PERSONALITY,
-        'owner_prompt': data.get('owner_prompt', '')
+        'owner_prompt': data.get('owner_prompt', OWNER_PERSONALITY)
     })
 
 @app.route('/api/settings', methods=['POST'])
 def api_settings_save():
     global BOT_PERSONALITY, BINANCE_ID, AI_API_URL
     body = request.json or {}
-    if 'bot_prompt' in body and body['bot_prompt']:
+    if body.get('bot_prompt'):
         BOT_PERSONALITY = body['bot_prompt']
-    if 'binance_id' in body and body['binance_id']:
+    if body.get('binance_id'):
         BINANCE_ID = body['binance_id']
-    if 'ai_api_url' in body and body['ai_api_url']:
+    if body.get('ai_api_url'):
         AI_API_URL = body['ai_api_url']
     if 'owner_prompt' in body:
         data['owner_prompt'] = body['owner_prompt']
     save_data()
-    add_log("⚙️ تم تحديث إعدادات البوت من لوحة التحكم")
+    add_log("⚙️ تم تحديث الإعدادات من لوحة التحكم")
     return jsonify({'success': True})
 
 # ========== API: Logs ==========
@@ -992,11 +1014,8 @@ def api_reset():
     body = request.json or {}
     if body.get('password') != OWNER_PASSWORD:
         return jsonify({'success': False, 'error': 'Wrong password'})
-    # Keep critical settings
-    keep_binance = BINANCE_ID
     keep_verified = data.get('verified', [])[:1]
     keep_owner_prompt = data.get('owner_prompt', '')
-    # Reset
     data['orders'] = []
     data['sessions'] = {}
     data['blocked'] = []
