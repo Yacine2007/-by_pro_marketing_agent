@@ -4,18 +4,16 @@ import json
 import requests
 import time
 import threading
-from flask import Flask, request, jsonify, render_template_string, send_from_directory
+from flask import Flask, request, jsonify, render_template_string
 from datetime import datetime
 from collections import deque
 
-import os as _os
-app = Flask(__name__, static_folder=_os.path.join(_os.path.dirname(__file__), "static"), static_url_path="")
+app = Flask(__name__)
 
 # ========== المتغيرات البيئية ==========
 PAGE_ACCESS_TOKEN = os.environ.get('PAGE_ACCESS_TOKEN')
 VERIFY_TOKEN = os.environ.get('VERIFY_TOKEN', 'by_pro_verify')
 OWNER_FB_ID = os.environ.get('OWNER_FB_ID', '61580260328404')  # معرف المدير الحقيقي
-SECOND_ADMIN_ID = os.environ.get('SECOND_ADMIN_ID', '25923199944038952')  # مدير ثانٍ دائم
 OWNER_PASSWORD = os.environ.get('OWNER_PASSWORD', '20070909')
 BIN_ID = os.environ.get('BIN_ID')
 X_MASTER_KEY = os.environ.get('X_MASTER_KEY')
@@ -170,8 +168,8 @@ def save_data():
 
 # ========== التحقق من المدير ==========
 def is_owner(sender_id):
-    """المدير الحقيقي + المدير الثاني الدائم"""
-    return str(sender_id) in [str(OWNER_FB_ID), str(SECOND_ADMIN_ID)]
+    """المدير الحقيقي هو صاحب الـ OWNER_FB_ID فقط - لا أحد غيره"""
+    return str(sender_id) == str(OWNER_FB_ID)
 
 def is_verified_admin(sender_id):
     """المدراء المضافون بكلمة المرور"""
@@ -216,8 +214,6 @@ def add_order(order_dict):
         f"محادثة: {order_dict['link']}"
     )
     send_fb(OWNER_FB_ID, notify_msg)
-    if str(SECOND_ADMIN_ID) != str(OWNER_FB_ID):
-        send_fb(SECOND_ADMIN_ID, notify_msg)
     return order_dict['id']
 
 def get_order(order_id):
@@ -781,231 +777,283 @@ def webhook():
                     threading.Thread(target=process_message, args=(sender, text), daemon=True).start()
     return 'OK', 200
 
-# ========== لوحة التحكم (index.html من static/) ==========
+# ========== لوحة التحكم ==========
 @app.route('/')
 def home():
-    return send_from_directory(app.static_folder, 'index.html')
-
-
-@app.route('/api/order/<int:order_id>/complete', methods=['POST'])
-def api_complete(order_id):
-    return jsonify({'success': update_order(order_id, {'status': 'مكتمل'})})
-
-@app.route('/api/order/<int:order_id>/delete', methods=['POST'])
-def api_delete(order_id):
-    delete_order(order_id)
-    return jsonify({'success': True})
-
-@app.route('/api/order/<int:order_id>/note', methods=['POST'])
-def api_note(order_id):
-    note = request.json.get('note', '')
-    add_note_to_order(order_id, note)
-    return jsonify({'success': True})
-
-@app.route('/api/unblock/<user_id>', methods=['POST'])
-def api_unblock(user_id):
-    if user_id in data.get('blocked', []):
-        data['blocked'].remove(user_id)
-        save_data()
-        return jsonify({'success': True})
-    return jsonify({'success': False}), 404
-
-@app.route('/api/remove_admin/<user_id>', methods=['POST'])
-def api_remove_admin(user_id):
-    if user_id in data.get('verified', []):
-        data['verified'].remove(user_id)
-        save_data()
-        return jsonify({'success': True})
-    return jsonify({'success': False}), 404
-
-@app.route('/api/stats')
-def api_stats():
-    return jsonify(get_live_stats())
-
-
-# ========== APIs الاحترافية للوحة ==========
-@app.route('/api/dashboard')
-def api_dashboard():
     stats = get_live_stats()
-    orders = data.get('orders', [])
-    cats = {'Web': 0, 'Apps': 0, 'Software': 0, 'Design': 0, 'Bots': 0, 'Store': 0, 'Other': 0}
-    for o in orders:
-        svc = (o.get('service') or '').lower()
-        if any(k in svc for k in ['موقع','website','web','متجر إلكتروني']): cats['Web'] += 1
-        elif any(k in svc for k in ['تطبيق','app','mobile']): cats['Apps'] += 1
-        elif any(k in svc for k in ['برنامج','software','نظام']): cats['Software'] += 1
-        elif any(k in svc for k in ['تصميم','design','شعار','logo','جرافيك']): cats['Design'] += 1
-        elif any(k in svc for k in ['بوت','bot','ذكاء','ai']): cats['Bots'] += 1
-        elif any(k in svc for k in ['store pro','متجر برامج']): cats['Store'] += 1
-        else: cats['Other'] += 1
-    from datetime import timedelta
-    daily = {}
-    for i in range(7):
-        day = (datetime.now() - timedelta(days=i)).strftime('%Y-%m-%d')
-        daily[day] = 0
-    for o in orders:
-        day = (o.get('timestamp') or '')[:10]
-        if day in daily: daily[day] += 1
-    completed = len([o for o in orders if o.get('status') == 'مكتمل'])
-    return jsonify({
-        'stats': stats, 'categories': cats, 'daily': daily,
-        'completed': completed, 'pending': len(orders) - completed,
-        'start_time': data['stats'].get('start_time', ''), 'logs': list(logs)[:30]
-    })
+    html = """
+    <!DOCTYPE html>
+    <html dir="rtl" lang="ar">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>B.Y PRO - لوحة التحكم</title>
+        <style>
+            * { box-sizing: border-box; font-family: system-ui, 'Segoe UI', Tahoma, sans-serif; }
+            body { background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%); margin: 0; padding: 20px; min-height: 100vh; }
+            .container { max-width: 1400px; margin: 0 auto; }
+            .header { background: rgba(255,255,255,0.95); border-radius: 20px; padding: 25px 30px; margin-bottom: 20px; box-shadow: 0 10px 40px rgba(0,0,0,0.3); }
+            h1 { color: #1a1a2e; margin: 0 0 8px; font-size: 1.8em; }
+            .badge { background: #4ade80; color: #166534; padding: 4px 14px; border-radius: 20px; display: inline-block; font-weight: bold; font-size: 0.9em; }
+            .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 15px; margin-bottom: 20px; }
+            .card { background: rgba(255,255,255,0.95); border-radius: 15px; padding: 18px; box-shadow: 0 5px 15px rgba(0,0,0,0.15); text-align: center; }
+            .card h3 { margin: 0 0 8px; color: #64748b; font-size: 0.85em; }
+            .card .value { font-size: 2.2em; font-weight: bold; color: #2563eb; }
+            .logs { background: rgba(255,255,255,0.95); border-radius: 15px; padding: 20px; margin-bottom: 20px; max-height: 200px; overflow-y: auto; }
+            .log-item { padding: 4px 0; border-bottom: 1px solid #e2e8f0; font-family: monospace; font-size: 0.85em; }
+            .tabs { display: flex; gap: 10px; margin-bottom: 20px; flex-wrap: wrap; }
+            .tab-btn { background: rgba(255,255,255,0.85); border: none; padding: 10px 22px; border-radius: 30px; font-size: 0.95em; cursor: pointer; transition: all 0.2s; }
+            .tab-btn:hover { background: white; }
+            .tab-btn.active { background: #2563eb; color: white; }
+            .tab-content { background: rgba(255,255,255,0.95); border-radius: 15px; padding: 20px; display: none; }
+            .tab-content.active { display: block; }
+            table { width: 100%; border-collapse: collapse; font-size: 0.9em; }
+            th { text-align: right; padding: 10px 12px; background: #f8fafc; color: #475569; font-weight: 600; }
+            td { padding: 10px 12px; border-bottom: 1px solid #e2e8f0; vertical-align: middle; }
+            .btn { background: #2563eb; color: white; border: none; padding: 5px 14px; border-radius: 15px; cursor: pointer; font-size: 0.85em; margin: 2px; transition: opacity 0.2s; }
+            .btn:hover { opacity: 0.85; }
+            .btn-danger { background: #dc2626; }
+            .btn-success { background: #16a34a; }
+            .btn-warning { background: #d97706; }
+            .status-badge { padding: 3px 10px; border-radius: 12px; font-size: 0.8em; font-weight: bold; color: white; }
+            .modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.6); justify-content: center; align-items: center; z-index: 1000; }
+            .modal-content { background: white; padding: 30px; border-radius: 15px; max-width: 500px; width: 90%; }
+            .refresh-note { color: rgba(255,255,255,0.6); font-size: 0.8em; text-align: center; margin-top: 15px; }
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            <div class="header">
+                <h1>🤵 B.Y PRO - مساعد المبيعات التقني</h1>
+                <div class="badge">✅ النظام يعمل</div>
+                <p style="margin: 8px 0 0; color: #64748b; font-size: 0.9em;">
+                    ⏱ بدء: {{ start_time }} &nbsp;|&nbsp; 💰 Binance: <code style="background:#f1f5f9;padding:2px 8px;border-radius:5px;">{{ binance_id }}</code>
+                </p>
+            </div>
 
-@app.route('/api/orders')
-def api_orders_list():
-    q = request.args.get('q', '').lower()
-    sf = request.args.get('status', '')
-    orders = list(reversed(data.get('orders', [])))
-    if q: orders = [o for o in orders if q in (o.get('name','') + o.get('service','') + o.get('phone','')).lower()]
-    if sf: orders = [o for o in orders if o.get('status','') == sf]
-    result = []
-    for o in orders[:100]:
-        o2 = dict(o)
-        o2['note'] = data.get('order_notes', {}).get(str(o.get('id', '')), '')
-        sid = o.get('sender_id', '')
-        o2['fb_link'] = o.get('link', '') or (f"https://www.facebook.com/messages/t/{sid}" if sid else '')
-        result.append(o2)
-    return jsonify(result)
+            <div class="stats-grid">
+                <div class="card"><h3>العملاء الفريدون</h3><div class="value">{{ unique_clients }}</div></div>
+                <div class="card"><h3>إجمالي الطلبات</h3><div class="value">{{ orders_count }}</div></div>
+                <div class="card"><h3>طلبات اليوم</h3><div class="value">{{ today_orders }}</div></div>
+                <div class="card"><h3>المحظورون</h3><div class="value">{{ blocked_count }}</div></div>
+                <div class="card"><h3>المدراء</h3><div class="value">{{ verified_count }}</div></div>
+                <div class="card"><h3>رسائل واردة</h3><div class="value">{{ msgs_received }}</div></div>
+            </div>
 
-@app.route('/api/clients')
-def api_clients_list():
-    q = request.args.get('q', '').lower()
-    sessions = data.get('sessions', {})
-    orders = data.get('orders', [])
-    clients = {}
-    for o in orders:
-        sid = o.get('sender_id', '')
-        if not sid: continue
-        fb_link = o.get('link', '') or f"https://www.facebook.com/messages/t/{sid}"
-        if sid not in clients:
-            clients[sid] = {
-                'id': sid, 'name': o.get('name', '') or sid,
-                'phone': o.get('phone', ''), 'link': fb_link,
-                'orders': [], 'last_seen': o.get('timestamp', ''),
-                'conversation': sessions.get(sid, {}).get('conversation', [])
+            <div class="logs">
+                <h3 style="margin: 0 0 10px; color: #1a1a2e;">📋 آخر الأحداث</h3>
+                {% for log in logs %}
+                <div class="log-item">[{{ log.time }}] {{ log.msg }}</div>
+                {% endfor %}
+            </div>
+
+            <div class="tabs">
+                <button class="tab-btn active" onclick="showTab('orders', event)">📦 الطلبات ({{ orders_count }})</button>
+                <button class="tab-btn" onclick="showTab('clients', event)">👥 العملاء</button>
+                <button class="tab-btn" onclick="showTab('blocked', event)">🚫 المحظورون ({{ blocked_count }})</button>
+                <button class="tab-btn" onclick="showTab('verified', event)">🔐 المدراء ({{ verified_count }})</button>
+                <button class="tab-btn" onclick="showTab('commands', event)">⚙️ الأوامر</button>
+            </div>
+
+            <div id="orders" class="tab-content active">
+                <h3>📦 جميع الطلبات</h3>
+                <table>
+                    <tr><th>#</th><th>الاسم</th><th>الخدمة</th><th>الميزانية</th><th>الهاتف</th><th>المدة</th><th>الحالة</th><th>ملاحظات</th><th>التاريخ</th><th>الإجراءات</th></tr>
+                    {% for o in orders %}
+                    <tr>
+                        <td>{{ o.id }}</td>
+                        <td><a href="{{ o.link }}" target="_blank">{{ o.name }}</a></td>
+                        <td>{{ o.service }}</td>
+                        <td>{{ o.get('budget_range', '') or (o.budget|string + '$') }}</td>
+                        <td>{{ o.get('phone', '-') }}</td>
+                        <td>{{ o.get('duration', '-') }}</td>
+                        <td>
+                            <span class="status-badge" style="background: {% if o.status == 'مكتمل' %}#16a34a{% else %}#d97706{% endif %}">
+                                {{ o.status }}
+                            </span>
+                        </td>
+                        <td>{{ order_notes.get(o.id|string, '') }}</td>
+                        <td style="font-size:0.8em;">{{ o.get('timestamp','')[:16] }}</td>
+                        <td>
+                            <button class="btn btn-success" onclick="markComplete({{ o.id }})">✔️</button>
+                            <button class="btn btn-warning" onclick="addNote({{ o.id }})">📝</button>
+                            <button class="btn btn-danger" onclick="deleteOrder({{ o.id }})">🗑️</button>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </table>
+            </div>
+
+            <div id="clients" class="tab-content">
+                <h3>👥 العملاء المسجلون</h3>
+                <table>
+                    <tr><th>الاسم</th><th>الهاتف</th><th>عدد الطلبات</th><th>آخر طلب</th><th>محادثة</th></tr>
+                    {% for client in clients %}
+                    <tr>
+                        <td>{{ client.name }}</td>
+                        <td>{{ client.phone }}</td>
+                        <td>{{ client.order_count }}</td>
+                        <td>{{ client.last_date[:10] }}</td>
+                        <td><a href="{{ client.link }}" target="_blank">🔗 فتح</a></td>
+                    </tr>
+                    {% endfor %}
+                </table>
+            </div>
+
+            <div id="blocked" class="tab-content">
+                <h3>🚫 المستخدمون المحظورون</h3>
+                <table>
+                    <tr><th>معرف المستخدم</th><th>الإجراء</th></tr>
+                    {% for uid in blocked_list %}
+                    <tr>
+                        <td>{{ uid }}</td>
+                        <td><button class="btn btn-success" onclick="unblockUser('{{ uid }}')">رفع الحظر</button></td>
+                    </tr>
+                    {% endfor %}
+                </table>
+            </div>
+
+            <div id="verified" class="tab-content">
+                <h3>🔐 المدراء الموثقون</h3>
+                <table>
+                    <tr><th>معرف المستخدم</th><th>الإجراء</th></tr>
+                    {% for uid in verified_list %}
+                    <tr>
+                        <td>{{ uid }}</td>
+                        <td><button class="btn btn-danger" onclick="removeAdmin('{{ uid }}')">إزالة</button></td>
+                    </tr>
+                    {% endfor %}
+                </table>
+            </div>
+
+            <div id="commands" class="tab-content">
+                <h3>⚙️ أوامر المدير (عبر الماسنجر)</h3>
+                <table>
+                    <tr><th>الأمر</th><th>الوظيفة</th></tr>
+                    <tr><td><code>احصائيات</code></td><td>عرض الإحصائيات الكاملة</td></tr>
+                    <tr><td><code>اي جديد</code></td><td>طلبات اليوم</td></tr>
+                    <tr><td><code>كل الطلبات</code></td><td>آخر 10 طلبات</td></tr>
+                    <tr><td><code>تفاصيل [رقم]</code></td><td>تفاصيل طلب محدد</td></tr>
+                    <tr><td><code>مكتمل [رقم]</code></td><td>تحديث حالة الطلب</td></tr>
+                    <tr><td><code>حذف [رقم]</code></td><td>حذف طلب</td></tr>
+                    <tr><td><code>ملاحظة [رقم] [نص]</code></td><td>إضافة ملاحظة</td></tr>
+                    <tr><td><code>حظر [معرف]</code></td><td>حظر مستخدم</td></tr>
+                    <tr><td><code>الغاء حظر [معرف]</code></td><td>رفع الحظر</td></tr>
+                    <tr><td><code>المحظورين</code></td><td>قائمة المحظورين</td></tr>
+                    <tr><td><code>العملاء</code></td><td>قائمة العملاء</td></tr>
+                </table>
+            </div>
+        </div>
+
+        <div id="noteModal" class="modal">
+            <div class="modal-content">
+                <h3>📝 إضافة ملاحظة للطلب #<span id="noteOrderId"></span></h3>
+                <textarea id="noteText" rows="4" style="width:100%;padding:10px;border-radius:8px;border:1px solid #ccc;margin-top:10px;"></textarea>
+                <div style="margin-top:15px;text-align:left;">
+                    <button class="btn" onclick="submitNote()">حفظ</button>
+                    <button class="btn btn-danger" onclick="closeModal()">إلغاء</button>
+                </div>
+            </div>
+        </div>
+
+        <p class="refresh-note">⟳ تحديث تلقائي كل 30 ثانية</p>
+
+        <script>
+            function showTab(tabId, event) {
+                document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
+                document.getElementById(tabId).classList.add('active');
+                document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+                if (event && event.target) event.target.classList.add('active');
             }
-        else:
-            if o.get('name') and not clients[sid]['name']: clients[sid]['name'] = o['name']
-            if o.get('phone'): clients[sid]['phone'] = o['phone']
-            if not clients[sid]['link']: clients[sid]['link'] = fb_link
-        clients[sid]['orders'].append({
-            'service': o.get('service', ''),
-            'budget': o.get('budget_range', '') or str(o.get('budget', '')) + '$',
-            'status': o.get('status', 'جديد'), 'id': o.get('id', '')
-        })
-        if o.get('timestamp', '') > clients[sid]['last_seen']:
-            clients[sid]['last_seen'] = o['timestamp']
-    for sid, sess in sessions.items():
-        if sid not in clients and sess.get('conversation'):
-            clients[sid] = {
-                'id': sid, 'name': sess.get('name', '') or sid,
-                'phone': sess.get('phone', ''),
-                'link': f"https://www.facebook.com/messages/t/{sid}",
-                'orders': [], 'last_seen': '', 'conversation': sess.get('conversation', [])
+            function markComplete(id) {
+                if (confirm('تأكيد إكمال الطلب #' + id + '؟')) {
+                    fetch('/api/order/' + id + '/complete', {method:'POST'})
+                        .then(r => r.json()).then(d => { if(d.success) location.reload(); });
+                }
             }
-    result = list(clients.values())
-    if q: result = [cl for cl in result if q in (cl['name'] + cl.get('phone', '')).lower()]
-    result.sort(key=lambda x: x['last_seen'], reverse=True)
-    return jsonify(result[:100])
+            function deleteOrder(id) {
+                if (confirm('حذف الطلب #' + id + '؟ لا يمكن التراجع.')) {
+                    fetch('/api/order/' + id + '/delete', {method:'POST'})
+                        .then(r => r.json()).then(d => { if(d.success) location.reload(); });
+                }
+            }
+            function addNote(id) {
+                document.getElementById('noteOrderId').innerText = id;
+                document.getElementById('noteModal').style.display = 'flex';
+            }
+            function submitNote() {
+                const id = document.getElementById('noteOrderId').innerText;
+                const note = document.getElementById('noteText').value;
+                fetch('/api/order/' + id + '/note', {
+                    method:'POST',
+                    headers:{'Content-Type':'application/json'},
+                    body:JSON.stringify({note:note})
+                }).then(r => r.json()).then(d => { if(d.success) location.reload(); });
+            }
+            function closeModal() {
+                document.getElementById('noteModal').style.display = 'none';
+                document.getElementById('noteText').value = '';
+            }
+            function unblockUser(uid) {
+                if (confirm('رفع الحظر عن ' + uid + '؟')) {
+                    fetch('/api/unblock/' + uid, {method:'POST'})
+                        .then(r => r.json()).then(d => { if(d.success) location.reload(); });
+                }
+            }
+            function removeAdmin(uid) {
+                if (confirm('إزالة المدير ' + uid + '؟')) {
+                    fetch('/api/remove_admin/' + uid, {method:'POST'})
+                        .then(r => r.json()).then(d => { if(d.success) location.reload(); });
+                }
+            }
+            window.onclick = function(e) {
+                if (e.target == document.getElementById('noteModal')) closeModal();
+            }
+            // تحديث تلقائي كل 30 ثانية
+            setTimeout(() => location.reload(), 30000);
+        </script>
+    </body>
+    </html>
+    """
+    
+    orders_list = sorted(data.get('orders', []), key=lambda x: x.get('id', 0), reverse=True)[:50]
+    
+    clients_dict = {}
+    for o in data.get('orders', []):
+        name = o.get('name', '')
+        if name:
+            if name not in clients_dict:
+                clients_dict[name] = {
+                    'name': name,
+                    'phone': o.get('phone', '-'),
+                    'order_count': 0,
+                    'last_date': o.get('timestamp', ''),
+                    'link': o.get('link', '')
+                }
+            clients_dict[name]['order_count'] += 1
+            if o.get('timestamp', '') > clients_dict[name]['last_date']:
+                clients_dict[name]['last_date'] = o['timestamp']
+                clients_dict[name]['phone'] = o.get('phone', '-')
+    
+    clients_list = sorted(clients_dict.values(), key=lambda x: x['last_date'], reverse=True)
 
-@app.route('/api/admins')
-def api_admins_list():
-    return jsonify({'owner': OWNER_FB_ID, 'second': SECOND_ADMIN_ID, 'verified': data.get('verified', [])})
+    return render_template_string(html,
+        start_time=data['stats'].get('start_time', '')[:16].replace('T', ' '),
+        binance_id=BINANCE_ID,
+        unique_clients=stats['unique_clients'],
+        orders_count=stats['total_orders'],
+        today_orders=stats['today_orders'],
+        blocked_count=stats['blocked'],
+        verified_count=stats['verified'],
+        msgs_received=stats['msgs_received'],
+        logs=list(logs)[:20],
+        orders=orders_list,
+        order_notes=data.get('order_notes', {}),
+        clients=clients_list[:50],
+        blocked_list=data.get('blocked', [])[-50:],
+        verified_list=data.get('verified', [])[-50:]
+    )
 
-@app.route('/api/admin/test/<uid>', methods=['POST'])
-def api_test_admin(uid):
-    ok = send_fb(uid, "🔐 Admin verification — please reply with the admin password.")
-    return jsonify({'success': bool(ok)})
-
-@app.route('/api/admin/remove/<uid>', methods=['POST'])
-def api_admin_remove(uid):
-    if uid in data.get('verified', []):
-        data['verified'].remove(uid)
-        if uid not in data.get('blocked', []): data['blocked'].append(uid)
-        save_data()
-        return jsonify({'success': True})
-    return jsonify({'success': False})
-
-@app.route('/api/settings', methods=['GET'])
-def api_get_settings():
-    return jsonify({
-        'binance_id': BINANCE_ID, 'ai_api_url': AI_API_URL,
-        'bot_prompt': BOT_PERSONALITY, 'owner_prompt': OWNER_PERSONALITY,
-        'company_website': COMPANY_WEBSITE, 'self_url': SELF_URL,
-        'fb_page': 'https://www.facebook.com/bypro2007',
-        'store_url': 'https://store-pro.great-site.net',
-        'store_support': 'https://t.me/STOREPROSPRT'
-    })
-
-@app.route('/api/settings', methods=['POST'])
-def api_save_settings():
-    global BOT_PERSONALITY, OWNER_PERSONALITY, BINANCE_ID, AI_API_URL
-    body = request.json or {}
-    if 'bot_prompt' in body: BOT_PERSONALITY = body['bot_prompt']
-    if 'owner_prompt' in body: OWNER_PERSONALITY = body['owner_prompt']
-    if 'binance_id' in body: BINANCE_ID = body['binance_id']
-    if 'ai_api_url' in body: AI_API_URL = body['ai_api_url']
-    add_log("⚙️ Settings updated from dashboard")
-    return jsonify({'success': True})
-
-@app.route('/api/logs')
-def api_logs_list():
-    return jsonify(list(logs)[:50])
-
-@app.route('/api/order/<int:oid>/complete', methods=['POST'])
-def api_complete(oid):
-    return jsonify({'success': update_order(oid, {'status': 'مكتمل'})})
-
-@app.route('/api/order/<int:oid>/delete', methods=['POST'])
-def api_delete(oid):
-    delete_order(oid); return jsonify({'success': True})
-
-@app.route('/api/order/<int:oid>/note', methods=['POST'])
-def api_note(oid):
-    note = (request.json or {}).get('note', '')
-    add_note_to_order(oid, note); return jsonify({'success': True})
-
-@app.route('/api/order/<int:oid>/block', methods=['POST'])
-def api_order_block(oid):
-    o = get_order(oid)
-    if o and o.get('sender_id'):
-        sid = o['sender_id']
-        if sid not in data.get('blocked', []): data['blocked'].append(sid)
-        save_data(); return jsonify({'success': True})
-    return jsonify({'success': False})
-
-@app.route('/api/block/<uid>', methods=['POST'])
-def api_block_u(uid):
-    if 'blocked' not in data: data['blocked'] = []
-    if uid not in data['blocked']: data['blocked'].append(uid)
-    save_data(); return jsonify({'success': True})
-
-@app.route('/api/unblock/<uid>', methods=['POST'])
-def api_unblock_u(uid):
-    if uid in data.get('blocked', []): data['blocked'].remove(uid)
-    save_data(); return jsonify({'success': True})
-
-@app.route('/api/reset', methods=['POST'])
-def api_reset():
-    body = request.json or {}
-    if body.get('password') != OWNER_PASSWORD:
-        return jsonify({'success': False, 'error': 'Wrong password'}), 403
-    owner_keep = data.get('verified', [])[:1]
-    data['orders'] = []; data['sessions'] = {}; data['order_notes'] = {}
-    data['blocked'] = []; data['verified'] = owner_keep
-    data['stats'] = {'msgs_received': 0, 'msgs_sent': 0, 'start_time': datetime.now().isoformat()}
-    save_data(); add_log("🔄 System reset from dashboard")
-    return jsonify({'success': True})
-
-@app.route('/api/new_orders_check')
-def api_new_orders():
-    """للتحقق من الطلبات الجديدة للإشعارات"""
-    since = request.args.get('since', '')
-    orders = data.get('orders', [])
-    new_ones = [o for o in orders if o.get('timestamp', '') > since] if since else []
-    return jsonify({'count': len(new_ones), 'orders': new_ones[-5:]})
 
 # ========== Keep-Alive كل 30 ثانية ==========
 def keep_alive_loop():
