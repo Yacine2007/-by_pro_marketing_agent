@@ -23,39 +23,60 @@ AI_API_URL = os.environ.get('AI_API_URL', 'http://fi8.bot-hosting.net:20163/elos
 COMPANY_WEBSITE = os.environ.get('COMPANY_WEBSITE', 'https://b.y-pro.kesug.com')
 SELF_URL = os.environ.get('SELF_URL', 'https://by-pro-marketing-agent.onrender.com')
 
-# ========== شخصية البوت - بشرية وطبيعية ==========
-BOT_PERSONALITY = """أنت "أحمد"، مستشار مبيعات في شركة B.Y PRO للتكنولوجيا والبرمجيات.
+# ========== شخصية البوت ==========
+BOT_PERSONALITY = """أنت "أحمد"، وكيل تسويق ومبيعات في شركة B.Y PRO للتكنولوجيا والبرمجيات.
 
-شخصيتك:
-- تتحدث كإنسان حقيقي، بأسلوب ودود ومريح، وليس كبوت آلي.
-- مختصر ومباشر، لا تطوّل بدون داعٍ.
-- تفهم احتياج العميل قبل أي شيء.
-- لا تبدأ ردودك بـ "أهلاً وسهلاً" في كل رسالة، تكلّم بشكل طبيعي.
+=== قاعدة اللغة - الأهم ===
+تحدّث دائماً بنفس لغة العميل التي بدأ بها المحادثة. إذا بدأ بالعربية فأنت عربي طوال المحادثة. إذا بدأ بالإنجليزية فأنت إنجليزي طوال المحادثة. لا تخلط اللغتين أبداً.
 
-طريقة عملك مع العميل:
-1. اسمع طلبه باختصار.
-2. اسأله أسئلة بسيطة تساعدك تفهم المشروع (1-2 سؤال فقط، مش أكثر).
-3. بعد ما فهمت المشروع، قدّم له السعر التقريبي والمدة مباشرة وبوضوح.
-4. إذا وافق، اطلب منه اسمه الكريم ورقم هاتفه لتسجيل الطلب.
-5. لا تطلب أي بيانات شخصية قبل الاتفاق على السعر.
+=== هويتك ===
+أنت تمثّل شركة B.Y PRO بالكامل: تصميم، برمجة، تطبيقات، ذكاء اصطناعي، جرافيك.
+عندما يسألك عميل "هل تقدر تبرمج؟" أو "هل تصمم؟" الجواب دائماً بإيجاب: "نعم، هذا تخصصنا".
+لا تقل "سأحوّلك للفريق التقني" أبداً. أنت من يغلق الصفقة مباشرة.
+لا تكشف أنك بوت أو ذكاء اصطناعي.
 
-قواعد أساسية:
-- لا تكرر نفسك.
-- لا تظهر كبوت أبداً.
-- أجب بنفس لغة العميل (عربي أو إنجليزي).
-- إذا سألك عن شيء تقني خارج نطاقك، قل له "أحوّلك للفريق التقني".
+=== أسلوبك ===
+تكلّم بطبيعية كإنسان، ودود ومختصر. لا تبدأ كل رسالة بـ "أهلاً". ردود قصيرة ومباشرة.
 
-الخدمات والأسعار التقريبية (استخدمها كمرجع فقط، السعر الفعلي يتحدد حسب التفاصيل):
-- موقع تعريفي: 300-800$ (5-10 أيام)
-- متجر إلكتروني: 700-1800$ (15-25 يوم)
-- بوت ذكاء اصطناعي: 500-2000$ (حسب التعقيد)
-- تطبيق جوال: من 1500$ (30-60 يوم)
-- تصميم جرافيك / شعار: 50-200$ (24-72 ساعة)
-- برنامج مخصص: من 1000$ (حسب المشروع)
+=== مسار البيع (اتبعه بدقة) ===
+1. اسمع العميل واسأل سؤالاً أو اثنين لفهم المشروع.
+2. قدّم السعر والمدة بوضوح (مثال: "120$ وتاخذ 24 ساعة").
+3. انتظر موافقته فقط. النظام يجمع بياناته تلقائياً بعد موافقته.
 
+=== ممنوع منعاً باتاً ===
+لا تطلب اسم العميل أو رقمه - النظام يفعل ذلك تلقائياً.
+لا تقل "تم تسجيل طلبك" - النظام هو من يسجّل.
+لا تعطِ وعوداً بالتسجيل قبل إعطاء البيانات.
+
+=== خدمات B.Y PRO والأسعار ===
+- شعار / لوجو بسيط: 80-180$ (24-48 ساعة)
+- هوية بصرية كاملة: 200-450$ (3-5 أيام)
+- تصميم جرافيك / مواد تسويقية: 100-350$ (1-3 أيام)
+- موقع تعريفي بسيط: 250-500$ (5-10 أيام)
+- موقع تعريفي متقدم: 500-950$ (10-20 يوم)
+- متجر إلكتروني أساسي: 650-1100$ (15-25 يوم)
+- متجر إلكتروني متكامل: 1100-2400$ (25-45 يوم)
+- تطبيق جوال بسيط MVP: 1400-2400$ (30-50 يوم)
+- تطبيق جوال متكامل: 2400-7500$ (50-90 يوم)
+- بوت ذكاء اصطناعي بسيط: 450-900$ (7-15 يوم)
+- بوت ذكاء اصطناعي متقدم: 900-2900$ (15-40 يوم)
+- برنامج / نظام مخصص: 950-4900$ (حسب المشروع)
 طريقة الدفع: 30% مقدماً، 70% بعد التسليم، عبر USDT (Binance Pay) معرف: 1074084246
 
-مهم جداً: لا تسجّل الطلب ولا تطلب البيانات إلا بعد أن يوافق العميل صراحةً على السعر والمدة."""
+=== متجر STORE PRO (ميزة إضافية) ===
+نمتلك متجراً لبيع المشاريع والبرامج الجاهزة: https://store-pro.great-site.net/
+يمكن لأي شخص رفع مشروعه أو برنامجه على المتجر للبيع:
+- المشاريع المجانية: تبدأ من 1$ فقط
+- المشاريع المدفوعة: تبدأ من 3$
+- باقي التسعيرات والميزات موجودة في المتجر
+- للدعم والتواصل: https://t.me/STOREPROSPRT
+لا تُعرض هذه الخدمة من تلقاء نفسك، فقط أجب عنها إذا سأل العميل."""
+
+# ========== برومبت المدير ==========
+OWNER_PERSONALITY = """أنت "أحمد"، مساعد ذكي لصاحب شركة B.Y PRO.
+المدير هو صاحب الشركة - صلاحياته مطلقة. أجبه مباشرة وبدون تحفظات.
+لا تقل له "هذا حساس" أو "ثواني" أو "سأتحقق" - أعطه المعلومة فوراً.
+مختصر وجاد معه دائماً. تحدث معه بالعربية دائماً."""
 
 # ========== تخزين JSONBin.io ==========
 def jsonbin_read():
@@ -256,7 +277,8 @@ def get_session(sender_id):
             'phone': '',
             'duration': '',
             'details': '',
-            'stage': 'explore',  # explore -> price_proposed -> awaiting_confirmation -> collecting_data -> done
+            'stage': 'explore',
+            'lang': 'ar',  # لغة العميل المكتشفة
             'conversation': [],
             'awaiting_password': False,
         }
@@ -292,87 +314,151 @@ def reset_session(sender_id):
         }
 
 # ========== استخراج البيانات من النص ==========
+
+def is_valid_phone(phone):
+    """التحقق من صحة رقم الهاتف - يرفض الأرقام العشوائية"""
+    digits = re.sub(r'\D', '', phone)
+    if len(digits) < 8 or len(digits) > 15:
+        return False
+    # رفض الأرقام المتكررة (0000000, 1111111, 1234567890)
+    if len(set(digits)) <= 2:
+        return False
+    if digits in ['1234567890', '0123456789', '9876543210']:
+        return False
+    # تحقق من بادئات معقولة
+    if digits.startswith('0') and len(digits) < 9:
+        return False
+    return True
+
 def extract_phone(text):
-    """استخراج رقم الهاتف من النص"""
+    """استخراج رقم الهاتف من النص مع التحقق من الصحة"""
     patterns = [
-        r'(\+213[567][0-9]{8})',      # جزائر +213
-        r'(00213[567][0-9]{8})',       # جزائر 00213
-        r'(0[567][0-9]{8})',           # جزائر محلي
-        r'(\+966[0-9]{9})',            # سعودية
-        r'(05[0-9]{8})',               # سعودية محلي
-        r'(\+212[0-9]{9})',            # مغرب
-        r'(\+216[0-9]{8})',            # تونس
+        r'(\+213[5-7][0-9]{8})',      # جزائر +213
+        r'(00213[5-7][0-9]{8})',       # جزائر 00213
+        r'(0[5-7][0-9]{8})',           # جزائر/مغرب محلي
+        r'(\+966[5][0-9]{8})',         # سعودية +966
+        r'(05[0-9]{8})',               # خليجي محلي
+        r'(\+971[5][0-9]{8})',         # إمارات
+        r'(\+212[5-7][0-9]{8})',       # مغرب
+        r'(\+216[2-9][0-9]{7})',       # تونس
         r'(\+20[0-9]{10})',            # مصر
-        r'(\+[1-9][0-9]{7,14})',       # أي رقم دولي
+        r'(\+962[7][0-9]{8})',         # أردن
+        r'(\+[1-9][0-9]{7,13})',       # أي رقم دولي
+        r'(07[0-9]{8,9})',             # العراق/الأردن
         r'([0-9]{10,13})',             # أي رقم طويل
     ]
     for pat in patterns:
         m = re.search(pat, text)
         if m:
-            return m.group(1)
+            phone = m.group(1)
+            if is_valid_phone(phone):
+                return phone
     return None
+
+def is_valid_name(name):
+    """التحقق من صحة الاسم"""
+    name = name.strip()
+    if len(name) < 2 or len(name) > 40:
+        return False
+    # يجب أن يحتوي على حروف فعلية (عربية أو لاتينية)
+    if not re.search(r'[\u0600-\u06FFa-zA-Z]', name):
+        return False
+    # رفض الأرقام فقط
+    if re.match(r'^[\d\s]+$', name):
+        return False
+    # رفض الرموز العشوائية
+    if re.match(r'^[^a-zA-Z\u0600-\u06FF]+$', name):
+        return False
+    # رفض الكلمات العشوائية (حروف مكررة جداً)
+    if len(name) > 3 and len(set(name.replace(' ', ''))) <= 2:
+        return False
+    # رفض الكلمات الشائعة التي ليست أسماء
+    non_names = ['نعم', 'لا', 'اوكي', 'تمام', 'كيف', 'ماذا', 'متى', 'yes', 'no', 'ok', 'okay', 'hello', 'مرحبا', 'هلا']
+    if name.lower() in non_names:
+        return False
+    return True
 
 def extract_name_from_text(text):
     """استخراج الاسم من النص"""
     patterns = [
-        r'اسمي[:\s]*([\u0600-\u06FF\s]{3,30})',
-        r'الاسم[:\s]*([\u0600-\u06FF\s]{3,30})',
-        r'انا[:\s]*([\u0600-\u06FF]{3,20})',
-        r'my name is[:\s]*([a-zA-Z\s]{3,30})',
-        r'i\'?m[:\s]*([a-zA-Z\s]{3,25})',
-        r'name[:\s]*([a-zA-Z\s]{3,30})',
-        r'يسمونني[:\s]*([\u0600-\u06FF\s]{3,20})',
+        r'(?:اسمي|الاسم|أنا|انا)[:\s]+([\u0600-\u06FF\w]{2,25}(?:\s[\u0600-\u06FF\w]{2,20}){0,3})',
+        r'(?:my name is|name is|im called|i am)[:\s]+([\w]{2,25}(?:\s[\w]{2,20}){0,2})',
     ]
     for pat in patterns:
         m = re.search(pat, text, re.I)
         if m:
-            name = m.group(1).strip()
-            # تأكد أنه اسم وليس جملة طويلة
-            if 2 <= len(name.split()) <= 4 and len(name) <= 30:
-                return name
+            candidate = m.group(1).strip()
+            if is_valid_name(candidate):
+                return candidate
     return None
+
+def detect_language(text):
+    """كشف لغة النص الأساسية"""
+    arabic_chars = len(re.findall(r'[\u0600-\u06FF]', text))
+    latin_chars = len(re.findall(r'[a-zA-Z]', text))
+    if arabic_chars > latin_chars:
+        return 'ar'
+    elif latin_chars > arabic_chars:
+        return 'en'
+    return 'ar'  # افتراضي
 
 def is_price_confirmation(text):
     """هل وافق العميل على السعر؟"""
     confirmations = [
-        'نعم', 'موافق', 'موافقة', 'تمام', 'تمام شكراً', 'اوكي', 'اوك', 'ok', 'yes', 
-        'okay', 'agreed', 'deal', 'ماشي', 'راني موافق', 'حسنا', 'يلا نبدأ', 
-        'نبدو', 'نبدأ', 'جيد', 'سنبدأ', 'اتفقنا', 'ممتاز', 'بالتوفيق', 'شكراً',
-        'اشتري', 'مشينا'
+        'نعم', 'موافق', 'موافقة', 'تمام', 'اوكي', 'اوك', 'ok', 'yes', 'okay',
+        'agreed', 'deal', 'ماشي', 'حسنا', 'يلا', 'نبدأ', 'جيد', 'اتفقنا',
+        'ممتاز', 'مشينا', 'بالطبع', 'طيب', 'خلاص', 'ايه', 'آه', 'يس',
+        'ان شاء الله نبدأ', 'حسناً', 'مو مشكلة', 'لا مشكلة', 'نعم موافق',
+        'sure', 'let\'s go', 'proceed', 'sounds good', 'perfect', 'great'
     ]
     text_clean = text.lower().strip()
-    return any(w in text_clean for w in confirmations)
+    if any(w in text_clean for w in confirmations):
+        return True
+    if len(text_clean) <= 3 and text_clean not in ['لا', 'لأ', 'no', 'la', 'لو', 'لن']:
+        return True
+    return False
 
 def is_price_rejection(text):
     """هل رفض العميل السعر؟"""
-    rejections = ['لا', 'غالي', 'كثير', 'خصم', 'أرخص', 'يخفض', 'مو مناسب', 'no', 'too much', 'expensive']
+    rejections = ['غالي', 'كثير', 'خصم', 'أرخص', 'يخفض', 'مو مناسب',
+                  'too much', 'expensive', 'reduce', 'discount', 'cheaper']
     text_clean = text.lower().strip()
+    if text_clean in ['لا', 'لأ', 'no', 'nope']:
+        return True
     return any(w in text_clean for w in rejections)
 
 # ========== الذكاء الاصطناعي ==========
-def ask_ai(user_msg, sess, extra_instruction=""):
+def ask_ai(user_msg, sess, extra_instruction="", is_owner_mode=False):
     context = "\n".join(sess.get('conversation', [])[-12:])
-    
-    stage_hints = {
-        'explore': "أنت تستمع لطلب العميل وتفهم احتياجه. اسأل سؤالاً أو سؤالين بسيطين لتفهم المشروع، ثم قدّم له السعر والمدة.",
-        'price_proposed': "لقد اقترحت سعراً للعميل. انتظر موافقته. لا تضيف معلومات جديدة.",
-        'awaiting_confirmation': "العميل على وشك الموافقة أو الرفض. إذا وافق، اطلب اسمه الكريم فقط.",
-        'collecting_name': "اطلب من العميل اسمه الكريم فقط. رسالة واحدة مختصرة.",
-        'collecting_phone': f"اسم العميل هو: {sess.get('name', '')}. اطلب منه رقم هاتفه الآن. رسالة مختصرة.",
-    }
-    
-    stage = sess.get('stage', 'explore')
-    hint = stage_hints.get(stage, "")
-    
-    full_prompt = (
-        f"{BOT_PERSONALITY}\n\n"
-        f"[حالة المحادثة الحالية: {hint}]\n"
-        f"{extra_instruction}\n\n"
-        f"سجل المحادثة:\n{context}\n\n"
-        f"المستخدم: {user_msg}\n"
-        f"أحمد:"
-    )
-    
+    lang = sess.get('lang', 'ar')
+    lang_hint = "تحدث بالعربية فقط." if lang == 'ar' else "Respond in English only."
+
+    if is_owner_mode:
+        full_prompt = (
+            f"{OWNER_PERSONALITY}\n\n"
+            f"{extra_instruction}\n\n"
+            f"سجل المحادثة:\n{context}\n\n"
+            f"المدير: {user_msg}\n"
+            f"أحمد:"
+        )
+    else:
+        stage_hints = {
+            'explore': "استمع للعميل، اسأل سؤالاً واحداً أو اثنين لفهم المشروع، ثم قدّم السعر والمدة مباشرة.",
+            'price_proposed': "اقترحت سعراً. فقط انتظر موافقته. لا تضيف جديداً. لا تطلب اسمه أو رقمه.",
+        }
+        stage = sess.get('stage', 'explore')
+        hint = stage_hints.get(stage, "")
+
+        full_prompt = (
+            f"{BOT_PERSONALITY}\n\n"
+            f"[{lang_hint}]\n"
+            f"[التعليمة الحالية: {hint}]\n"
+            f"{extra_instruction}\n\n"
+            f"سجل المحادثة:\n{context}\n\n"
+            f"العميل: {user_msg}\n"
+            f"أحمد:"
+        )
+
     try:
         url = f'{AI_API_URL}?text={requests.utils.quote(full_prompt)}'
         r = requests.get(url, timeout=15)
@@ -383,7 +469,9 @@ def ask_ai(user_msg, sess, extra_instruction=""):
                 return answer[:1800]
     except Exception as e:
         add_log(f"❌ خطأ AI: {e}")
-    
+
+    if lang == 'en':
+        return "Sorry, a temporary technical error occurred. Please try again."
     return "عذراً، حدث خطأ تقني مؤقت. حاول مرة أخرى."
 
 # ========== معالجة أوامر المدير ==========
@@ -407,38 +495,28 @@ def handle_owner_command(sender_id, text):
         send_fb(sender_id, msg)
         return True
     
-    # الطلبات الجديدة / اليوم
-    if any(k in text_lower for k in ['اي جديد', 'طلبات اليوم', 'الجديد', 'تفاصيل طلب اليوم', 'طلب اليوم']):
-        today_list = stats['today_orders_list']
-        if today_list:
-            lines = []
-            for o in today_list:
-                note = data.get('order_notes', {}).get(str(o.get('id','')), '')
-                lines.append(
-                    f"#{o['id']} {o['name']} | {o['service']} | {o.get('budget_range','') or str(o.get('budget','؟'))+'$'}\n"
-                    f"📱 {o.get('phone','؟')} | ⏱ {o.get('duration','؟')} | 🔗 {o.get('link','')}"
-                )
-            send_fb(sender_id, f"📦 {stats['today_orders']} طلب اليوم:\n\n" + "\n\n".join(lines))
+    # الطلبات الجديدة
+    if any(k in text_lower for k in ['اي جديد', 'طلبات اليوم', 'الجديد']):
+        if stats['today_orders'] > 0:
+            lines = [f"#{o['id']} {o['name']} - {o['service']} - {o.get('budget','؟')}$" 
+                     for o in stats['today_orders_list']]
+            send_fb(sender_id, f"📦 {stats['today_orders']} طلب اليوم:\n" + "\n".join(lines))
         else:
             send_fb(sender_id, "لا توجد طلبات اليوم.")
         return True
     
-    # كل الطلبات / اعرض الطلبات
-    if any(k in text_lower for k in ['كل الطلبات', 'جميع الطلبات', 'all orders', 'اعرض الطلبات', 'الطلبات', 'عرض الطلبات']):
+    # كل الطلبات
+    if any(k in text_lower for k in ['كل الطلبات', 'جميع الطلبات', 'all orders']):
         orders = data.get('orders', [])[-10:]
         if orders:
-            lines = []
-            for o in reversed(orders):
-                lines.append(
-                    f"#{o['id']} {o['name']} | {o['service']} | {o.get('budget_range','') or str(o.get('budget','؟'))+'$'} [{o.get('status','جديد')}]\n"
-                    f"📱 {o.get('phone','؟')} | {o.get('timestamp','')[:10]}"
-                )
-            send_fb(sender_id, "📋 آخر الطلبات:\n\n" + "\n\n".join(lines))
+            lines = [f"#{o['id']} {o['name']} - {o['service']} - {o.get('budget','؟')}$ [{o.get('status','جديد')}]"
+                     for o in reversed(orders)]
+            send_fb(sender_id, "📋 آخر الطلبات:\n" + "\n".join(lines))
         else:
             send_fb(sender_id, "لا توجد طلبات بعد.")
         return True
     
-    # تفاصيل طلب برقمه
+    # تفاصيل طلب
     m = re.search(r'تفاصيل\s+(\d+)', text)
     if m:
         oid = int(m.group(1))
@@ -449,13 +527,14 @@ def handle_owner_command(sender_id, text):
                 f"📋 تفاصيل الطلب #{oid}\n"
                 f"الاسم: {o['name']}\n"
                 f"الخدمة: {o['service']}\n"
-                f"الميزانية: {o.get('budget_range','') or str(o.get('budget','؟'))+'$'}\n"
+                f"الميزانية: {o.get('budget','؟')}$\n"
                 f"الهاتف: {o.get('phone','غير متوفر')}\n"
                 f"المدة: {o.get('duration','غير محددة')}\n"
+                f"التفاصيل: {o.get('details','')}\n"
                 f"الحالة: {o.get('status','جديد')}\n"
                 f"ملاحظات: {note}\n"
                 f"التاريخ: {o.get('timestamp','')[:16]}\n"
-                f"رابط المحادثة: {o.get('link','')}"
+                f"رابط: {o.get('link','')}"
             )
         else:
             msg = f"❌ لم يُعثر على طلب #{oid}"
@@ -553,6 +632,15 @@ def process_message(sender_id, text):
         return
 
     sess = get_session(sender_id)
+
+    # كشف لغة العميل عند أول رسالة حقيقية (غير المدير)
+    if not is_owner(sender_id) and not is_verified_admin(sender_id):
+        if not sess.get('lang') or sess.get('lang') == 'ar':
+            detected = detect_language(text)
+            if detected != sess.get('lang', 'ar'):
+                update_session(sender_id, {'lang': detected})
+                sess['lang'] = detected
+
     add_to_conversation(sender_id, 'المستخدم', text)
 
     # ====== المدير الحقيقي (بالـ ID الثابت فقط) ======
@@ -668,24 +756,23 @@ def process_message(sender_id, text):
     # --- مرحلة: تم اقتراح السعر، ننتظر الموافقة ---
     if stage == 'price_proposed':
         if is_price_confirmation(text):
-            # وافق! انتقل لجمع البيانات
             sess['stage'] = 'collecting_name'
             update_session(sender_id, {'stage': 'collecting_name'})
             save_data()
-            send_fb(sender_id, "ممتاز! ما اسمك الكريم؟")
+            msg = "Great! What's your name?" if sess.get('lang') == 'en' else "ممتاز! ما اسمك الكريم؟"
+            send_fb(sender_id, msg)
+            add_to_conversation(sender_id, 'أحمد', msg)
             return
         elif is_price_rejection(text):
-            # رفض أو طلب تعديل
             sess['stage'] = 'explore'
             update_session(sender_id, {'stage': 'explore', 'budget': 0, 'budget_range': ''})
-            reply = ask_ai(text, sess, extra_instruction="\nالعميل يريد تعديلاً في السعر أو لديه استفسار. ناقشه بمرونة.")
+            reply = ask_ai(text, sess, extra_instruction="العميل يريد تعديل السعر. ناقشه بمرونة وقدّم بديلاً.")
             send_fb(sender_id, reply)
             add_to_conversation(sender_id, 'أحمد', reply)
             save_data()
             return
         else:
-            # سؤال إضافي قبل الموافقة
-            reply = ask_ai(text, sess, extra_instruction="\nالعميل يستفسر. أجبه باختصار ثم ذكّره بالسؤال: هل يوافق على السعر والمدة؟")
+            reply = ask_ai(text, sess, extra_instruction="أجب باختصار ثم اسأله: هل يوافق على السعر؟ لا تطلب اسمه أو رقمه.")
             send_fb(sender_id, reply)
             add_to_conversation(sender_id, 'أحمد', reply)
             save_data()
@@ -693,45 +780,46 @@ def process_message(sender_id, text):
 
     # --- مرحلة: جمع الاسم ---
     if stage == 'collecting_name':
-        # استخراج الاسم من النص
+        lang = sess.get('lang', 'ar')
+        # محاولة استخراج الاسم بالأنماط أولاً
         name = extract_name_from_text(text)
-        
-        # إذا لم يُستخرج بالنمط، افترض أن النص كله هو الاسم إذا كان قصيراً
-        if not name and len(text.split()) <= 4 and len(text) <= 30:
-            # تحقق أنه ليس كلمة موافقة أو سؤال
-            if not any(w in text.lower() for w in ['نعم', 'لا', 'كيف', 'ماذا', 'متى', 'أين']):
-                name = text.strip()
-        
+
+        # إذا لم يُستخرج، افترض أن النص كله هو الاسم إذا كان قصيراً وصالحاً
+        if not name:
+            candidate = text.strip()
+            words = candidate.split()
+            if 1 <= len(words) <= 4 and 2 <= len(candidate) <= 40:
+                if is_valid_name(candidate):
+                    name = candidate
+
         if name:
-            sess['name'] = name
-            sess['stage'] = 'collecting_phone'
             update_session(sender_id, {'name': name, 'stage': 'collecting_phone'})
+            sess.update({'name': name, 'stage': 'collecting_phone'})
             save_data()
-            send_fb(sender_id, f"تمام {name}، ما هو رقم هاتفك للتواصل؟")
-            return
+            msg = f"Got it {name}! Please send your phone number." if lang == 'en' else f"تمام {name}، أرسل رقم هاتفك للتواصل."
+            send_fb(sender_id, msg)
+            add_to_conversation(sender_id, 'أحمد', msg)
         else:
-            send_fb(sender_id, "ما اسمك الكريم؟ (الاسم فقط من فضلك)")
-            return
+            msg = "Please enter your name only." if lang == 'en' else "أدخل اسمك فقط من فضلك."
+            send_fb(sender_id, msg)
+        return
 
     # --- مرحلة: جمع رقم الهاتف ---
     if stage == 'collecting_phone':
+        lang = sess.get('lang', 'ar')
         phone = extract_phone(text)
+
         if phone:
-            sess['phone'] = phone
-            update_session(sender_id, {'phone': phone})
-            
-            # هل هناك تفاصيل إضافية في النص؟
-            # لا، نسجّل الطلب مباشرة
-            sess['stage'] = 'done'
-            update_session(sender_id, {'stage': 'done'})
-            
-            # === تسجيل الطلب ===
+            update_session(sender_id, {'phone': phone, 'stage': 'done'})
+            sess.update({'phone': phone, 'stage': 'done'})
+
+            # === تسجيل الطلب الفعلي ===
             order = {
-                'name': sess['name'],
+                'name': sess.get('name', ''),
                 'service': sess.get('service', 'خدمة تقنية'),
                 'budget': sess.get('budget', 0),
                 'budget_range': sess.get('budget_range', ''),
-                'phone': sess['phone'],
+                'phone': phone,
                 'duration': sess.get('duration', ''),
                 'details': sess.get('details', ''),
                 'timestamp': datetime.now().isoformat(),
@@ -740,26 +828,30 @@ def process_message(sender_id, text):
                 'status': 'جديد'
             }
             order_id = add_order(order)
-            
-            # رسالة للعميل طبيعية
-            confirm_msg = (
-                f"شكراً {sess['name']}! تم تسجيل طلبك بنجاح 👌\n"
-                f"سيتواصل معك فريقنا على رقمك قريباً لبدء العمل على {sess.get('service', 'مشروعك')}.\n"
-                f"إذا كان لديك أي سؤال في الوقت الحالي، تواصل معنا على: {COMPANY_WEBSITE}"
-            )
+
+            if lang == 'en':
+                confirm_msg = (
+                    f"Your order has been registered successfully {sess.get('name','')} 👌\n"
+                    f"Our team will contact you shortly to start working on your {sess.get('service','project')}.\n"
+                    f"Any questions: {COMPANY_WEBSITE}"
+                )
+            else:
+                confirm_msg = (
+                    f"تم تسجيل طلبك بنجاح يا {sess.get('name','')} 👌\n"
+                    f"فريقنا سيتواصل معك قريباً على رقمك لبدء العمل على {sess.get('service','مشروعك')}.\n"
+                    f"أي سؤال: {COMPANY_WEBSITE}"
+                )
             send_fb(sender_id, confirm_msg)
-            add_log(f"✅ طلب #{order_id} مسجّل كامل لـ {sess['name']}")
-            
-            # إعادة تعيين الجلسة للطلبات المستقبلية
+            add_log(f"✅ طلب #{order_id} مسجّل لـ {sess.get('name','')}")
             reset_session(sender_id)
             save_data()
-            return
         else:
-            send_fb(sender_id, "أرسل لي رقم هاتفك فقط من فضلك (مثال: 0555123456)")
-            return
+            # رقم غير صالح - أخبره بالسبب
+            msg = "That doesn't look like a valid phone number. Please send your real phone number (e.g. +1234567890)." if lang == 'en' else "هذا لا يبدو رقم هاتف صحيح. أرسل رقمك الحقيقي (مثال: 0555123456)."
+            send_fb(sender_id, msg)
+        return
 
     # --- أي مرحلة أخرى - إعادة تشغيل ---
-    sess['stage'] = 'explore'
     update_session(sender_id, {'stage': 'explore'})
     reply = ask_ai(text, sess)
     send_fb(sender_id, reply)
@@ -871,7 +963,7 @@ def home():
                     {% for o in orders %}
                     <tr>
                         <td>{{ o.id }}</td>
-                        <td>{{ o.name }}</td>
+                        <td><a href="{{ o.link }}" target="_blank">{{ o.name }}</a></td>
                         <td>{{ o.service }}</td>
                         <td>{{ o.get('budget_range', '') or (o.budget|string + '$') }}</td>
                         <td>{{ o.get('phone', '-') }}</td>
@@ -884,7 +976,6 @@ def home():
                         <td>{{ order_notes.get(o.id|string, '') }}</td>
                         <td style="font-size:0.8em;">{{ o.get('timestamp','')[:16] }}</td>
                         <td>
-                            {% if o.get('link') %}<a href="{{ o.link }}" target="_blank" class="btn" style="background:#7c3aed;text-decoration:none;">💬</a>{% endif %}
                             <button class="btn btn-success" onclick="markComplete({{ o.id }})">✔️</button>
                             <button class="btn btn-warning" onclick="addNote({{ o.id }})">📝</button>
                             <button class="btn btn-danger" onclick="deleteOrder({{ o.id }})">🗑️</button>
