@@ -56,7 +56,7 @@ a{color:var(--blue2);text-decoration:none}
 
 .main{margin-left:var(--sidebar-w);min-height:100vh;padding:22px 26px;transition:margin-left .25s}
 .page{display:none;animation:fi .22s}
-.page.active{display:block}
+.page.active{display:flex;flex-direction:column}
 @keyframes fi{from{opacity:0;transform:translateY(5px)}to{opacity:1;transform:none}}
 
 /* TOPBAR */
@@ -413,7 +413,55 @@ textarea.fi{resize:vertical;min-height:105px;font-family:'Courier New',monospace
           <i class="fa fa-pen" style="color:var(--blue2)"></i> Post Text
           <span style="font-size:.7rem;font-weight:400;color:var(--muted);margin-left:6px">Default — saved until changed</span>
         </div>
-        <textarea id="pub-text" rows="22" style="display:block;width:100%;padding:12px;border:1px solid var(--border);border-radius:7px;font-size:.85rem;line-height:1.8;resize:vertical;font-family:inherit;color:var(--black);background:#fff;outline:none;box-sizing:border-box"></textarea>
+        <textarea id="pub-text" style="width:100%;height:520px;padding:12px;border:1px solid #dde1ea;border-radius:7px;font-size:.85rem;line-height:1.8;resize:vertical;font-family:inherit;color:#1a1d23;background:#fff;outline:none;box-sizing:border-box">🚀 B.Y PRO | حلول تقنية متكاملة تقود أعمالك نحو الريادة
+
+✨ نحن لا نبني مجرد برمجيات، بل نصمم أدوات ذكية تضاعف نمو أعمالك وتضمن تفوقك المستمر.
+
+━━━━━━━━━━━━━━━━━━━━━━
+💼 حلولنا الاحترافية (جودة عالمية وتنفيذ متقن):
+━━━━━━━━━━━━━━━━━━━━━━
+
+🌐 المنصات الرقمية
+تطوير مواقع إلكترونية فائقة السرعة، متجاوبة، ومجهزة تقنياً لتصدر نتائج البحث (SEO).
+
+📱 تطبيقات الجوال
+تجربة مستخدم (UX) استثنائية على iOS وAndroid تجمع بين الأناقة وسلاسة الأداء.
+
+☁️ الأنظمة السحابية المخصصة
+تطوير أنظمة (ERP - CRM) وأتمتة العمليات لرفع كفاءة فريقك بنسبة 100%.
+
+🤖 تقنيات الذكاء الاصطناعي
+دمج Chatbots ذكية، تحليل بيانات تنبؤي، وصناعة محتوى آلي متقدم.
+
+🎨 الهوية البصرية
+صياغة بصمة بصرية فريدة (Logo & Branding) تعكس قيم مشروعك وتجذب عملاءك.
+
+🎬 المحتوى المرئي
+مونتاج فيديو تسويقي وصناعة محتوى يروي قصة نجاحك بأسلوب احترافي.
+
+📈 استراتيجيات النمو الرقمي
+بناء مجتمعات حقيقية وتفاعل مستهدف يحوّل المتابعين إلى عملاء.
+
+🛡️ الاستشارات والدعم
+مرافقة تقنية مستمرة 24/7 لضمان استقرار وتطور أعمالك دون توقف.
+
+━━━━━━━━━━━━━━━━━━━━━━
+🏆 لماذا يثق رواد الأعمال في B.Y PRO؟
+━━━━━━━━━━━━━━━━━━━━━━
+
+1️⃣ الابتكار المستدام — أحدث التقنيات لضمان بقاء مشروعك في الصدارة دائماً
+2️⃣ الالتزام المطلق — التسليم في الموعد المحدد هو ميثاقنا
+3️⃣ عائد الاستثمار (ROI) — حلولنا مصممة لزيادة المبيعات وتقليل التكاليف
+4️⃣ مرونة فائقة — خطط دفع ميسرة تناسب الشركات الناشئة والمؤسسات الكبرى
+
+━━━━━━━━━━━━━━━━━━━━━━
+⚡ مستقبل أعمالك يبدأ بقرار الآن!
+━━━━━━━━━━━━━━━━━━━━━━
+
+لا تترك المنافس يسبقك 👇
+📩 راسلنا الآن ونبدأ فوراً!
+
+#BY_PRO #تحول_رقمي #ذكاء_اصطناعي #برمجة #تسويق_رقمي #ريادة_الأعمال #تطوير_مواقع</textarea>
       </div>
     </div>
 
@@ -470,6 +518,7 @@ function tryLogin(){
   }
 }
 document.getElementById('pwd').addEventListener('keydown',e=>{if(e.key==='Enter')tryLogin();});
+document.addEventListener('DOMContentLoaded',()=>{const t=document.getElementById('pub-text');if(t&&!t.value)t.value=DEFAULT_POST;});
 
 // NAV
 function goPage(id,btn){
@@ -811,7 +860,7 @@ async function loadPublish(){
     const r=await fetch('/api/publish/settings');
     const s=await r.json();
     document.getElementById('pub-interval').value=s.interval_minutes||60;
-    document.getElementById('pub-text').value=s.post_text||DEFAULT_POST;
+    if(s.post_text) document.getElementById('pub-text').value=s.post_text;
     document.getElementById('pub-chatbtn').checked=s.add_chat_button!==false;
     document.getElementById('pub-last').textContent=s.last_published?(new Date(s.last_published).toLocaleString()):'Never';
     const badge=document.getElementById('pub-statusbadge');
@@ -850,7 +899,7 @@ async function savePublishSettings(){
 
 // INIT
 function init(){
-  reqNotif();loadAnl();
+  reqNotif();loadAnl();loadPublish();
   fetch('/api/orders').then(r=>r.json()).then(ords=>{allOrd=ords;if(ords.length)lastTs=ords[0].timestamp||'';});
   setInterval(()=>{if(document.getElementById('page-analytics').classList.contains('active'))loadAnl();checkNew();},30000);
   setInterval(checkNew,15000);
