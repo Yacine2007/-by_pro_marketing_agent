@@ -1205,22 +1205,26 @@ def get_recent_posts(page_id, limit=10):
     return []
 
 def get_post_comments(post_id):
-    """جلب تعليقات منشور"""
+    """جلب تعليقات منشور مع pagination"""
+    comments = []
     try:
-        r = requests.get(
-            f'https://graph.facebook.com/v18.0/{post_id}/comments',
-            params={
-                'access_token': PAGE_ACCESS_TOKEN,
-                'fields': 'id,message,from,created_time',
-                'limit': 50
-            },
-            timeout=10
-        )
+        url = f'https://graph.facebook.com/v18.0/{post_id}/comments'
+        params = {
+            'access_token': PAGE_ACCESS_TOKEN,
+            'fields': 'id,message,from,created_time,comment_count',
+            'limit': 100,
+            'filter': 'stream'  # يجلب كل التعليقات بما فيها ردود الردود
+        }
+        r = requests.get(url, params=params, timeout=10)
         if r.status_code == 200:
-            return r.json().get('data', [])
+            data_r = r.json()
+            comments = data_r.get('data', [])
+            add_log(f"💬 جلب {len(comments)} تعليق من منشور {post_id[:15]}")
+        else:
+            add_log(f"⚠️ خطأ جلب تعليقات {post_id[:10]}: {r.status_code} {r.text[:80]}")
     except Exception as e:
         add_log(f"❌ خطأ جلب التعليقات: {e}")
-    return []
+    return comments
 
 def reply_to_comment(comment_id, reply_text):
     """الرد على تعليق"""
@@ -1231,7 +1235,11 @@ def reply_to_comment(comment_id, reply_text):
             json={'message': reply_text},
             timeout=10
         )
-        return r.status_code == 200
+        if r.status_code == 200:
+            return True
+        else:
+            add_log(f"⚠️ فشل الرد على تعليق: {r.status_code} {r.text[:80]}")
+            return False
     except Exception as e:
         add_log(f"❌ خطأ الرد على تعليق: {e}")
         return False
@@ -1257,75 +1265,92 @@ def generate_comment_reply(commenter_name, comment_text, post_text):
         add_log(f"❌ خطأ AI للتعليق: {e}")
     return None
 
-def comments_loop():
-    """حلقة مراقبة التعليقات وإضافة الردود"""
-    while True:
-        try:
-            settings = data.get('comment_settings', {})
-            interval = int(settings.get('check_interval_minutes', 5)) * 60
-            time.sleep(interval)
+def process_comments_once():
+    """فحص التعليقات مرة واحدة"""
+    try:
+        settings = data.get('comment_settings', {})
+        if not settings.get('enabled') or not PAGE_ACCESS_TOKEN:
+            return
 
-            if not settings.get('enabled') or not PAGE_ACCESS_TOKEN:
-                continue
+        page_id = get_page_id()
+        if not page_id:
+            add_log("⚠️ لم يتم جلب Page ID للتعليقات")
+            return
 
-            page_id = get_page_id()
-            if not page_id:
-                continue
+        posts = get_recent_posts(page_id, limit=20)
+        replied_ids = set(data.get('comment_replied_ids', []))
+        today = datetime.now().strftime('%Y-%m-%d')
+        new_replies = 0
 
-            posts = get_recent_posts(page_id, limit=15)
-            replied_ids = set(data.get('comment_replied_ids', []))
-            today = datetime.now().strftime('%Y-%m-%d')
+        for post in posts:
+            post_id = post.get('id', '')
+            post_text = post.get('message', '')
+            comments = get_post_comments(post_id)
 
-            for post in posts:
-                post_id = post.get('id')
-                post_text = post.get('message', '')
-                comments = get_post_comments(post_id)
+            for comment in comments:
+                cid = comment.get('id', '')
+                if not cid or cid in replied_ids:
+                    continue
 
-                for comment in comments:
-                    cid = comment.get('id')
-                    if cid in replied_ids:
-                        continue
+                # جلب اسم المعلق — يكون في 'from' أو نتركه 'صديق'
+                from_data = comment.get('from') or {}
+                commenter_name = from_data.get('name', '') or 'صديق'
+                comment_text = (comment.get('message') or '').strip()
 
-                    commenter = comment.get('from', {})
-                    commenter_name = commenter.get('name', 'صديق')
-                    comment_text = comment.get('message', '')
+                if not comment_text:
+                    continue
 
-                    if not comment_text:
-                        continue
+                # تجاهل التعليقات القديمة جداً (أكثر من 48 ساعة)
+                created = comment.get('created_time', '')
+                if created:
+                    try:
+                        from datetime import timezone
+                        ct = datetime.fromisoformat(created.replace('Z', '+00:00'))
+                        age_hours = (datetime.now(timezone.utc) - ct).total_seconds() / 3600
+                        if age_hours > 48:
+                            replied_ids.add(cid)  # نضيفه لتجنب فحصه مرة أخرى
+                            continue
+                    except:
+                        pass
 
-                    reply = generate_comment_reply(commenter_name, comment_text, post_text)
-                    if not reply:
-                        continue
+                reply = generate_comment_reply(commenter_name, comment_text, post_text)
+                if not reply:
+                    continue
 
-                    ok = reply_to_comment(cid, reply)
-                    if ok:
-                        replied_ids.add(cid)
-                        data['comment_replied_ids'] = list(replied_ids)[-500:]
+                ok = reply_to_comment(cid, reply)
+                if ok:
+                    replied_ids.add(cid)
+                    new_replies += 1
+                    data['comment_replied_ids'] = list(replied_ids)[-1000:]
+                    data.setdefault('comment_stats', {})[today] = \
+                        data['comment_stats'].get(today, 0) + 1
+                    data.setdefault('comment_log', []).insert(0, {
+                        'time': datetime.now().strftime('%Y-%m-%d %H:%M'),
+                        'post_id': post_id,
+                        'post_text': post_text[:100],
+                        'commenter': commenter_name,
+                        'comment': comment_text[:200],
+                        'reply': reply[:200]
+                    })
+                    data['comment_log'] = data['comment_log'][:200]
+                    add_log(f"💬 رد على {commenter_name}: {comment_text[:40]}")
+                    time.sleep(4)  # تأخير بين الردود
 
-                        # إحصائيات يومية
-                        if 'comment_stats' not in data:
-                            data['comment_stats'] = {}
-                        data['comment_stats'][today] = data['comment_stats'].get(today, 0) + 1
-
-                        # سجل التعليقات
-                        if 'comment_log' not in data:
-                            data['comment_log'] = []
-                        data['comment_log'].insert(0, {
-                            'time': datetime.now().strftime('%Y-%m-%d %H:%M'),
-                            'post_id': post_id,
-                            'post_text': post_text[:100],
-                            'commenter': commenter_name,
-                            'comment': comment_text[:200],
-                            'reply': reply[:200]
-                        })
-                        data['comment_log'] = data['comment_log'][:200]
-
-                        add_log(f"💬 رد على {commenter_name}: {comment_text[:40]}")
-                        time.sleep(3)  # تأخير بين الردود لتجنب الحظر
-
+        if new_replies > 0:
             save_data()
-        except Exception as e:
-            add_log(f"⚠️ خطأ حلقة التعليقات: {e}")
+            add_log(f"✅ {new_replies} رد جديد على التعليقات")
+
+    except Exception as e:
+        add_log(f"⚠️ خطأ فحص التعليقات: {e}")
+
+def comments_loop():
+    """حلقة مراقبة التعليقات — يفحص فوراً ثم كل X دقائق"""
+    time.sleep(10)  # انتظر 10 ثوان بعد بدء السيرفر فقط
+    while True:
+        process_comments_once()
+        settings = data.get('comment_settings', {})
+        interval = int(settings.get('check_interval_minutes', 5)) * 60
+        time.sleep(interval)
 
 # ========== نشر المنشورات التلقائي ==========
 
@@ -1617,6 +1642,24 @@ def api_publish_settings_save():
     save_data()
     add_log("⚙️ تم تحديث إعدادات النشر")
     return jsonify({'success': True})
+
+# ========== API: Clear Message Counters ==========
+@app.route('/api/clear_msgs', methods=['POST'])
+def api_clear_msgs():
+    body = request.json or {}
+    if body.get('password') != OWNER_PASSWORD:
+        return jsonify({'success': False, 'error': 'Wrong password'})
+    data['stats']['msgs_received'] = 0
+    data['stats']['msgs_sent'] = 0
+    save_data()
+    add_log("🗑️ تم مسح عدادات الرسائل")
+    return jsonify({'success': True})
+
+# ========== API: Manual Comments Check ==========
+@app.route('/api/comments/check_now', methods=['POST'])
+def api_comments_check_now():
+    threading.Thread(target=process_comments_once, daemon=True).start()
+    return jsonify({'success': True, 'message': 'Comment check started'})
 
 # ========== Keep-Alive كل 30 ثانية ==========
 def keep_alive_loop():
