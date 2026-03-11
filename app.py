@@ -976,8 +976,10 @@ def webhook():
 
 def handle_new_comment(comment_id, commenter_name, commenter_id, comment_text, post_id):
     """معالجة تعليق جديد فور وصوله عبر Webhook"""
+    # تحقق مزدوج — الأول هنا، الثاني داخل reply_to_comment
     replied_ids = set(data.get('comment_replied_ids', []))
     if comment_id in replied_ids:
+        add_log(f"⏭️ تعليق مكرر تجاهله: {comment_id[:10]}")
         return
 
     # جلب نص المنشور
@@ -1283,9 +1285,9 @@ def get_post_comments(post_id):
         url = f'https://graph.facebook.com/v18.0/{post_id}/comments'
         params = {
             'access_token': PAGE_ACCESS_TOKEN,
-            'fields': 'id,message,from,created_time,comment_count',
+            'fields': 'id,message,from{id,name},created_time',
             'limit': 100,
-            'filter': 'stream'  # يجلب كل التعليقات بما فيها ردود الردود
+            'filter': 'stream'
         }
         r = requests.get(url, params=params, timeout=10)
         if r.status_code == 200:
@@ -1299,7 +1301,15 @@ def get_post_comments(post_id):
     return comments
 
 def reply_to_comment(comment_id, reply_text):
-    """الرد على تعليق"""
+    """الرد على تعليق — مع تسجيل فوري قبل الإرسال لمنع التكرار"""
+    # تسجيل فوري قبل الطلب لمنع أي تكرار من حلقات متوازية
+    replied_ids = set(data.get('comment_replied_ids', []))
+    if comment_id in replied_ids:
+        add_log(f"⏭️ تخطي تعليق مكرر: {comment_id[:10]}")
+        return False
+    replied_ids.add(comment_id)
+    data['comment_replied_ids'] = list(replied_ids)[-1000:]
+
     try:
         r = requests.post(
             f'https://graph.facebook.com/v18.0/{comment_id}/comments',
@@ -1310,9 +1320,14 @@ def reply_to_comment(comment_id, reply_text):
         if r.status_code == 200:
             return True
         else:
+            # إزالته من القائمة لو فشل الإرسال
+            replied_ids.discard(comment_id)
+            data['comment_replied_ids'] = list(replied_ids)
             add_log(f"⚠️ فشل الرد على تعليق: {r.status_code} {r.text[:80]}")
             return False
     except Exception as e:
+        replied_ids.discard(comment_id)
+        data['comment_replied_ids'] = list(replied_ids)
         add_log(f"❌ خطأ الرد على تعليق: {e}")
         return False
 
