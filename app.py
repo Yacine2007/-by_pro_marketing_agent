@@ -923,32 +923,104 @@ def verify():
 @app.route('/webhook', methods=['POST'])
 def webhook():
     body = request.json
-    if body and body.get('object') == 'page':
-        for entry in body.get('entry', []):
-            for msg in entry.get('messaging', []):
-                sender = str(msg['sender']['id'])
-                message = msg.get('message', {})
+    if not body or body.get('object') != 'page':
+        return 'OK', 200
 
-                # معالجة الأزرار السريعة (quick replies)
-                if message.get('quick_reply'):
-                    payload = message['quick_reply'].get('payload', '')
-                    if is_owner(sender) or is_verified_admin(sender):
-                        threading.Thread(
-                            target=handle_quick_reply_payload,
-                            args=(sender, payload), daemon=True
-                        ).start()
-                    continue
+    for entry in body.get('entry', []):
 
-                # رسائل نصية عادية
-                if 'text' in message:
-                    text = message['text']
-                    # إذا أرسل المدير "menu" أو "قائمة" أو "مساعدة"
-                    if (is_owner(sender) or is_verified_admin(sender)) and \
-                       text.strip().lower() in ['menu', 'قائمة', 'مساعدة', 'help', 'القائمة']:
-                        threading.Thread(target=send_owner_menu, args=(sender,), daemon=True).start()
-                    else:
-                        threading.Thread(target=process_message, args=(sender, text), daemon=True).start()
+        # ===== أحداث Feed (تعليقات على المنشورات) =====
+        for change in entry.get('changes', []):
+            val = change.get('value', {})
+            item = val.get('item', '')
+            verb = val.get('verb', '')
+            # تعليق جديد على منشور الصفحة
+            if item == 'comment' and verb == 'add':
+                comment_id = val.get('comment_id', '')
+                from_info = val.get('from', {})
+                commenter_name = from_info.get('name', '')
+                commenter_id = from_info.get('id', '')
+                comment_text = val.get('message', '')
+                post_id = val.get('post_id', '')
+                add_log(f"💬 تعليق جديد من {commenter_name or commenter_id}: {comment_text[:50]}")
+                if comment_id and comment_text:
+                    threading.Thread(
+                        target=handle_new_comment,
+                        args=(comment_id, commenter_name, commenter_id, comment_text, post_id),
+                        daemon=True
+                    ).start()
+
+        # ===== رسائل Messenger =====
+        for msg in entry.get('messaging', []):
+            sender = str(msg['sender']['id'])
+            message = msg.get('message', {})
+
+            if message.get('quick_reply'):
+                payload = message['quick_reply'].get('payload', '')
+                if is_owner(sender) or is_verified_admin(sender):
+                    threading.Thread(
+                        target=handle_quick_reply_payload,
+                        args=(sender, payload), daemon=True
+                    ).start()
+                continue
+
+            if 'text' in message:
+                text = message['text']
+                if (is_owner(sender) or is_verified_admin(sender)) and \
+                   text.strip().lower() in ['menu', 'قائمة', 'مساعدة', 'help', 'القائمة']:
+                    threading.Thread(target=send_owner_menu, args=(sender,), daemon=True).start()
+                else:
+                    threading.Thread(target=process_message, args=(sender, text), daemon=True).start()
+
     return 'OK', 200
+
+
+def handle_new_comment(comment_id, commenter_name, commenter_id, comment_text, post_id):
+    """معالجة تعليق جديد فور وصوله عبر Webhook"""
+    replied_ids = set(data.get('comment_replied_ids', []))
+    if comment_id in replied_ids:
+        return
+
+    # جلب نص المنشور
+    post_text = ''
+    try:
+        r = requests.get(
+            f'https://graph.facebook.com/v18.0/{post_id}',
+            params={'access_token': PAGE_ACCESS_TOKEN, 'fields': 'message'},
+            timeout=8
+        )
+        if r.status_code == 200:
+            post_text = r.json().get('message', '')
+    except:
+        pass
+
+    display_name = commenter_name or 'صديق'
+    reply_text = generate_comment_reply(display_name, comment_text, post_text)
+    if not reply_text:
+        return
+
+    # إضافة @tag إذا كان لدينا ID المعلق
+    if commenter_id:
+        final_reply = f"@[{commenter_id}] {reply_text}"
+    else:
+        final_reply = reply_text
+
+    ok = reply_to_comment(comment_id, final_reply)
+    if ok:
+        replied_ids.add(comment_id)
+        data['comment_replied_ids'] = list(replied_ids)[-1000:]
+        today = datetime.now().strftime('%Y-%m-%d')
+        data.setdefault('comment_stats', {})[today] = data['comment_stats'].get(today, 0) + 1
+        data.setdefault('comment_log', []).insert(0, {
+            'time': datetime.now().strftime('%Y-%m-%d %H:%M'),
+            'post_id': post_id,
+            'post_text': post_text[:100],
+            'commenter': display_name,
+            'comment': comment_text[:200],
+            'reply': final_reply[:200]
+        })
+        data['comment_log'] = data['comment_log'][:200]
+        save_data()
+        add_log(f"✅ رد على {display_name}: {comment_text[:30]}")
 
 # ========== لوحة التحكم ==========
 @app.route('/')
@@ -1295,6 +1367,7 @@ def process_comments_once():
                 # جلب اسم المعلق — يكون في 'from' أو نتركه 'صديق'
                 from_data = comment.get('from') or {}
                 commenter_name = from_data.get('name', '') or 'صديق'
+                commenter_id = from_data.get('id', '')
                 comment_text = (comment.get('message') or '').strip()
 
                 if not comment_text:
@@ -1317,7 +1390,10 @@ def process_comments_once():
                 if not reply:
                     continue
 
-                ok = reply_to_comment(cid, reply)
+                # إضافة @tag لإرسال الإشعار للمعلق
+                final_reply = f"@[{commenter_id}] {reply}" if commenter_id else reply
+
+                ok = reply_to_comment(cid, final_reply)
                 if ok:
                     replied_ids.add(cid)
                     new_replies += 1
