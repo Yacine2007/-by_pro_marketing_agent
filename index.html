@@ -221,6 +221,9 @@ textarea.fi{resize:vertical;min-height:105px;font-family:'Courier New',monospace
       <div class="nlabel">CRM</div>
       <button class="nbtn" onclick="goPage('orders',this)"><i class="fa fa-box"></i> Orders</button>
       <button class="nbtn" onclick="goPage('clients',this)"><i class="fa fa-users"></i> Clients</button>
+      <div class="nlabel">Marketing</div>
+      <button class="nbtn" onclick="goPage('comments',this)"><i class="fa fa-comments"></i> Comments</button>
+      <button class="nbtn" onclick="goPage('publishing',this)"><i class="fa fa-bullhorn"></i> Publishing</button>
       <div class="nlabel">System</div>
       <button class="nbtn" onclick="goPage('admins',this)"><i class="fa fa-shield-halved"></i> Admins</button>
       <button class="nbtn" onclick="goPage('settings',this)"><i class="fa fa-gear"></i> Settings</button>
@@ -331,6 +334,78 @@ textarea.fi{resize:vertical;min-height:105px;font-family:'Courier New',monospace
       </div>
     </div>
 
+    <!-- COMMENTS -->
+    <div class="page" id="page-comments">
+      <div class="topbar">
+        <h2><i class="fa fa-comments" style="color:var(--blue2);margin-right:8px"></i>Auto Comments</h2>
+        <div style="display:flex;gap:9px;flex-wrap:wrap">
+          <button class="btn bs" onclick="toggleComments(true)"><i class="fa fa-play"></i> Enable</button>
+          <button class="btn bd" onclick="toggleComments(false)"><i class="fa fa-stop"></i> Disable</button>
+          <button class="btn bp" onclick="saveCommentSettings()"><i class="fa fa-save"></i> Save Settings</button>
+        </div>
+      </div>
+      <!-- Stats -->
+      <div class="sgrid" style="grid-template-columns:repeat(auto-fill,minmax(130px,1fr));margin-bottom:16px">
+        <div class="sc blue"><div class="sl">Today Replies</div><div class="sv" id="cs-today">—</div><i class="fa fa-comment-dots si"></i></div>
+        <div class="sc green"><div class="sl">Total Replies</div><div class="sv" id="cs-total">—</div><i class="fa fa-comments si"></i></div>
+        <div class="sc" id="cs-statuscard"><div class="sl">Status</div><div class="sv" id="cs-status" style="font-size:1rem">—</div></div>
+      </div>
+      <!-- Settings -->
+      <div class="sgrd" style="margin-bottom:16px">
+        <div class="scard">
+          <h3><i class="fa fa-gear"></i> Settings</h3>
+          <div class="fg"><label>Check Interval (minutes)</label><input class="fi" type="number" id="cs-interval" value="5" min="1" max="60"></div>
+        </div>
+        <div class="scard full">
+          <h3><i class="fa fa-robot"></i> Comment Reply Prompt</h3>
+          <div class="fg"><textarea class="fi" id="cs-prompt" style="min-height:160px"></textarea></div>
+        </div>
+      </div>
+      <!-- Log -->
+      <div class="card">
+        <div class="chd">
+          <h3><i class="fa fa-list" style="color:var(--blue2)"></i> Comments & Replies Log</h3>
+          <button class="btn bg" onclick="loadComments()"><i class="fa fa-sync"></i> Refresh</button>
+        </div>
+        <div style="overflow-x:auto"><table>
+          <thead><tr><th>Time</th><th>Post</th><th>Commenter</th><th>Comment</th><th>Reply</th></tr></thead>
+          <tbody id="ctb"><tr><td colspan="5" class="empty">Loading...</td></tr></tbody>
+        </table></div>
+      </div>
+    </div>
+
+    <!-- PUBLISHING -->
+    <div class="page" id="page-publishing">
+      <div class="topbar">
+        <h2><i class="fa fa-bullhorn" style="color:var(--blue2);margin-right:8px"></i>Publishing</h2>
+        <div style="display:flex;gap:9px;flex-wrap:wrap">
+          <button class="btn bp" onclick="publishNow()"><i class="fa fa-paper-plane"></i> Publish Now</button>
+          <button class="btn bs" onclick="togglePublish(true)"><i class="fa fa-clock"></i> Enable Auto</button>
+          <button class="btn bd" onclick="togglePublish(false)"><i class="fa fa-stop"></i> Disable Auto</button>
+          <button class="btn bg" onclick="savePublishSettings()"><i class="fa fa-save"></i> Save</button>
+        </div>
+      </div>
+      <div class="sgrd">
+        <div class="scard">
+          <h3><i class="fa fa-clock"></i> Auto-Publish Schedule</h3>
+          <div class="fg"><label>Interval (minutes between posts)</label><input class="fi" type="number" id="pub-interval" value="60" min="10"></div>
+          <div class="fg" style="display:flex;align-items:center;gap:10px;margin-top:8px">
+            <input type="checkbox" id="pub-chatbtn" checked style="width:16px;height:16px">
+            <label style="font-size:.85rem;color:var(--black);text-transform:none;letter-spacing:0">Add "Send Message" button to post</label>
+          </div>
+          <div class="fg" style="margin-top:12px">
+            <label>Last Published</label>
+            <div class="fi" id="pub-last" style="background:var(--bg);color:var(--muted);cursor:default">—</div>
+          </div>
+          <div id="pub-statusbadge" style="margin-top:10px"></div>
+        </div>
+        <div class="scard full">
+          <h3><i class="fa fa-pen"></i> Post Text <span style="font-size:.7rem;font-weight:400;color:var(--muted);margin-left:8px">This text will be published automatically</span></h3>
+          <div class="fg"><textarea class="fi" id="pub-text" style="min-height:380px;line-height:1.7"></textarea></div>
+        </div>
+      </div>
+    </div>
+
   </main>
 </div>
 
@@ -392,7 +467,7 @@ function goPage(id,btn){
   document.getElementById('page-'+id).classList.add('active');
   if(btn) btn.classList.add('active');
   closeSB();
-  ({analytics:loadAnl,orders:loadOrd,clients:loadCli,admins:loadAdm,settings:loadSet})[id]?.();
+  ({analytics:loadAnl,orders:loadOrd,clients:loadCli,admins:loadAdm,settings:loadSet,comments:loadComments,publishing:loadPublish})[id]?.();
 }
 function toggleSB(){document.getElementById('sb').classList.toggle('open');document.getElementById('ov').classList.toggle('show');}
 function closeSB(){document.getElementById('sb').classList.remove('open');document.getElementById('ov').classList.remove('show');}
@@ -613,8 +688,91 @@ async function checkNew(){
   }catch(e){}
 }
 
-// INIT
-function init(){
+
+// ===== COMMENTS =====
+async function loadComments(){
+  try{
+    const [sr,lr]=await Promise.all([fetch('/api/comments/stats'),fetch('/api/comments/log')]);
+    const s=await sr.json(), log=await lr.json();
+    document.getElementById('cs-today').textContent=s.today;
+    document.getElementById('cs-total').textContent=s.total;
+    const enabled=s.enabled;
+    document.getElementById('cs-status').textContent=enabled?'🟢 Active':'🔴 Stopped';
+    // Settings
+    const cr=await fetch('/api/comments/settings');
+    const cs=await cr.json();
+    document.getElementById('cs-interval').value=cs.check_interval_minutes||5;
+    document.getElementById('cs-prompt').value=cs.prompt||'';
+    // Log table
+    const tb=document.getElementById('ctb');
+    if(!log.length){tb.innerHTML='<tr><td colspan="5" class="empty">No replies yet</td></tr>';return;}
+    tb.innerHTML=log.map(l=>`<tr>
+      <td style="color:var(--muted);font-size:.73rem;white-space:nowrap">${l.time}</td>
+      <td style="max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:.75rem">${l.post_text||'—'}</td>
+      <td><strong>${l.commenter}</strong></td>
+      <td style="max-width:160px;font-size:.8rem">${l.comment}</td>
+      <td style="max-width:180px;font-size:.8rem;color:var(--blue2)">${l.reply}</td>
+    </tr>`).join('');
+  }catch(e){console.error(e);}
+}
+async function toggleComments(on){
+  await fetch('/api/comments/settings',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({enabled:on})});
+  toast(on?'Comments auto-reply enabled':'Comments auto-reply disabled', on?'ok':'');
+  loadComments();
+}
+async function saveCommentSettings(){
+  const body={
+    check_interval_minutes:parseInt(document.getElementById('cs-interval').value)||5,
+    prompt:document.getElementById('cs-prompt').value
+  };
+  const r=await fetch('/api/comments/settings',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+  const d=await r.json();
+  if(d.success)toast('Comment settings saved','ok'); else toast('Save failed','err');
+}
+
+// ===== PUBLISHING =====
+async function loadPublish(){
+  try{
+    const r=await fetch('/api/publish/settings');
+    const s=await r.json();
+    document.getElementById('pub-interval').value=s.interval_minutes||60;
+    document.getElementById('pub-text').value=s.post_text||'';
+    document.getElementById('pub-chatbtn').checked=s.add_chat_button!==false;
+    document.getElementById('pub-last').textContent=s.last_published?(new Date(s.last_published).toLocaleString()):'Never';
+    const badge=document.getElementById('pub-statusbadge');
+    badge.innerHTML=s.enabled
+      ?'<span class="bdg bdg-done">🟢 Auto-publish Active</span>'
+      :'<span class="bdg" style="background:var(--red-bg);color:var(--red);border:1px solid var(--red-bd)">🔴 Auto-publish Stopped</span>';
+  }catch(e){console.error(e);}
+}
+async function publishNow(){
+  const text=document.getElementById('pub-text').value;
+  const add_chat_button=document.getElementById('pub-chatbtn').checked;
+  if(!text){toast('Please enter post text first','err');return;}
+  toast('Publishing...','');
+  const r=await fetch('/api/publish/now',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({text,add_chat_button})});
+  const d=await r.json();
+  if(d.success){toast('✅ Published successfully!','ok');loadPublish();}
+  else toast('❌ Failed: '+d.result,'err');
+}
+async function togglePublish(on){
+  const body={enabled:on};
+  if(on){body.post_text=document.getElementById('pub-text').value;body.interval_minutes=parseInt(document.getElementById('pub-interval').value)||60;}
+  await fetch('/api/publish/settings',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+  toast(on?'Auto-publish enabled':'Auto-publish disabled',on?'ok':'');
+  loadPublish();
+}
+async function savePublishSettings(){
+  const body={
+    interval_minutes:parseInt(document.getElementById('pub-interval').value)||60,
+    post_text:document.getElementById('pub-text').value,
+    add_chat_button:document.getElementById('pub-chatbtn').checked
+  };
+  const r=await fetch('/api/publish/settings',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+  const d=await r.json();
+  if(d.success)toast('Publishing settings saved','ok'); else toast('Save failed','err');
+}
+
   reqNotif();loadAnl();
   fetch('/api/orders').then(r=>r.json()).then(ords=>{allOrd=ords;if(ords.length)lastTs=ords[0].timestamp||'';});
   setInterval(()=>{if(document.getElementById('page-analytics').classList.contains('active'))loadAnl();checkNew();},30000);
