@@ -773,6 +773,8 @@ async function savePublishSettings(){
   if(d.success)toast('Publishing settings saved','ok'); else toast('Save failed','err');
 }
 
+// INIT
+function init(){
   reqNotif();loadAnl();
   fetch('/api/orders').then(r=>r.json()).then(ords=>{allOrd=ords;if(ords.length)lastTs=ords[0].timestamp||'';});
   setInterval(()=>{if(document.getElementById('page-analytics').classList.contains('active'))loadAnl();checkNew();},30000);
