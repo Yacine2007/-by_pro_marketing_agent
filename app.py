@@ -88,7 +88,72 @@ OWNER_PERSONALITY = """أنت "أحمد"، وكيل تسويق خدمات شرك
 - أجبه بنفس اللغة التي يكتب بها (عربي أو إنجليزي أو فرنسي)
 - لا تبدأ كل رد بـ "سيدي المدير" — استخدمها بشكل طبيعي وليس في كل جملة"""
 
-# ========== تخزين JSONBin.io ==========
+
+# ========== برومبت الردود على التعليقات ==========
+COMMENT_PERSONALITY = """أنت "أحمد"، وكيل تسويق شركة B.Y PRO للتكنولوجيا والبرمجيات.
+
+مهمتك: الرد على تعليقات المتابعين على منشورات الصفحة.
+
+قواعد الرد:
+- خاطب المعلق باسمه دائماً في بداية الرد
+- ردودك قصيرة ومشجعة (2-4 أسطر فقط)
+- إذا كان التعليق سؤالاً تقنياً أو طلب خدمة → اقترح عليه التواصل عبر الماسنجر
+- إذا كان إطراءً أو تشجيعاً → اشكره وأضف جملة تسويقية خفيفة
+- إذا كان استفساراً عن أسعار → أعطه نطاق سعري مختصر وادعه للماسنجر
+- لا تبدو كبوت — تكلم بشكل طبيعي وودي
+- أجب بنفس لغة التعليق (عربي أو إنجليزي أو فرنسي)
+- لا تضع هاشتاقات في الردود"""
+
+# ========== نص المنشور الافتراضي ==========
+DEFAULT_POST_TEXT = """🚀 B.Y PRO | حلول تقنية متكاملة تقود أعمالك نحو الريادة
+
+✨ نحن لا نبني مجرد برمجيات، بل نصمم أدوات ذكية تضاعف نمو أعمالك وتضمن تفوقك المستمر.
+
+━━━━━━━━━━━━━━━━━━━━━━
+💼 حلولنا الاحترافية (جودة عالمية وتنفيذ متقن):
+━━━━━━━━━━━━━━━━━━━━━━
+
+🌐 المنصات الرقمية
+تطوير مواقع إلكترونية فائقة السرعة، متجاوبة، ومجهزة تقنياً لتصدر نتائج البحث (SEO).
+
+📱 تطبيقات الجوال
+تجربة مستخدم (UX) استثنائية على iOS وAndroid تجمع بين الأناقة وسلاسة الأداء.
+
+☁️ الأنظمة السحابية المخصصة
+تطوير أنظمة (ERP - CRM) وأتمتة العمليات لرفع كفاءة فريقك بنسبة 100%.
+
+🤖 تقنيات الذكاء الاصطناعي
+دمج Chatbots ذكية، تحليل بيانات تنبؤي، وصناعة محتوى آلي متقدم.
+
+🎨 الهوية البصرية
+صياغة بصمة بصرية فريدة (Logo & Branding) تعكس قيم مشروعك وتجذب عملاءك.
+
+🎬 المحتوى المرئي
+مونتاج فيديو تسويقي وصناعة محتوى يروي قصة نجاحك بأسلوب احترافي.
+
+📈 استراتيجيات النمو الرقمي
+بناء مجتمعات حقيقية وتفاعل مستهدف يحوّل المتابعين إلى عملاء.
+
+🛡️ الاستشارات والدعم
+مرافقة تقنية مستمرة 24/7 لضمان استقرار وتطور أعمالك دون توقف.
+
+━━━━━━━━━━━━━━━━━━━━━━
+🏆 لماذا يثق رواد الأعمال في B.Y PRO؟
+━━━━━━━━━━━━━━━━━━━━━━
+
+1️⃣ الابتكار المستدام — أحدث التقنيات لضمان بقاء مشروعك في الصدارة دائماً
+2️⃣ الالتزام المطلق — التسليم في الموعد المحدد هو ميثاقنا
+3️⃣ عائد الاستثمار (ROI) — حلولنا مصممة لزيادة المبيعات وتقليل التكاليف
+4️⃣ مرونة فائقة — خطط دفع ميسرة تناسب الشركات الناشئة والمؤسسات الكبرى
+
+━━━━━━━━━━━━━━━━━━━━━━
+⚡ مستقبل أعمالك يبدأ بقرار الآن!
+━━━━━━━━━━━━━━━━━━━━━━
+
+لا تترك المنافس يسبقك 👇
+📩 راسلنا الآن ونبدأ فوراً!
+
+#BY_PRO #تحول_رقمي #ذكاء_اصطناعي #برمجة #تسويق_رقمي #ريادة_الأعمال #تطوير_مواقع"""
 def jsonbin_read():
     if not BIN_ID or not X_MASTER_KEY:
         return {}
@@ -138,6 +203,22 @@ DEFAULT_DATA = {
         'msgs_received': 0,
         'msgs_sent': 0,
         'start_time': datetime.now().isoformat()
+    },
+    # إعدادات التعليقات والنشر
+    'comment_replied_ids': [],      # IDs التعليقات التي تم الرد عليها
+    'comment_stats': {},            # إحصائيات التعليقات اليومية
+    'comment_log': [],              # سجل التعليقات والردود
+    'publish_settings': {
+        'enabled': False,
+        'interval_minutes': 60,
+        'post_text': '',
+        'add_chat_button': True,
+        'last_published': ''
+    },
+    'comment_settings': {
+        'enabled': False,
+        'prompt': '',
+        'check_interval_minutes': 5
     }
 }
 
@@ -845,10 +926,28 @@ def webhook():
     if body and body.get('object') == 'page':
         for entry in body.get('entry', []):
             for msg in entry.get('messaging', []):
-                if 'message' in msg and 'text' in msg['message']:
-                    sender = str(msg['sender']['id'])
-                    text = msg['message']['text']
-                    threading.Thread(target=process_message, args=(sender, text), daemon=True).start()
+                sender = str(msg['sender']['id'])
+                message = msg.get('message', {})
+
+                # معالجة الأزرار السريعة (quick replies)
+                if message.get('quick_reply'):
+                    payload = message['quick_reply'].get('payload', '')
+                    if is_owner(sender) or is_verified_admin(sender):
+                        threading.Thread(
+                            target=handle_quick_reply_payload,
+                            args=(sender, payload), daemon=True
+                        ).start()
+                    continue
+
+                # رسائل نصية عادية
+                if 'text' in message:
+                    text = message['text']
+                    # إذا أرسل المدير "menu" أو "قائمة" أو "مساعدة"
+                    if (is_owner(sender) or is_verified_admin(sender)) and \
+                       text.strip().lower() in ['menu', 'قائمة', 'مساعدة', 'help', 'القائمة']:
+                        threading.Thread(target=send_owner_menu, args=(sender,), daemon=True).start()
+                    else:
+                        threading.Thread(target=process_message, args=(sender, text), daemon=True).start()
     return 'OK', 200
 
 # ========== لوحة التحكم ==========
@@ -1070,6 +1169,455 @@ def api_reset():
     add_log("🔄 تم إعادة تعيين البيانات من لوحة التحكم")
     return jsonify({'success': True})
 
+
+# ========== ردود فيسبوك على التعليقات ==========
+
+def get_page_id():
+    """جلب Page ID من API"""
+    try:
+        r = requests.get(
+            f'https://graph.facebook.com/v18.0/me',
+            params={'access_token': PAGE_ACCESS_TOKEN, 'fields': 'id,name'},
+            timeout=8
+        )
+        if r.status_code == 200:
+            return r.json().get('id')
+    except:
+        pass
+    return None
+
+def get_recent_posts(page_id, limit=10):
+    """جلب آخر منشورات الصفحة"""
+    try:
+        r = requests.get(
+            f'https://graph.facebook.com/v18.0/{page_id}/posts',
+            params={
+                'access_token': PAGE_ACCESS_TOKEN,
+                'fields': 'id,message,created_time',
+                'limit': limit
+            },
+            timeout=10
+        )
+        if r.status_code == 200:
+            return r.json().get('data', [])
+    except Exception as e:
+        add_log(f"❌ خطأ جلب المنشورات: {e}")
+    return []
+
+def get_post_comments(post_id):
+    """جلب تعليقات منشور"""
+    try:
+        r = requests.get(
+            f'https://graph.facebook.com/v18.0/{post_id}/comments',
+            params={
+                'access_token': PAGE_ACCESS_TOKEN,
+                'fields': 'id,message,from,created_time',
+                'limit': 50
+            },
+            timeout=10
+        )
+        if r.status_code == 200:
+            return r.json().get('data', [])
+    except Exception as e:
+        add_log(f"❌ خطأ جلب التعليقات: {e}")
+    return []
+
+def reply_to_comment(comment_id, reply_text):
+    """الرد على تعليق"""
+    try:
+        r = requests.post(
+            f'https://graph.facebook.com/v18.0/{comment_id}/comments',
+            params={'access_token': PAGE_ACCESS_TOKEN},
+            json={'message': reply_text},
+            timeout=10
+        )
+        return r.status_code == 200
+    except Exception as e:
+        add_log(f"❌ خطأ الرد على تعليق: {e}")
+        return False
+
+def generate_comment_reply(commenter_name, comment_text, post_text):
+    """توليد رد على تعليق بالـ AI"""
+    comment_prompt = data.get('comment_settings', {}).get('prompt') or COMMENT_PERSONALITY
+    full_prompt = (
+        f"{comment_prompt}\n\n"
+        f"المنشور الأصلي: {post_text[:300]}\n\n"
+        f"اسم المعلق: {commenter_name}\n"
+        f"التعليق: {comment_text}\n\n"
+        f"اكتب رداً مناسباً يخاطبه باسمه:"
+    )
+    try:
+        url = f'{AI_API_URL}?text={requests.utils.quote(full_prompt)}'
+        r = requests.get(url, timeout=15)
+        if r.status_code == 200:
+            answer = r.json().get('response', '').strip()
+            if answer:
+                return answer[:500]
+    except Exception as e:
+        add_log(f"❌ خطأ AI للتعليق: {e}")
+    return None
+
+def comments_loop():
+    """حلقة مراقبة التعليقات وإضافة الردود"""
+    while True:
+        try:
+            settings = data.get('comment_settings', {})
+            interval = int(settings.get('check_interval_minutes', 5)) * 60
+            time.sleep(interval)
+
+            if not settings.get('enabled') or not PAGE_ACCESS_TOKEN:
+                continue
+
+            page_id = get_page_id()
+            if not page_id:
+                continue
+
+            posts = get_recent_posts(page_id, limit=15)
+            replied_ids = set(data.get('comment_replied_ids', []))
+            today = datetime.now().strftime('%Y-%m-%d')
+
+            for post in posts:
+                post_id = post.get('id')
+                post_text = post.get('message', '')
+                comments = get_post_comments(post_id)
+
+                for comment in comments:
+                    cid = comment.get('id')
+                    if cid in replied_ids:
+                        continue
+
+                    commenter = comment.get('from', {})
+                    commenter_name = commenter.get('name', 'صديق')
+                    comment_text = comment.get('message', '')
+
+                    if not comment_text:
+                        continue
+
+                    reply = generate_comment_reply(commenter_name, comment_text, post_text)
+                    if not reply:
+                        continue
+
+                    ok = reply_to_comment(cid, reply)
+                    if ok:
+                        replied_ids.add(cid)
+                        data['comment_replied_ids'] = list(replied_ids)[-500:]
+
+                        # إحصائيات يومية
+                        if 'comment_stats' not in data:
+                            data['comment_stats'] = {}
+                        data['comment_stats'][today] = data['comment_stats'].get(today, 0) + 1
+
+                        # سجل التعليقات
+                        if 'comment_log' not in data:
+                            data['comment_log'] = []
+                        data['comment_log'].insert(0, {
+                            'time': datetime.now().strftime('%Y-%m-%d %H:%M'),
+                            'post_id': post_id,
+                            'post_text': post_text[:100],
+                            'commenter': commenter_name,
+                            'comment': comment_text[:200],
+                            'reply': reply[:200]
+                        })
+                        data['comment_log'] = data['comment_log'][:200]
+
+                        add_log(f"💬 رد على {commenter_name}: {comment_text[:40]}")
+                        time.sleep(3)  # تأخير بين الردود لتجنب الحظر
+
+            save_data()
+        except Exception as e:
+            add_log(f"⚠️ خطأ حلقة التعليقات: {e}")
+
+# ========== نشر المنشورات التلقائي ==========
+
+def publish_post(text, add_chat_button=True):
+    """نشر منشور على الصفحة"""
+    if not PAGE_ACCESS_TOKEN:
+        return False, "PAGE_ACCESS_TOKEN غير موجود"
+    try:
+        page_id = get_page_id()
+        if not page_id:
+            return False, "لم يتم جلب Page ID"
+
+        payload = {'message': text, 'access_token': PAGE_ACCESS_TOKEN}
+
+        if add_chat_button:
+            payload['call_to_action'] = {
+                'type': 'MESSAGE_PAGE',
+                'value': {'app_destination': 'MESSENGER'}
+            }
+
+        r = requests.post(
+            f'https://graph.facebook.com/v18.0/{page_id}/feed',
+            json=payload,
+            timeout=15
+        )
+        if r.status_code == 200:
+            post_id = r.json().get('id', '')
+            add_log(f"📢 تم نشر منشور: {post_id}")
+            data.setdefault('publish_settings', {})['last_published'] = datetime.now().isoformat()
+            save_data()
+            return True, post_id
+        else:
+            err = r.json().get('error', {}).get('message', r.text[:100])
+            add_log(f"❌ فشل النشر: {err}")
+            return False, err
+    except Exception as e:
+        add_log(f"❌ خطأ النشر: {e}")
+        return False, str(e)
+
+def publish_loop():
+    """حلقة النشر التلقائي"""
+    while True:
+        try:
+            time.sleep(60)
+            settings = data.get('publish_settings', {})
+            if not settings.get('enabled') or not settings.get('post_text'):
+                continue
+            interval = int(settings.get('interval_minutes', 60)) * 60
+            last = settings.get('last_published', '')
+            if last:
+                elapsed = (datetime.now() - datetime.fromisoformat(last)).total_seconds()
+                if elapsed < interval:
+                    continue
+            text = settings.get('post_text', '')
+            add_btn = settings.get('add_chat_button', True)
+            publish_post(text, add_btn)
+        except Exception as e:
+            add_log(f"⚠️ خطأ حلقة النشر: {e}")
+
+# ========== أزرار سريعة للمدير عبر الماسنجر ==========
+
+def send_quick_replies(sender_id, text, buttons):
+    """إرسال رسالة مع أزرار سريعة"""
+    if not PAGE_ACCESS_TOKEN:
+        return False
+    try:
+        url = f'https://graph.facebook.com/v18.0/me/messages?access_token={PAGE_ACCESS_TOKEN}'
+        payload = {
+            'recipient': {'id': sender_id},
+            'message': {
+                'text': text,
+                'quick_replies': [
+                    {'content_type': 'text', 'title': b['title'], 'payload': b['payload']}
+                    for b in buttons[:11]
+                ]
+            },
+            'messaging_type': 'RESPONSE'
+        }
+        r = requests.post(url, json=payload, timeout=8)
+        return r.status_code == 200
+    except:
+        return False
+
+def send_owner_menu(sender_id):
+    """إرسال القائمة الرئيسية للمدير"""
+    send_quick_replies(sender_id,
+        "🎛️ لوحة تحكم B.Y PRO — اختر:",
+        [
+            {'title': '📊 الإحصائيات',    'payload': 'STATS'},
+            {'title': '📋 كل الطلبات',    'payload': 'ALL_ORDERS'},
+            {'title': '📅 طلبات اليوم',   'payload': 'TODAY_ORDERS'},
+            {'title': '👥 العملاء',        'payload': 'CLIENTS'},
+            {'title': '🚫 المحظورون',      'payload': 'BLOCKED'},
+            {'title': '💬 التعليقات',      'payload': 'COMMENT_STATS'},
+            {'title': '📢 نشر الآن',       'payload': 'PUBLISH_NOW'},
+            {'title': '🔐 المدراء',        'payload': 'ADMINS'},
+        ]
+    )
+
+def handle_quick_reply_payload(sender_id, payload):
+    """معالجة الضغط على زر سريع"""
+    stats = get_live_stats()
+
+    if payload == 'STATS':
+        completed = len([o for o in data.get('orders', []) if o.get('status') == 'مكتمل'])
+        msg = (
+            f"📊 إحصائيات B.Y PRO\n━━━━━━━━━━━━━━━\n"
+            f"📦 إجمالي الطلبات: {stats['total_orders']}\n"
+            f"📅 اليوم: {stats['today_orders']}\n"
+            f"✅ مكتملة: {completed}\n"
+            f"⏳ معلقة: {stats['total_orders']-completed}\n"
+            f"👥 عملاء: {stats['unique_clients']}\n"
+            f"🚫 محظورون: {stats['blocked']}\n"
+            f"📨 واردة: {stats['msgs_received']} | 📤 صادرة: {stats['msgs_sent']}"
+        )
+        send_fb(sender_id, msg)
+        send_quick_replies(sender_id, "ماذا تريد؟", [
+            {'title': '📋 كل الطلبات', 'payload': 'ALL_ORDERS'},
+            {'title': '🏠 القائمة الرئيسية', 'payload': 'MAIN_MENU'}
+        ])
+
+    elif payload == 'ALL_ORDERS':
+        orders = list(reversed(data.get('orders', [])[-15:]))
+        if not orders:
+            send_fb(sender_id, "لا توجد طلبات بعد.")
+        else:
+            lines = [f"#{o['id']} {o.get('name','؟')} — {o.get('service','؟')} — {o.get('budget','؟')}$ [{o.get('status','جديد')}]" for o in orders]
+            send_fb(sender_id, f"📋 الطلبات ({len(data.get('orders',[]))} إجمالاً):\n" + "\n".join(lines))
+        send_quick_replies(sender_id, "إجراء على طلب؟", [
+            {'title': '✅ تحديد مكتمل', 'payload': 'COMPLETE_ORDER'},
+            {'title': '🗑️ حذف طلب',    'payload': 'DELETE_ORDER'},
+            {'title': '📝 ملاحظة',      'payload': 'NOTE_ORDER'},
+            {'title': '🏠 رئيسية',      'payload': 'MAIN_MENU'}
+        ])
+
+    elif payload == 'TODAY_ORDERS':
+        if stats['today_orders'] > 0:
+            lines = [f"#{o['id']} {o['name']} — {o['service']} — {o.get('budget','؟')}$" for o in stats['today_orders_list']]
+            send_fb(sender_id, f"📅 طلبات اليوم ({stats['today_orders']}):\n" + "\n".join(lines))
+        else:
+            send_fb(sender_id, "لا توجد طلبات اليوم.")
+        send_quick_replies(sender_id, "؟", [{'title': '🏠 رئيسية', 'payload': 'MAIN_MENU'}])
+
+    elif payload == 'CLIENTS':
+        orders = data.get('orders', [])
+        clients = {}
+        for o in orders:
+            n = o.get('name', '')
+            if n and n not in clients:
+                clients[n] = o.get('phone', '')
+        if clients:
+            lines = [f"• {n} — {p}" for n, p in list(clients.items())[-15:]]
+            send_fb(sender_id, f"👥 العملاء ({len(clients)}):\n" + "\n".join(lines))
+        else:
+            send_fb(sender_id, "لا يوجد عملاء بعد.")
+        send_quick_replies(sender_id, "؟", [{'title': '🏠 رئيسية', 'payload': 'MAIN_MENU'}])
+
+    elif payload == 'BLOCKED':
+        blocked = data.get('blocked', [])
+        if blocked:
+            send_fb(sender_id, f"🚫 المحظورون ({len(blocked)}):\n" + "\n".join(blocked[-15:]))
+        else:
+            send_fb(sender_id, "لا يوجد محظورون.")
+        send_quick_replies(sender_id, "؟", [{'title': '🏠 رئيسية', 'payload': 'MAIN_MENU'}])
+
+    elif payload == 'COMMENT_STATS':
+        today = datetime.now().strftime('%Y-%m-%d')
+        today_count = data.get('comment_stats', {}).get(today, 0)
+        total = sum(data.get('comment_stats', {}).values())
+        status = "🟢 مفعّل" if data.get('comment_settings', {}).get('enabled') else "🔴 موقوف"
+        send_fb(sender_id,
+            f"💬 إحصائيات التعليقات\n━━━━━━━━━━━━━━━\n"
+            f"الحالة: {status}\n"
+            f"ردود اليوم: {today_count}\n"
+            f"إجمالي الردود: {total}"
+        )
+        send_quick_replies(sender_id, "؟", [
+            {'title': '🟢 تفعيل الردود',  'payload': 'COMMENTS_ON'},
+            {'title': '🔴 إيقاف الردود',  'payload': 'COMMENTS_OFF'},
+            {'title': '🏠 رئيسية',         'payload': 'MAIN_MENU'}
+        ])
+
+    elif payload == 'COMMENTS_ON':
+        data.setdefault('comment_settings', {})['enabled'] = True
+        save_data()
+        send_fb(sender_id, "🟢 تم تفعيل الرد التلقائي على التعليقات.")
+        send_quick_replies(sender_id, "؟", [{'title': '🏠 رئيسية', 'payload': 'MAIN_MENU'}])
+
+    elif payload == 'COMMENTS_OFF':
+        data.setdefault('comment_settings', {})['enabled'] = False
+        save_data()
+        send_fb(sender_id, "🔴 تم إيقاف الرد التلقائي على التعليقات.")
+        send_quick_replies(sender_id, "؟", [{'title': '🏠 رئيسية', 'payload': 'MAIN_MENU'}])
+
+    elif payload == 'PUBLISH_NOW':
+        text = data.get('publish_settings', {}).get('post_text', '')
+        if not text:
+            send_fb(sender_id, "❌ لم يتم تعيين نص المنشور بعد. اذهب للوحة التحكم > Publishing.")
+        else:
+            add_btn = data.get('publish_settings', {}).get('add_chat_button', True)
+            ok, result = publish_post(text, add_btn)
+            if ok:
+                send_fb(sender_id, f"✅ تم النشر بنجاح! ID: {result}")
+            else:
+                send_fb(sender_id, f"❌ فشل النشر: {result}")
+        send_quick_replies(sender_id, "؟", [{'title': '🏠 رئيسية', 'payload': 'MAIN_MENU'}])
+
+    elif payload == 'ADMINS':
+        verified = data.get('verified', [])
+        msg = f"🔐 المدراء ({len(verified)}):\n" + "\n".join(verified[-10:]) if verified else "لا يوجد مدراء مضافون."
+        send_fb(sender_id, msg)
+        send_quick_replies(sender_id, "؟", [{'title': '🏠 رئيسية', 'payload': 'MAIN_MENU'}])
+
+    elif payload == 'COMPLETE_ORDER':
+        send_fb(sender_id, "أرسل: مكتمل [رقم الطلب]\nمثال: مكتمل 5")
+
+    elif payload == 'DELETE_ORDER':
+        send_fb(sender_id, "أرسل: حذف [رقم الطلب]\nمثال: حذف 3")
+
+    elif payload == 'NOTE_ORDER':
+        send_fb(sender_id, "أرسل: ملاحظة [رقم] [النص]\nمثال: ملاحظة 2 العميل طلب تعديل")
+
+    elif payload == 'MAIN_MENU':
+        send_owner_menu(sender_id)
+
+# ========== API: Comments ==========
+@app.route('/api/comments/log')
+def api_comments_log():
+    return jsonify(data.get('comment_log', [])[:100])
+
+@app.route('/api/comments/stats')
+def api_comments_stats():
+    stats_raw = data.get('comment_stats', {})
+    today = datetime.now().strftime('%Y-%m-%d')
+    return jsonify({
+        'today': stats_raw.get(today, 0),
+        'total': sum(stats_raw.values()),
+        'daily': dict(sorted(stats_raw.items())[-14:]),
+        'enabled': data.get('comment_settings', {}).get('enabled', False)
+    })
+
+@app.route('/api/comments/settings', methods=['GET'])
+def api_comments_settings_get():
+    s = data.get('comment_settings', {})
+    return jsonify({
+        'enabled': s.get('enabled', False),
+        'prompt': s.get('prompt', COMMENT_PERSONALITY),
+        'check_interval_minutes': s.get('check_interval_minutes', 5)
+    })
+
+@app.route('/api/comments/settings', methods=['POST'])
+def api_comments_settings_save():
+    body = request.json or {}
+    data.setdefault('comment_settings', {}).update({
+        k: body[k] for k in ['enabled', 'prompt', 'check_interval_minutes'] if k in body
+    })
+    save_data()
+    add_log("⚙️ تم تحديث إعدادات التعليقات")
+    return jsonify({'success': True})
+
+# ========== API: Publishing ==========
+@app.route('/api/publish/now', methods=['POST'])
+def api_publish_now():
+    body = request.json or {}
+    text = body.get('text') or data.get('publish_settings', {}).get('post_text', '')
+    add_btn = body.get('add_chat_button', data.get('publish_settings', {}).get('add_chat_button', True))
+    if not text:
+        return jsonify({'success': False, 'error': 'لا يوجد نص للنشر'})
+    ok, result = publish_post(text, add_btn)
+    return jsonify({'success': ok, 'result': result})
+
+@app.route('/api/publish/settings', methods=['GET'])
+def api_publish_settings_get():
+    s = data.get('publish_settings', {})
+    return jsonify({
+        'enabled': s.get('enabled', False),
+        'interval_minutes': s.get('interval_minutes', 60),
+        'post_text': s.get('post_text', DEFAULT_POST_TEXT),
+        'add_chat_button': s.get('add_chat_button', True),
+        'last_published': s.get('last_published', '')
+    })
+
+@app.route('/api/publish/settings', methods=['POST'])
+def api_publish_settings_save():
+    body = request.json or {}
+    data.setdefault('publish_settings', {}).update({
+        k: body[k] for k in ['enabled', 'interval_minutes', 'post_text', 'add_chat_button'] if k in body
+    })
+    save_data()
+    add_log("⚙️ تم تحديث إعدادات النشر")
+    return jsonify({'success': True})
+
 # ========== Keep-Alive كل 30 ثانية ==========
 def keep_alive_loop():
     while True:
@@ -1082,16 +1630,18 @@ def keep_alive_loop():
 
 if __name__ == '__main__':
     print("\n" + "="*70)
-    print("🚀 B.Y PRO Agent - النسخة المُصلحة الكاملة")
+    print("🚀 B.Y PRO Agent - النسخة النهائية الشاملة")
     print("="*70)
     print(f"👤 Owner ID: {OWNER_FB_ID}")
     print(f"🔑 Password: {OWNER_PASSWORD}")
     print(f"💰 Binance: {BINANCE_ID}")
-    print(f"📦 Orders in DB: {len(data.get('orders', []))}")
-    print(f"📊 JSONBin ID: {BIN_ID}")
-    print(f"🌐 Self URL: {SELF_URL}")
+    print(f"📦 Orders: {len(data.get('orders', []))}")
+    print(f"💬 Comments replied: {len(data.get('comment_replied_ids', []))}")
+    print(f"📢 Auto-publish: {data.get('publish_settings', {}).get('enabled', False)}")
     print("="*70 + "\n")
 
     threading.Thread(target=keep_alive_loop, daemon=True).start()
+    threading.Thread(target=comments_loop, daemon=True).start()
+    threading.Thread(target=publish_loop, daemon=True).start()
     port = int(os.environ.get('PORT', 5000))
     app.run(host='0.0.0.0', port=port, debug=False)
