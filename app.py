@@ -1799,48 +1799,6 @@ def api_comment_log_edit():
         return jsonify({'success': True})
     return jsonify({'success': False, 'error': 'Invalid index'})
 
-# ========== API: Comment Log Management ==========
-@app.route('/api/comments/log/delete', methods=['POST'])
-def api_comment_log_delete():
-    body = request.json or {}
-    idx = body.get('index')
-    if idx is None:
-        return jsonify({'success': False, 'error': 'index required'})
-    log = data.get('comment_log', [])
-    if 0 <= int(idx) < len(log):
-        log.pop(int(idx))
-        data['comment_log'] = log
-        save_data()
-        return jsonify({'success': True})
-    return jsonify({'success': False, 'error': 'Invalid index'})
-
-@app.route('/api/comments/log/clear', methods=['POST'])
-def api_comment_log_clear():
-    body = request.json or {}
-    if body.get('password') != OWNER_PASSWORD:
-        return jsonify({'success': False, 'error': 'Wrong password'})
-    data['comment_log'] = []
-    data['comment_stats'] = {}
-    save_data()
-    add_log("🗑️ تم مسح سجل التعليقات والإحصائيات")
-    return jsonify({'success': True})
-
-@app.route('/api/comments/log/edit', methods=['POST'])
-def api_comment_log_edit():
-    body = request.json or {}
-    idx = body.get('index')
-    new_reply = body.get('reply', '')
-    if idx is None or not new_reply:
-        return jsonify({'success': False, 'error': 'index and reply required'})
-    log = data.get('comment_log', [])
-    if 0 <= int(idx) < len(log):
-        log[int(idx)]['reply'] = new_reply
-        log[int(idx)]['edited'] = True
-        data['comment_log'] = log
-        save_data()
-        return jsonify({'success': True})
-    return jsonify({'success': False, 'error': 'Invalid index'})
-
 # ========== API: Manual Comments Check ==========
 @app.route('/api/comments/check_now', methods=['POST'])
 def api_comments_check_now():
