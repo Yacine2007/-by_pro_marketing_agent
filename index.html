@@ -368,15 +368,38 @@ textarea.fi{resize:vertical;min-height:105px;font-family:'Courier New',monospace
       </div>
       <!-- Log -->
       <div class="card">
-        <div class="chd">
+        <div class="chd" style="flex-wrap:wrap;gap:8px">
           <h3><i class="fa fa-list" style="color:var(--blue2)"></i> Comments & Replies Log</h3>
-          <button class="btn bg" onclick="refreshCommentsLog()"><i class="fa fa-sync"></i> Refresh Log</button>
-          <button class="btn bp" onclick="checkNow()"><i class="fa fa-search"></i> Check Now</button>
+          <div style="display:flex;gap:7px;flex-wrap:wrap;align-items:center;margin-left:auto">
+            <!-- Filters -->
+            <input class="fi" id="cf-search" placeholder="Search..." style="width:140px;padding:5px 9px;font-size:.78rem" oninput="filterComments()">
+            <select class="fi" id="cf-post" style="width:150px;padding:5px 9px;font-size:.78rem" onchange="filterComments()">
+              <option value="">All Posts</option>
+            </select>
+            <select class="fi" id="cf-sort" style="width:120px;padding:5px 9px;font-size:.78rem" onchange="filterComments()">
+              <option value="newest">Newest First</option>
+              <option value="oldest">Oldest First</option>
+            </select>
+            <button class="btn bg" onclick="refreshCommentsLog()"><i class="fa fa-sync"></i> Refresh</button>
+            <button class="btn bp" onclick="checkNow()"><i class="fa fa-search"></i> Check Now</button>
+            <button class="btn bd" onclick="clearCommentLog()"><i class="fa fa-trash"></i> Clear Log</button>
+          </div>
         </div>
         <div style="overflow-x:auto"><table>
-          <thead><tr><th>Time</th><th>Post</th><th>Commenter</th><th>Comment</th><th>Reply</th></tr></thead>
-          <tbody id="ctb"><tr><td colspan="5" class="empty">Loading...</td></tr></tbody>
+          <thead><tr><th>Time</th><th>Post</th><th>Commenter</th><th>Comment</th><th>Reply</th><th style="width:70px">Actions</th></tr></thead>
+          <tbody id="ctb"><tr><td colspan="6" class="empty">Loading...</td></tr></tbody>
         </table></div>
+      </div>
+      <!-- Edit Reply Modal -->
+      <div class="mov" id="cedit-mod">
+        <div class="modal">
+          <h3><i class="fa fa-pen" style="color:var(--blue2)"></i> Edit Reply</h3>
+          <textarea id="cedit-txt" style="width:100%;min-height:100px;padding:8px;border:1px solid var(--border);border-radius:6px;font-family:inherit;font-size:.85rem;resize:vertical"></textarea>
+          <div class="modal-act">
+            <button class="btn bg" onclick="document.getElementById('cedit-mod').style.display='none'">Cancel</button>
+            <button class="btn bp" onclick="saveEditReply()">Save</button>
+          </div>
+        </div>
       </div>
     </div>
 
@@ -759,8 +782,8 @@ async function checkNew(){
 
 
 // ===== COMMENTS =====
-async function loadComments(){
-  // loadComments = عرض فقط، مطابق لـ refreshCommentsLog
+async function loadComments(){refreshCommentsLog();}
+async function _loadCommentsOld(){
   try{
     const [sr,lr]=await Promise.all([fetch('/api/comments/stats'),fetch('/api/comments/log')]);
     const s=await sr.json(), log=await lr.json();
@@ -785,24 +808,83 @@ async function loadComments(){
     </tr>`).join('');
   }catch(e){console.error(e);}
 }
+let allCommentLog=[];
+let editingCommentIdx=-1;
+
 async function refreshCommentsLog(){
-  // فقط تحديث عرض السجل — لا يُشغّل فحصاً جديداً
   try{
     const [sr,lr]=await Promise.all([fetch('/api/comments/stats'),fetch('/api/comments/log')]);
     const s=await sr.json(), log=await lr.json();
     document.getElementById('cs-today').textContent=s.today;
     document.getElementById('cs-total').textContent=s.total;
     document.getElementById('cs-status').textContent=s.enabled?'🟢 Active':'🔴 Stopped';
-    const tb=document.getElementById('ctb');
-    if(!log.length){tb.innerHTML='<tr><td colspan="5" class="empty">No replies yet</td></tr>';return;}
-    tb.innerHTML=log.map(l=>`<tr>
-      <td style="color:var(--muted);font-size:.73rem;white-space:nowrap">${l.time}</td>
-      <td style="max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:.75rem">${l.post_text||'—'}</td>
-      <td><strong>${l.commenter}</strong></td>
-      <td style="max-width:160px;font-size:.8rem">${l.comment}</td>
-      <td style="max-width:180px;font-size:.8rem;color:var(--blue2)">${l.reply}</td>
-    </tr>`).join('');
+    allCommentLog=log;
+    // Populate post filter
+    const posts=[...new Set(log.map(l=>l.post_text||'').filter(Boolean).map(t=>t.substring(0,40)))];
+    const sel=document.getElementById('cf-post');
+    const cur=sel.value;
+    sel.innerHTML='<option value="">All Posts</option>'+posts.map(p=>`<option value="${p}">${p}</option>`).join('');
+    sel.value=cur;
+    filterComments();
   }catch(e){console.error(e);}
+}
+
+function filterComments(){
+  const search=(document.getElementById('cf-search').value||'').toLowerCase();
+  const postFilter=document.getElementById('cf-post').value;
+  const sort=document.getElementById('cf-sort').value;
+  let log=[...allCommentLog];
+  if(search) log=log.filter(l=>(l.commenter||'').toLowerCase().includes(search)||(l.comment||'').toLowerCase().includes(search)||(l.reply||'').toLowerCase().includes(search));
+  if(postFilter) log=log.filter(l=>(l.post_text||'').startsWith(postFilter));
+  if(sort==='oldest') log=log.reverse();
+  const tb=document.getElementById('ctb');
+  if(!log.length){tb.innerHTML='<tr><td colspan="6" class="empty">No results</td></tr>';return;}
+  tb.innerHTML=log.map((l,i)=>{
+    const realIdx=allCommentLog.indexOf(l);
+    return `<tr>
+      <td style="color:var(--muted);font-size:.71rem;white-space:nowrap">${l.time}</td>
+      <td style="max-width:110px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:.73rem" title="${l.post_text||''}">${l.post_text||'—'}</td>
+      <td style="white-space:nowrap"><strong>${l.commenter||'صديق'}</strong>${l.commenter_id?'<br><span style="font-size:.65rem;color:var(--muted)">ID:'+l.commenter_id+'</span>':''}</td>
+      <td style="max-width:150px;font-size:.79rem">${l.comment||''}</td>
+      <td style="max-width:170px;font-size:.79rem;color:var(--blue2)">${l.reply||''}${l.edited?'<span style="font-size:.65rem;color:var(--muted);margin-left:4px">[edited]</span>':''}</td>
+      <td style="white-space:nowrap">
+        <button class="btn bg bico" style="padding:3px 6px;font-size:.72rem" title="Edit" onclick="openEditComment(${realIdx})"><i class="fa fa-pen"></i></button>
+        <button class="btn bd bico" style="padding:3px 6px;font-size:.72rem;margin-left:2px" title="Delete" onclick="deleteComment(${realIdx})"><i class="fa fa-trash"></i></button>
+      </td>
+    </tr>`;
+  }).join('');
+}
+
+function openEditComment(idx){
+  editingCommentIdx=idx;
+  const l=allCommentLog[idx];
+  document.getElementById('cedit-txt').value=l.reply||'';
+  document.getElementById('cedit-mod').style.display='flex';
+}
+
+async function saveEditReply(){
+  if(editingCommentIdx<0)return;
+  const reply=document.getElementById('cedit-txt').value.trim();
+  if(!reply){toast('Reply cannot be empty','err');return;}
+  const r=await fetch('/api/comments/log/edit',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({index:editingCommentIdx,reply})});
+  const d=await r.json();
+  document.getElementById('cedit-mod').style.display='none';
+  if(d.success){toast('Reply updated','ok');refreshCommentsLog();}else toast('Failed','err');
+}
+
+async function deleteComment(idx){
+  if(!confirm('Delete this log entry?'))return;
+  const r=await fetch('/api/comments/log/delete',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({index:idx})});
+  const d=await r.json();
+  if(d.success){toast('Deleted','ok');refreshCommentsLog();}else toast('Failed','err');
+}
+
+async function clearCommentLog(){
+  const p=prompt('Enter password to clear all comment log & stats:');
+  if(!p)return;
+  const r=await fetch('/api/comments/log/clear',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({password:p})});
+  const d=await r.json();
+  if(d.success){toast('Log cleared','ok');refreshCommentsLog();}else toast('Wrong password','err');
 }
 async function checkNow(){
   toast('Checking comments...','');
