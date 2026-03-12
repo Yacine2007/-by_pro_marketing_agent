@@ -1302,13 +1302,13 @@ def get_post_comments(post_id):
 
 def reply_to_comment(comment_id, reply_text):
     """الرد على تعليق — مع تسجيل فوري قبل الإرسال لمنع التكرار"""
-    # تسجيل فوري قبل الطلب لمنع أي تكرار من حلقات متوازية
     replied_ids = set(data.get('comment_replied_ids', []))
     if comment_id in replied_ids:
         add_log(f"⏭️ تخطي تعليق مكرر: {comment_id[:10]}")
         return False
+    # تسجيل فوري لمنع أي إعادة محاولة متوازية
     replied_ids.add(comment_id)
-    data['comment_replied_ids'] = list(replied_ids)[-1000:]
+    data['comment_replied_ids'] = list(replied_ids)[-2000:]
 
     try:
         r = requests.post(
@@ -1320,10 +1320,19 @@ def reply_to_comment(comment_id, reply_text):
         if r.status_code == 200:
             return True
         else:
-            # إزالته من القائمة لو فشل الإرسال
+            err_data = r.json().get('error', {})
+            err_msg = err_data.get('message', r.text[:100])
+            err_code = err_data.get('code', 0)
+            # كود 100 أو 400 = تعليق لا يمكن الرد عليه (محذوف/قديم/من الصفحة)
+            # نبقيه في replied_ids لتجنب إعادة المحاولة
+            if r.status_code == 400 or err_code in [100, 200, 10]:
+                add_log(f"⏭️ تعليق غير قابل للرد (سيُتجاهل): {err_msg[:60]}")
+                # يبقى في replied_ids — لا نُزيله
+                return False
+            # أخطاء أخرى مؤقتة — نُزيل من replied_ids للمحاولة لاحقاً
             replied_ids.discard(comment_id)
             data['comment_replied_ids'] = list(replied_ids)
-            add_log(f"⚠️ فشل الرد على تعليق: {r.status_code} {r.text[:80]}")
+            add_log(f"⚠️ خطأ مؤقت في الرد: {r.status_code} {err_msg[:60]}")
             return False
     except Exception as e:
         replied_ids.discard(comment_id)
