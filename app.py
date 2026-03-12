@@ -1353,7 +1353,7 @@ def generate_comment_reply(commenter_name, comment_text, post_text):
     return None
 
 def process_comments_once():
-    """فحص التعليقات مرة واحدة"""
+    """فحص التعليقات — يرد فقط على الجديدة ولا يعدّ القديمة"""
     try:
         settings = data.get('comment_settings', {})
         if not settings.get('enabled') or not PAGE_ACCESS_TOKEN:
@@ -1365,9 +1365,11 @@ def process_comments_once():
             return
 
         posts = get_recent_posts(page_id, limit=20)
+        # نسخة محلية من replied_ids — لا نُعدّل الـ global هنا
         replied_ids = set(data.get('comment_replied_ids', []))
         today = datetime.now().strftime('%Y-%m-%d')
         new_replies = 0
+        from datetime import timezone
 
         for post in posts:
             post_id = post.get('id', '')
@@ -1377,59 +1379,68 @@ def process_comments_once():
             for comment in comments:
                 cid = comment.get('id', '')
                 if not cid or cid in replied_ids:
-                    continue
+                    continue  # مكرر — تجاهل بدون عداد
 
-                # جلب اسم المعلق — يكون في 'from' أو نتركه 'صديق'
                 from_data = comment.get('from') or {}
-                commenter_name = from_data.get('name', '') or 'صديق'
-                commenter_id = from_data.get('id', '')
+                commenter_name = (from_data.get('name') or '').strip()
+                commenter_id = (from_data.get('id') or '').strip()
                 comment_text = (comment.get('message') or '').strip()
 
+                # تجاهل التعليقات الفارغة
                 if not comment_text:
+                    replied_ids.add(cid)  # علّمه لتجنب إعادة فحصه
                     continue
 
-                # تجاهل التعليقات القديمة جداً (أكثر من 48 ساعة)
+                # تجاهل التعليقات الأقدم من 24 ساعة وعلّمها
                 created = comment.get('created_time', '')
                 if created:
                     try:
-                        from datetime import timezone
                         ct = datetime.fromisoformat(created.replace('Z', '+00:00'))
                         age_hours = (datetime.now(timezone.utc) - ct).total_seconds() / 3600
-                        if age_hours > 48:
-                            replied_ids.add(cid)  # نضيفه لتجنب فحصه مرة أخرى
+                        if age_hours > 24:
+                            replied_ids.add(cid)
                             continue
                     except:
                         pass
 
-                reply = generate_comment_reply(commenter_name, comment_text, post_text)
+                # توليد الرد
+                display_name = commenter_name or 'صديق'
+                reply = generate_comment_reply(display_name, comment_text, post_text)
                 if not reply:
                     continue
 
-                # إضافة @tag لإرسال الإشعار للمعلق
                 final_reply = f"@[{commenter_id}] {reply}" if commenter_id else reply
 
+                # reply_to_comment تُضيف cid لـ replied_ids داخلياً
                 ok = reply_to_comment(cid, final_reply)
                 if ok:
                     replied_ids.add(cid)
                     new_replies += 1
-                    data['comment_replied_ids'] = list(replied_ids)[-1000:]
+                    # العداد يزيد فقط عند النجاح الفعلي
                     data.setdefault('comment_stats', {})[today] = \
                         data['comment_stats'].get(today, 0) + 1
                     data.setdefault('comment_log', []).insert(0, {
                         'time': datetime.now().strftime('%Y-%m-%d %H:%M'),
                         'post_id': post_id,
                         'post_text': post_text[:100],
-                        'commenter': commenter_name,
+                        'commenter': display_name,
+                        'commenter_id': commenter_id,
                         'comment': comment_text[:200],
-                        'reply': reply[:200]
+                        'reply': final_reply[:200]
                     })
                     data['comment_log'] = data['comment_log'][:200]
-                    add_log(f"💬 رد على {commenter_name}: {comment_text[:40]}")
-                    time.sleep(4)  # تأخير بين الردود
+                    add_log(f"💬 رد على {display_name}: {comment_text[:40]}")
+                    time.sleep(4)
+
+        # تحديث replied_ids المجمّعة مرة واحدة
+        data['comment_replied_ids'] = list(replied_ids)[-2000:]
 
         if new_replies > 0:
             save_data()
             add_log(f"✅ {new_replies} رد جديد على التعليقات")
+        else:
+            # احفظ replied_ids المحدّثة حتى لو لم يكن هناك ردود جديدة
+            save_data()
 
     except Exception as e:
         add_log(f"⚠️ خطأ فحص التعليقات: {e}")
@@ -1745,6 +1756,90 @@ def api_clear_msgs():
     save_data()
     add_log("🗑️ تم مسح عدادات الرسائل")
     return jsonify({'success': True})
+
+# ========== API: Comment Log Management ==========
+@app.route('/api/comments/log/delete', methods=['POST'])
+def api_comment_log_delete():
+    body = request.json or {}
+    idx = body.get('index')
+    if idx is None:
+        return jsonify({'success': False, 'error': 'index required'})
+    log = data.get('comment_log', [])
+    if 0 <= idx < len(log):
+        removed = log.pop(idx)
+        data['comment_log'] = log
+        save_data()
+        return jsonify({'success': True})
+    return jsonify({'success': False, 'error': 'Invalid index'})
+
+@app.route('/api/comments/log/clear', methods=['POST'])
+def api_comment_log_clear():
+    body = request.json or {}
+    if body.get('password') != OWNER_PASSWORD:
+        return jsonify({'success': False, 'error': 'Wrong password'})
+    data['comment_log'] = []
+    data['comment_stats'] = {}
+    save_data()
+    add_log("🗑️ تم مسح سجل التعليقات والإحصائيات")
+    return jsonify({'success': True})
+
+@app.route('/api/comments/log/edit', methods=['POST'])
+def api_comment_log_edit():
+    body = request.json or {}
+    idx = body.get('index')
+    new_reply = body.get('reply', '')
+    if idx is None or not new_reply:
+        return jsonify({'success': False, 'error': 'index and reply required'})
+    log = data.get('comment_log', [])
+    if 0 <= idx < len(log):
+        log[idx]['reply'] = new_reply
+        log[idx]['edited'] = True
+        data['comment_log'] = log
+        save_data()
+        return jsonify({'success': True})
+    return jsonify({'success': False, 'error': 'Invalid index'})
+
+# ========== API: Comment Log Management ==========
+@app.route('/api/comments/log/delete', methods=['POST'])
+def api_comment_log_delete():
+    body = request.json or {}
+    idx = body.get('index')
+    if idx is None:
+        return jsonify({'success': False, 'error': 'index required'})
+    log = data.get('comment_log', [])
+    if 0 <= int(idx) < len(log):
+        log.pop(int(idx))
+        data['comment_log'] = log
+        save_data()
+        return jsonify({'success': True})
+    return jsonify({'success': False, 'error': 'Invalid index'})
+
+@app.route('/api/comments/log/clear', methods=['POST'])
+def api_comment_log_clear():
+    body = request.json or {}
+    if body.get('password') != OWNER_PASSWORD:
+        return jsonify({'success': False, 'error': 'Wrong password'})
+    data['comment_log'] = []
+    data['comment_stats'] = {}
+    save_data()
+    add_log("🗑️ تم مسح سجل التعليقات والإحصائيات")
+    return jsonify({'success': True})
+
+@app.route('/api/comments/log/edit', methods=['POST'])
+def api_comment_log_edit():
+    body = request.json or {}
+    idx = body.get('index')
+    new_reply = body.get('reply', '')
+    if idx is None or not new_reply:
+        return jsonify({'success': False, 'error': 'index and reply required'})
+    log = data.get('comment_log', [])
+    if 0 <= int(idx) < len(log):
+        log[int(idx)]['reply'] = new_reply
+        log[int(idx)]['edited'] = True
+        data['comment_log'] = log
+        save_data()
+        return jsonify({'success': True})
+    return jsonify({'success': False, 'error': 'Invalid index'})
 
 # ========== API: Manual Comments Check ==========
 @app.route('/api/comments/check_now', methods=['POST'])
