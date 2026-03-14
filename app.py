@@ -1019,13 +1019,8 @@ def handle_new_comment(comment_id, commenter_name, commenter_id, comment_text, p
     if not reply_text:
         return
 
-    # إضافة @tag إذا كان لدينا ID المعلق
-    if commenter_id:
-        final_reply = f"@[{commenter_id}] {reply_text}"
-    else:
-        final_reply = reply_text
-
-    ok = reply_to_comment(comment_id, final_reply)
+    # الرد على التعليق مباشرة (بدون @tag لأنه لا يُرسل إشعار)
+    ok = reply_to_comment(comment_id, reply_text)
     if ok:
         replied_ids.add(comment_id)
         data['comment_replied_ids'] = list(replied_ids)[-1000:]
@@ -1036,12 +1031,23 @@ def handle_new_comment(comment_id, commenter_name, commenter_id, comment_text, p
             'post_id': post_id,
             'post_text': post_text[:100],
             'commenter': display_name,
+            'commenter_id': commenter_id,
             'comment': comment_text[:200],
-            'reply': final_reply[:200]
+            'reply': reply_text[:200]
         })
         data['comment_log'] = data['comment_log'][:200]
         save_data()
         add_log(f"✅ رد على {display_name}: {comment_text[:30]}")
+        # إرسال إشعار خاص عبر الماسنجر إذا أمكن
+        if commenter_id:
+            notif = (
+                f"مرحباً {display_name}! 👋\n"
+                f"شكراً على تعليقك على منشورنا.\n"
+                f"ردّ B.Y PRO على تعليقك:\n"
+                f"«{reply_text[:200]}»\n\n"
+                f"يسعدنا خدمتك 😊"
+            )
+            send_fb(commenter_id, notif)
 
 # ========== لوحة التحكم ==========
 @app.route('/')
@@ -1265,8 +1271,13 @@ def api_reset():
 
 # ========== ردود فيسبوك على التعليقات ==========
 
+_cached_page_id = None
+
 def get_page_id():
-    """جلب Page ID من API"""
+    """جلب Page ID من API مع cache"""
+    global _cached_page_id
+    if _cached_page_id:
+        return _cached_page_id
     try:
         r = requests.get(
             f'https://graph.facebook.com/v18.0/me',
@@ -1274,7 +1285,8 @@ def get_page_id():
             timeout=8
         )
         if r.status_code == 200:
-            return r.json().get('id')
+            _cached_page_id = r.json().get('id')
+            return _cached_page_id
     except:
         pass
     return None
@@ -1404,6 +1416,8 @@ def process_comments_once():
             post_text = post.get('message', '')
             comments = get_post_comments(post_id)
 
+            page_id_val = get_page_id() or ''
+
             for comment in comments:
                 cid = comment.get('id', '')
                 if not cid or cid in replied_ids:
@@ -1412,6 +1426,11 @@ def process_comments_once():
                 from_data = comment.get('from') or {}
                 commenter_name = (from_data.get('name') or '').strip()
                 commenter_id = (from_data.get('id') or '').strip()
+
+                # تجاهل تعليقات الصفحة نفسها لمنع الرد على النفس
+                if page_id_val and commenter_id == page_id_val:
+                    replied_ids.add(cid)
+                    continue
                 comment_text = (comment.get('message') or '').strip()
                 # محاولة جلب الاسم إذا لم يصل
                 if not commenter_name and commenter_id:
@@ -1486,14 +1505,16 @@ def process_comments_once():
         add_log(f"⚠️ خطأ فحص التعليقات: {e}")
 
 def comments_loop():
-    """حلقة مراقبة التعليقات — تعمل فقط عبر Webhook
-    الفحص الدوري موقوف لأن API لا يُرجع أسماء المعلقين
-    يمكن تفعيله يدوياً عبر زر Check Now في لوحة التحكم"""
-    time.sleep(10)
+    """حلقة مراقبة التعليقات كل 30 ثانية"""
+    time.sleep(15)  # انتظر قليلاً بعد بدء السيرفر
     while True:
-        # فقط نسجّل أن الحلقة نشطة
-        time.sleep(300)  # كل 5 دقائق فقط للتأكد أن الـ thread حي
-        add_log("💓 Comments loop alive — waiting for webhooks")
+        try:
+            settings = data.get('comment_settings', {})
+            if settings.get('enabled') and PAGE_ACCESS_TOKEN:
+                process_comments_once()
+        except Exception as e:
+            add_log(f"⚠️ خطأ comments_loop: {e}")
+        time.sleep(30)
 
 # ========== نشر المنشورات التلقائي ==========
 
