@@ -941,13 +941,19 @@ def webhook():
                 commenter_id = from_info.get('id', '')
                 comment_text = val.get('message', '')
                 post_id = val.get('post_id', '')
-                add_log(f"💬 تعليق جديد من {commenter_name or commenter_id}: {comment_text[:50]}")
+                # log تفصيلي لتشخيص البيانات الواردة
+                add_log(f"💬 webhook تعليق | from:{commenter_name or '?'} id:{commenter_id or '?'} | {comment_text[:30]}")
                 if comment_id and comment_text:
-                    threading.Thread(
-                        target=handle_new_comment,
-                        args=(comment_id, commenter_name, commenter_id, comment_text, post_id),
-                        daemon=True
-                    ).start()
+                    # تجاهل ردود الصفحة على نفسها
+                    page_id_local = get_page_id()
+                    if commenter_id and page_id_local and commenter_id == page_id_local:
+                        add_log("⏭️ تجاهل تعليق الصفحة على نفسها")
+                    else:
+                        threading.Thread(
+                            target=handle_new_comment,
+                            args=(comment_id, commenter_name, commenter_id, comment_text, post_id),
+                            daemon=True
+                        ).start()
 
         # ===== رسائل Messenger =====
         for msg in entry.get('messaging', []):
@@ -994,6 +1000,19 @@ def handle_new_comment(comment_id, commenter_name, commenter_id, comment_text, p
             post_text = r.json().get('message', '')
     except:
         pass
+
+    # إذا لم يصل الاسم عبر الـ Webhook، نحاول جلبه مباشرة
+    if not commenter_name and commenter_id:
+        try:
+            nr = requests.get(
+                f'https://graph.facebook.com/v18.0/{commenter_id}',
+                params={'access_token': PAGE_ACCESS_TOKEN, 'fields': 'name'},
+                timeout=5
+            )
+            if nr.status_code == 200:
+                commenter_name = nr.json().get('name', '')
+        except:
+            pass
 
     display_name = commenter_name or 'صديق'
     reply_text = generate_comment_reply(display_name, comment_text, post_text)
@@ -1394,6 +1413,18 @@ def process_comments_once():
                 commenter_name = (from_data.get('name') or '').strip()
                 commenter_id = (from_data.get('id') or '').strip()
                 comment_text = (comment.get('message') or '').strip()
+                # محاولة جلب الاسم إذا لم يصل
+                if not commenter_name and commenter_id:
+                    try:
+                        nr = requests.get(
+                            f'https://graph.facebook.com/v18.0/{commenter_id}',
+                            params={'access_token': PAGE_ACCESS_TOKEN, 'fields': 'name'},
+                            timeout=5
+                        )
+                        if nr.status_code == 200:
+                            commenter_name = nr.json().get('name', '')
+                    except:
+                        pass
 
                 # تجاهل التعليقات الفارغة
                 if not comment_text:
@@ -1455,13 +1486,14 @@ def process_comments_once():
         add_log(f"⚠️ خطأ فحص التعليقات: {e}")
 
 def comments_loop():
-    """حلقة مراقبة التعليقات — يفحص فوراً ثم كل X دقائق"""
-    time.sleep(10)  # انتظر 10 ثوان بعد بدء السيرفر فقط
+    """حلقة مراقبة التعليقات — تعمل فقط عبر Webhook
+    الفحص الدوري موقوف لأن API لا يُرجع أسماء المعلقين
+    يمكن تفعيله يدوياً عبر زر Check Now في لوحة التحكم"""
+    time.sleep(10)
     while True:
-        process_comments_once()
-        settings = data.get('comment_settings', {})
-        interval = int(settings.get('check_interval_minutes', 5)) * 60
-        time.sleep(interval)
+        # فقط نسجّل أن الحلقة نشطة
+        time.sleep(300)  # كل 5 دقائق فقط للتأكد أن الـ thread حي
+        add_log("💓 Comments loop alive — waiting for webhooks")
 
 # ========== نشر المنشورات التلقائي ==========
 
