@@ -1491,15 +1491,13 @@ def process_comments_once():
                     add_log(f"💬 رد على {display_name}: {comment_text[:40]}")
                     time.sleep(4)
 
-        # تحديث replied_ids المجمّعة مرة واحدة
+        # تحديث replied_ids المجمّعة مرة واحدة — بدون حفظ إلا عند الردود الجديدة
         data['comment_replied_ids'] = list(replied_ids)[-2000:]
 
         if new_replies > 0:
             save_data()
             add_log(f"✅ {new_replies} رد جديد على التعليقات")
-        else:
-            # احفظ replied_ids المحدّثة حتى لو لم يكن هناك ردود جديدة
-            save_data()
+        # لا نحفظ إذا لم يكن هناك ردود جديدة — لتوفير JSONBin rate limit
 
     except Exception as e:
         add_log(f"⚠️ خطأ فحص التعليقات: {e}")
@@ -1867,13 +1865,12 @@ def api_comments_check_now():
     threading.Thread(target=process_comments_once, daemon=True).start()
     return jsonify({'success': True, 'message': 'Comment check started'})
 
-# ========== Keep-Alive كل 30 ثانية ==========
+# ========== Keep-Alive كل 5 دقائق (لا يتعارض مع JSONBin) ==========
 def keep_alive_loop():
     while True:
-        time.sleep(30)
+        time.sleep(300)  # كل 5 دقائق فقط
         try:
             requests.get(SELF_URL, timeout=8)
-            add_log("💓 Keep-alive ping")
         except Exception as e:
             add_log(f"⚠️ Keep-alive failed: {e}")
 
