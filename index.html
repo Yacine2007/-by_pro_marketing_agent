@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
-<title>B.Y PRO — Agent Hub</title>
+<title>B.Y PRO — Executive Dashboard</title>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 <style>
@@ -11,756 +11,782 @@
   margin: 0;
   padding: 0;
   box-sizing: border-box;
-  font-family: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
 }
 
 body {
-  background: #f0f4fe;
+  font-family: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, sans-serif;
+  background: #f0f4fa;
   color: #0a2540;
+  font-size: 14px;
+  line-height: 1.4;
 }
 
-/* ===== MAIN LAYOUT ===== */
-.dashboard {
+/* simplified, no login overlay */
+:root {
+  --primary: #1e40af;
+  --primary-dark: #1e3a8a;
+  --primary-light: #3b82f6;
+  --primary-bg: #eff6ff;
+  --border: #e2edff;
+  --card-white: #ffffff;
+  --text-dark: #0f2b3d;
+  --text-muted: #5c6f87;
+  --success: #0e7b32;
+  --success-bg: #e8f5e9;
+  --warning: #ea8c2b;
+  --warning-bg: #fff4e5;
+  --danger: #d32f2f;
+  --danger-bg: #ffeaea;
+  --shadow-sm: 0 4px 12px rgba(0, 0, 0, 0.02), 0 1px 2px rgba(0, 0, 0, 0.03);
+  --shadow-md: 0 8px 20px rgba(0, 0, 0, 0.04), 0 2px 4px rgba(0, 0, 0, 0.02);
+}
+
+/* Layout */
+.app-wrapper {
   display: flex;
   min-height: 100vh;
 }
 
-/* SIDEBAR — sleek blue/white */
+/* Sidebar - crisp white/blue accent */
 .sidebar {
   width: 260px;
   background: #ffffff;
-  border-right: 1px solid #e2edff;
+  border-right: 1px solid var(--border);
   display: flex;
   flex-direction: column;
   position: fixed;
-  height: 100vh;
-  overflow-y: auto;
-  z-index: 10;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  z-index: 20;
   transition: transform 0.2s ease;
-  box-shadow: 0 0 20px rgba(0, 40, 100, 0.03);
+  box-shadow: var(--shadow-sm);
 }
 
-.logo-area {
-  padding: 24px 20px;
-  border-bottom: 1px solid #eef3ff;
+.s-logo {
+  padding: 20px 20px;
+  border-bottom: 1px solid var(--border);
   display: flex;
   align-items: center;
   gap: 12px;
+  background: white;
 }
 
-.logo-icon {
-  width: 38px;
-  height: 38px;
-  background: #1a5cff;
+.s-logo img {
+  width: 40px;
+  height: 40px;
   border-radius: 12px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: white;
-  font-size: 1.3rem;
-  font-weight: 600;
-  box-shadow: 0 6px 12px rgba(26, 92, 255, 0.15);
+  object-fit: cover;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.05);
+  border: 1px solid #eef2ff;
 }
 
-.logo-text h1 {
-  font-size: 1.2rem;
-  font-weight: 700;
-  color: #0a2540;
-  letter-spacing: -0.2px;
+.brand {
+  font-weight: 800;
+  font-size: 1.1rem;
+  color: var(--primary-dark);
+  letter-spacing: -0.3px;
 }
 
-.logo-text span {
-  font-size: 0.7rem;
-  color: #5c6f87;
+.brand small {
+  font-size: 0.65rem;
   font-weight: 500;
+  color: var(--text-muted);
+  display: block;
+  margin-top: 2px;
 }
 
-.nav-links {
+.nav {
   flex: 1;
   padding: 20px 12px;
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
+  overflow-y: auto;
 }
 
-.nav-item {
+.nlabel {
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  font-weight: 700;
+  color: #7c8ba0;
+  padding: 8px 12px 4px;
+  margin-top: 8px;
+}
+
+.nbtn {
   display: flex;
   align-items: center;
   gap: 12px;
+  width: 100%;
   padding: 10px 14px;
-  border-radius: 12px;
+  margin-bottom: 4px;
+  border: none;
+  background: transparent;
+  border-radius: 14px;
   font-size: 0.85rem;
   font-weight: 500;
-  color: #2c3e5c;
-  transition: all 0.2s;
+  color: #2c3e50;
   cursor: pointer;
-  background: transparent;
-  border: none;
-  width: 100%;
+  transition: all 0.2s;
   text-align: left;
 }
 
-.nav-item i {
+.nbtn i {
   width: 22px;
   font-size: 1rem;
-  color: #5f7f9e;
+  color: #6c86a3;
+  transition: color 0.2s;
 }
 
-.nav-item.active {
-  background: #1a5cff;
-  color: white;
-  box-shadow: 0 4px 8px rgba(26, 92, 255, 0.2);
+.nbtn:hover {
+  background: #f2f6fe;
+  color: var(--primary-dark);
 }
 
-.nav-item.active i {
-  color: white;
+.nbtn:hover i {
+  color: var(--primary);
 }
 
-.nav-item:hover:not(.active) {
-  background: #eef4ff;
-  color: #1a5cff;
+.nbtn.active {
+  background: var(--primary-bg);
+  color: var(--primary);
+  font-weight: 600;
 }
 
-.status-footer {
+.nbtn.active i {
+  color: var(--primary);
+}
+
+.s-foot {
   padding: 16px 20px;
-  border-top: 1px solid #eef3ff;
-  font-size: 0.7rem;
-  color: #5c6f87;
+  border-top: 1px solid var(--border);
+  background: #ffffff;
+}
+
+.s-status {
   display: flex;
   align-items: center;
   gap: 8px;
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: #2b6e3c;
 }
 
-.online-dot {
+.dot {
   width: 8px;
   height: 8px;
-  background: #1fcd7a;
+  background: #2b9348;
   border-radius: 50%;
-  display: inline-block;
-  box-shadow: 0 0 0 2px rgba(31,205,122,0.2);
+  box-shadow: 0 0 0 2px #e0f2e9;
+}
+
+#uptime-lbl {
+  font-size: 0.7rem;
+  color: #7e8c9e;
+  margin-top: 6px;
 }
 
 /* MAIN CONTENT */
-.main-content {
-  flex: 1;
+.main {
   margin-left: 260px;
-  padding: 24px 28px;
-  background: #f6f9fe;
+  flex: 1;
+  padding: 28px 32px;
+  background: #f8fafd;
   min-height: 100vh;
 }
 
 .page {
   display: none;
-  animation: fadeIn 0.25s ease;
+  animation: fadeSlide 0.2s ease;
 }
 
-.page.active-page {
+.page.active {
   display: block;
 }
 
-@keyframes fadeIn {
-  from { opacity: 0; transform: translateY(4px);}
-  to { opacity: 1; transform: translateY(0);}
+@keyframes fadeSlide {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 /* top bar */
-.top-bar {
+.topbar {
   display: flex;
   justify-content: space-between;
   align-items: center;
   flex-wrap: wrap;
+  gap: 15px;
   margin-bottom: 28px;
-  gap: 12px;
 }
 
-.page-title {
+.topbar h2 {
   font-size: 1.5rem;
   font-weight: 700;
-  color: #0a2b44;
+  background: linear-gradient(135deg, #1e3a8a, #2b6cb0);
+  background-clip: text;
+  -webkit-background-clip: text;
+  color: transparent;
   letter-spacing: -0.3px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
 }
 
-.badge-live {
-  background: #e9f0ff;
-  border-radius: 40px;
-  padding: 6px 14px;
-  font-size: 0.7rem;
+.topbar h2 i {
+  background: none;
+  -webkit-background-clip: unset;
+  color: var(--primary);
+}
+
+.tbadge {
+  background: #eef2ff;
+  padding: 5px 14px;
+  border-radius: 30px;
+  font-size: 0.75rem;
   font-weight: 500;
-  color: #1a5cff;
+  color: var(--primary-dark);
+  border: 1px solid #cddfff;
 }
 
-/* STAT CARDS - fresh minimal */
-.stats-grid {
+/* stat cards */
+.sgrid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
   gap: 16px;
   margin-bottom: 28px;
 }
 
-.stat-card {
-  background: white;
+.sc {
+  background: var(--card-white);
   border-radius: 20px;
   padding: 18px 16px;
-  border: 1px solid #eef2fc;
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow-sm);
   transition: all 0.2s;
-  box-shadow: 0 1px 2px rgba(0,0,0,0.02);
+  position: relative;
+  overflow: hidden;
 }
 
-.stat-title {
+.sc:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 12px 22px rgba(0, 0, 0, 0.04);
+  border-color: #cbdffc;
+}
+
+.sl {
   font-size: 0.7rem;
+  font-weight: 700;
   text-transform: uppercase;
+  color: var(--text-muted);
   letter-spacing: 0.5px;
-  font-weight: 600;
-  color: #6d7f98;
-  margin-bottom: 8px;
+  margin-bottom: 6px;
 }
 
-.stat-number {
-  font-size: 2rem;
+.sv {
+  font-size: 1.8rem;
   font-weight: 800;
-  color: #0a2540;
+  color: #0b2b42;
   line-height: 1.2;
 }
 
-/* cards */
-.chart-row {
+.sc.blue .sv { color: var(--primary); }
+.sc.green .sv { color: #15803d; }
+.sc.yellow .sv { color: #b45309; }
+.sc.red .sv { color: #c62828; }
+.sc.purple .sv { color: #7c3aed; }
+
+.sc .si {
+  position: absolute;
+  right: 16px;
+  bottom: 16px;
+  font-size: 2rem;
+  opacity: 0.08;
+  pointer-events: none;
+}
+
+/* charts grid */
+.crow {
   display: grid;
-  grid-template-columns: 2fr 1.2fr;
+  grid-template-columns: 1.8fr 1fr;
   gap: 20px;
   margin-bottom: 28px;
 }
 
-.card-white {
+.cc {
   background: white;
-  border-radius: 24px;
-  border: 1px solid #eef2fc;
+  border-radius: 20px;
+  border: 1px solid var(--border);
   padding: 18px 20px;
-  box-shadow: 0 1px 3px rgba(0,0,0,0.02);
+  box-shadow: var(--shadow-sm);
 }
 
-.card-header {
-  font-weight: 600;
-  font-size: 0.85rem;
-  color: #2c3e5c;
-  margin-bottom: 18px;
+.ct {
+  font-weight: 700;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  margin-bottom: 12px;
   display: flex;
   align-items: center;
-  gap: 8px;
-  border-bottom: 1px solid #f0f4fa;
-  padding-bottom: 10px;
+  gap: 6px;
 }
 
-.table-wrapper {
-  overflow-x: auto;
+/* card generic */
+.card {
+  background: white;
+  border-radius: 20px;
+  border: 1px solid var(--border);
+  overflow: hidden;
+  margin-bottom: 24px;
+  box-shadow: var(--shadow-sm);
 }
 
+.chd {
+  padding: 14px 20px;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  background: #fefefe;
+}
+
+.chd h3 {
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: #1e3a5f;
+  margin: 0;
+  flex: 1;
+}
+
+/* table */
 table {
   width: 100%;
   border-collapse: collapse;
-  font-size: 0.8rem;
 }
 
 th {
   text-align: left;
-  padding: 12px 8px;
-  color: #5c6f87;
-  font-weight: 600;
-  border-bottom: 1px solid #eef2fc;
+  padding: 12px 16px;
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  background: #f9fcff;
+  border-bottom: 1px solid var(--border);
 }
 
 td {
-  padding: 10px 8px;
-  border-bottom: 1px solid #f0f5fd;
-  color: #1f344f;
+  padding: 12px 16px;
+  border-bottom: 1px solid #f0f4fc;
+  font-size: 0.8rem;
+  vertical-align: middle;
 }
 
-.badge-status {
-  background: #eef4ff;
-  color: #1a5cff;
+tr:hover td {
+  background-color: #fafcff;
+}
+
+/* badges */
+.bdg {
+  padding: 3px 10px;
   border-radius: 30px;
-  padding: 4px 12px;
   font-size: 0.7rem;
   font-weight: 600;
-  display: inline-block;
 }
 
-.badge-done {
-  background: #e1f7ed;
-  color: #107c4e;
-}
+.bdg-done { background: var(--success-bg); color: #0f6e2f; border: 1px solid #c0e0c0; }
+.bdg-new { background: var(--primary-bg); color: var(--primary-dark); border: 1px solid #bfd9ff; }
 
-.btn-sm {
-  background: transparent;
-  border: 1px solid #dce5f0;
-  border-radius: 30px;
-  padding: 5px 10px;
+.bdg-tag {
+  background: #f2f4f8;
+  padding: 4px 8px;
+  border-radius: 20px;
   font-size: 0.7rem;
+  color: #2c3e50;
+}
+
+/* buttons */
+.btn {
+  padding: 6px 14px;
+  border-radius: 30px;
   font-weight: 500;
-  cursor: pointer;
-  transition: all 0.2s;
-  color: #2c3e5c;
-}
-
-.btn-sm:hover {
-  background: #f0f5ff;
-  border-color: #1a5cff;
-  color: #1a5cff;
-}
-
-.btn-primary {
-  background: #1a5cff;
-  border: none;
-  border-radius: 40px;
-  padding: 8px 16px;
   font-size: 0.75rem;
-  font-weight: 600;
-  color: white;
+  border: none;
   cursor: pointer;
+  transition: 0.2s;
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  transition: 0.2s;
+  background: #f1f5f9;
+  color: #1f3a5f;
 }
 
-.btn-primary:hover {
-  background: #0f49d6;
-}
+.btn.bp { background: var(--primary); color: white; }
+.btn.bp:hover { background: var(--primary-dark); }
+.btn.bs { background: var(--success-bg); color: #166534; border: 1px solid #bbdfbb; }
+.btn.bd { background: var(--danger-bg); color: #b91c1c; border: 1px solid #ffcdcd; }
+.btn.bw { background: var(--warning-bg); color: #b45309; border: 1px solid #ffe0b5; }
+.btn.bg { background: #f8fafc; border: 1px solid var(--border); }
+.btn.bpur { background: #f0eaff; color: #6941c6; }
 
-.btn-outline {
-  background: white;
-  border: 1px solid #d0e0ff;
-  border-radius: 40px;
-  padding: 6px 12px;
-  font-size: 0.7rem;
-  cursor: pointer;
-}
-
-.client-grid {
+/* client cards */
+.cgrid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
-  gap: 16px;
+  gap: 18px;
 }
 
-.client-card {
+.cc2 {
   background: white;
   border-radius: 20px;
-  padding: 16px;
-  border: 1px solid #eef3ff;
-  transition: 0.2s;
+  padding: 18px;
+  border: 1px solid var(--border);
   cursor: pointer;
-}
-
-.client-card:hover {
-  border-color: #bdd3ff;
-  box-shadow: 0 4px 12px rgba(0,0,0,0.03);
-}
-
-.client-name {
-  font-weight: 700;
-  margin-bottom: 8px;
-  font-size: 0.9rem;
-}
-
-.client-meta {
-  font-size: 0.7rem;
-  color: #6d7f98;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 12px;
-}
-
-.settings-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 20px;
-}
-
-.settings-card {
-  background: white;
-  border-radius: 24px;
-  padding: 20px;
-  border: 1px solid #eef2fc;
-}
-
-.full-width {
-  grid-column: span 2;
-}
-
-textarea, input {
-  width: 100%;
-  padding: 12px 14px;
-  border-radius: 16px;
-  border: 1px solid #e2edff;
-  background: #fbfdff;
-  font-size: 0.8rem;
-  outline: none;
   transition: 0.2s;
 }
 
-textarea:focus, input:focus {
-  border-color: #1a5cff;
-  box-shadow: 0 0 0 2px rgba(26,92,255,0.1);
+.cc2:hover {
+  border-color: var(--primary-light);
+  box-shadow: 0 8px 20px rgba(30, 64, 175, 0.08);
 }
 
-.log-box {
-  background: #f7fafd;
-  border-radius: 18px;
-  padding: 12px;
-  font-family: monospace;
+.cn {
+  font-weight: 700;
+  font-size: 1rem;
+  margin-bottom: 6px;
+}
+
+.cm {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.cob {
+  background: var(--primary-bg);
+  color: var(--primary);
+  border-radius: 30px;
   font-size: 0.7rem;
-  max-height: 200px;
-  overflow-y: auto;
-  color: #1e2f41;
+  font-weight: 700;
+  padding: 2px 10px;
+  display: inline-block;
+  margin-top: 8px;
 }
 
-/* right conversation panel */
-.conv-panel {
+/* conversation panel */
+#conv-panel {
   position: fixed;
   right: 0;
   top: 0;
   bottom: 0;
   width: 360px;
   background: white;
-  box-shadow: -4px 0 25px rgba(0,0,0,0.05);
-  border-left: 1px solid #eef3ff;
-  transform: translateX(100%);
-  transition: 0.25s ease;
-  z-index: 1000;
+  border-left: 1px solid var(--border);
   display: flex;
   flex-direction: column;
+  z-index: 200;
+  transform: translateX(100%);
+  transition: transform 0.25s cubic-bezier(0.2, 0.9, 0.4, 1.1);
+  box-shadow: -8px 0 25px rgba(0, 0, 0, 0.05);
 }
 
-.conv-panel.open {
+#conv-panel.open {
   transform: translateX(0);
 }
 
-.conv-header {
-  padding: 18px;
-  border-bottom: 1px solid #eff4fe;
+/* search, filters */
+.sw {
   display: flex;
-  justify-content: space-between;
   align-items: center;
-}
-
-.conv-msgs {
-  flex: 1;
-  overflow-y: auto;
-  padding: 16px;
-  display: flex;
-  flex-direction: column;
   gap: 8px;
+  background: #f9fbfe;
+  border: 1px solid var(--border);
+  border-radius: 40px;
+  padding: 6px 12px;
 }
 
-.msg-bubble {
-  max-width: 85%;
-  padding: 10px 12px;
-  border-radius: 18px;
-  font-size: 0.75rem;
-  line-height: 1.4;
+.sw input {
+  border: none;
+  background: none;
+  outline: none;
+  font-size: 0.8rem;
+  width: 160px;
 }
 
-.msg-user {
-  background: #f0f4fe;
-  align-self: flex-start;
-  border-bottom-left-radius: 4px;
-}
-
-.msg-bot {
-  background: #eef2ff;
-  color: #0a2b44;
-  align-self: flex-end;
-  border-bottom-right-radius: 4px;
-}
-
-/* modal simple */
-.modal-mask {
-  position: fixed;
-  inset: 0;
-  background: rgba(0,0,0,0.3);
-  display: none;
-  align-items: center;
-  justify-content: center;
-  z-index: 1100;
-}
-
-.modal-card {
+.fsel {
+  padding: 6px 12px;
+  border-radius: 30px;
+  border: 1px solid var(--border);
   background: white;
-  border-radius: 32px;
-  max-width: 420px;
-  width: 90%;
-  padding: 24px;
+  font-size: 0.75rem;
+  color: #1f2f47;
+}
+
+.logsbox {
+  background: #0f172a;
+  color: #cbd5e6;
+  font-family: 'SF Mono', monospace;
+  font-size: 0.75rem;
+  padding: 14px;
+  border-radius: 16px;
+  max-height: 210px;
+  overflow-y: auto;
+}
+
+/* settings grid */
+.sgrd {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 20px;
+}
+
+.scard {
+  background: white;
+  border-radius: 20px;
+  border: 1px solid var(--border);
+  padding: 20px;
+}
+
+.fi {
+  width: 100%;
+  padding: 9px 12px;
+  border-radius: 14px;
+  border: 1px solid #e2edf2;
+  background: #ffffff;
+  font-size: 0.85rem;
 }
 
 /* responsive */
-@media (max-width: 780px) {
+@media (max-width: 768px) {
   .sidebar {
     transform: translateX(-100%);
-    position: fixed;
+    width: 260px;
   }
-  .sidebar.mobile-open {
+  .sidebar.open {
     transform: translateX(0);
   }
-  .main-content {
+  .main {
     margin-left: 0;
-    padding: 18px;
+    padding: 20px 16px;
   }
-  .chart-row {
+  .crow {
     grid-template-columns: 1fr;
   }
-  .settings-grid {
+  .sgrd {
     grid-template-columns: 1fr;
   }
-  .full-width {
-    grid-column: span 1;
-  }
-  .stats-grid {
-    grid-template-columns: repeat(2,1fr);
+  .topbar {
+    flex-direction: column;
+    align-items: flex-start;
   }
 }
 
-.menu-toggle {
+.ham {
   display: none;
   position: fixed;
   top: 16px;
   left: 16px;
-  background: white;
-  border: 1px solid #e0ecff;
-  border-radius: 14px;
-  padding: 8px 12px;
-  z-index: 20;
+  z-index: 30;
+  background: var(--primary);
+  border: none;
+  border-radius: 40px;
+  width: 40px;
+  height: 40px;
+  color: white;
+  font-size: 1.2rem;
   cursor: pointer;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
 }
 
-@media (max-width: 780px) {
-  .menu-toggle {
+.ov {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.2);
+  z-index: 15;
+}
+
+@media (max-width: 768px) {
+  .ham {
     display: flex;
     align-items: center;
-    gap: 6px;
+    justify-content: center;
   }
+  .ov.show {
+    display: block;
+  }
+}
+
+/* toast */
+#toast {
+  position: fixed;
+  top: 20px;
+  right: 20px;
+  z-index: 300;
+  transition: all 0.2s;
+  opacity: 0;
+  transform: translateY(-20px);
+  pointer-events: none;
+}
+#toast.show {
+  opacity: 1;
+  transform: translateY(0);
+}
+.tin {
+  background: #1f2937;
+  color: white;
+  padding: 12px 18px;
+  border-radius: 40px;
+  font-size: 0.8rem;
+  border-left: 4px solid var(--primary);
+  box-shadow: 0 8px 20px rgba(0,0,0,0.08);
+}
+.tin.ok { border-left-color: #2b9348; }
+.tin.err { border-left-color: #e53e3e; }
+.empty {
+  text-align: center;
+  padding: 40px;
+  color: var(--text-muted);
+}
+
+/* modal */
+.mov {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.4);
+  align-items: center;
+  justify-content: center;
+  z-index: 400;
+}
+.modal {
+  background: white;
+  border-radius: 28px;
+  padding: 24px;
+  max-width: 460px;
+  width: 90%;
 }
 </style>
 </head>
 <body>
 
-<button class="menu-toggle" id="menuToggleBtn"><i class="fa fa-bars"></i> Menu</button>
+<div id="toast"><div class="tin" id="tin"></div></div>
+<button class="ham" id="hamBtn"><i class="fa fa-bars"></i></button>
+<div class="ov" id="overlay"></div>
 
-<div class="dashboard">
+<div class="app-wrapper" id="appWrapper">
   <aside class="sidebar" id="sidebar">
-    <div class="logo-area">
-      <div class="logo-icon">B</div>
-      <div class="logo-text">
-        <h1>B.Y PRO</h1>
-        <span>Marketing Agent</span>
-      </div>
+    <div class="s-logo">
+      <img src="https://github.com/Yacine2007/-by_pro_marketing_agent/blob/main/MA.jpg?raw=true" alt="B.Y PRO">
+      <div class="brand">B.Y PRO<small>Executive Agent</small></div>
     </div>
-    <div class="nav-links">
-      <button class="nav-item active" data-page="analytics"><i class="fas fa-chart-line"></i> Analytics</button>
-      <button class="nav-item" data-page="orders"><i class="fas fa-box"></i> Orders</button>
-      <button class="nav-item" data-page="clients"><i class="fas fa-users"></i> Clients</button>
-      <button class="nav-item" data-page="comments"><i class="fas fa-comment-dots"></i> Comments</button>
-      <button class="nav-item" data-page="publish"><i class="fas fa-bullhorn"></i> Publishing</button>
-      <button class="nav-item" data-page="admins"><i class="fas fa-shield-alt"></i> Admins</button>
-      <button class="nav-item" data-page="settings"><i class="fas fa-sliders-h"></i> Settings</button>
+    <div class="nav">
+      <div class="nlabel">Core</div>
+      <button class="nbtn active" data-page="analytics"><i class="fa fa-chart-line"></i> Analytics</button>
+      <div class="nlabel">Management</div>
+      <button class="nbtn" data-page="orders"><i class="fa fa-box"></i> Orders</button>
+      <button class="nbtn" data-page="clients"><i class="fa fa-users"></i> Clients</button>
+      <div class="nlabel">Marketing</div>
+      <button class="nbtn" data-page="comments"><i class="fa fa-comment-dots"></i> Comments AI</button>
+      <button class="nbtn" data-page="publishing"><i class="fa fa-bullhorn"></i> Publishing</button>
+      <div class="nlabel">System</div>
+      <button class="nbtn" data-page="admins"><i class="fa fa-shield-alt"></i> Admins</button>
+      <button class="nbtn" data-page="settings"><i class="fa fa-sliders-h"></i> Settings</button>
     </div>
-    <div class="status-footer">
-      <span class="online-dot"></span> Agent live • <span id="liveClock">—</span>
+    <div class="s-foot">
+      <div class="s-status"><span class="dot"></span> Agent online</div>
+      <div id="uptime-lbl">—</div>
     </div>
   </aside>
 
-  <main class="main-content" id="mainContent">
-    <!-- ========= ANALYTICS PAGE ========= -->
-    <div class="page active-page" id="page-analytics">
-      <div class="top-bar">
-        <h2 class="page-title"><i class="fas fa-chart-pie" style="color:#1a5cff; margin-right: 8px;"></i> Performance</h2>
-        <div class="badge-live" id="liveBadge"><i class="fas fa-circle" style="font-size: 8px; color:#1fcd7a;"></i> Live data</div>
-      </div>
-      <div class="stats-grid" id="statGrid"></div>
-      <div class="chart-row">
-        <div class="card-white"><div class="card-header"><i class="fas fa-chart-line"></i> Orders trend (7d)</div><canvas id="trendChart" height="100"></canvas></div>
-        <div class="card-white"><div class="card-header"><i class="fas fa-chart-pie"></i> Services split</div><canvas id="pieChart" height="130"></canvas></div>
-      </div>
-      <div class="card-white"><div class="card-header"><i class="fas fa-terminal"></i> Live events</div><div class="log-box" id="liveLogs">Loading logs...</div></div>
+  <main class="main" id="mainContent">
+    <!-- Analytics Page -->
+    <div class="page active" id="page-analytics">
+      <div class="topbar"><h2><i class="fa fa-chart-pie"></i> Analytics</h2><div class="tbadge" id="rlbl"><i class="fa fa-circle-notch fa-spin"></i> Live</div></div>
+      <div class="sgrid" id="statsGrid"></div>
+      <div class="crow"><div class="cc"><div class="ct"><i class="fa fa-chart-line"></i> Orders trend (7d)</div><canvas id="lchart" height="90"></canvas></div><div class="cc"><div class="ct"><i class="fa fa-chart-pie"></i> Services distribution</div><canvas id="pchart" height="145"></canvas></div></div>
+      <div class="card"><div class="chd"><h3><i class="fa fa-terminal"></i> Live logs</h3><button class="btn bg" id="refreshLogsBtn"><i class="fa fa-sync"></i> Refresh</button></div><div class="logsbox" id="logbox">Loading logs...</div></div>
     </div>
 
-    <!-- ORDERS -->
-    <div class="page" id="page-orders">
-      <div class="top-bar"><h2 class="page-title"><i class="fas fa-truck"></i> Orders</h2><div><input type="text" id="orderSearch" placeholder="Search name/service" style="width: 180px; padding: 6px 12px; border-radius: 40px;"></div></div>
-      <div class="card-white"><div class="table-wrapper"><table id="ordersTable"><thead><tr><th>ID</th><th>Client</th><th>Service</th><th>Budget</th><th>Status</th><th>Date</th><th>Action</th></tr></thead><tbody><tr><td colspan="7" style="text-align:center">Loading orders...</td></tr></tbody></table></div></div>
-    </div>
+    <div class="page" id="page-orders"><div class="topbar"><h2><i class="fa fa-box"></i> Orders</h2><div style="display:flex;gap:8px"><div class="sw"><i class="fa fa-search"></i><input id="osrch" placeholder="Search order"></div><select class="fsel" id="ostat"><option value="">All Status</option><option value="جديد">New</option><option value="مكتمل">Completed</option></select></div></div><div class="card"><div style="overflow-x:auto"> <table> <thead><tr><th>ID</th><th>Client</th><th>Service</th><th>Budget</th><th>Status</th><th>Actions</th></tr></thead><tbody id="otb"></tbody></table></div></div></div>
+    <div class="page" id="page-clients"><div class="topbar"><h2><i class="fa fa-users"></i> Clients</h2><div class="sw"><i class="fa fa-search"></i><input id="csrch" placeholder="Search by name/phone"></div></div><div class="cgrid" id="cgrid"></div></div>
+    <div class="page" id="page-admins"><div class="topbar"><h2><i class="fa fa-shield-halved"></i> Admins & roles</h2></div><div class="card"><div class="chd"><h3>Manager accounts · 3 fails auto-ban</h3></div><div id="admlist" style="padding:16px"></div></div></div>
+    <div class="page" id="page-settings"><div class="topbar"><h2><i class="fa fa-gear"></i> Configuration</h2><button class="btn bp" id="saveAllSettings"><i class="fa fa-save"></i> Save all</button></div><div class="sgrd" id="settingsGrid"></div><div class="card full" style="margin-top:20px"><div class="chd"><h3><i class="fa fa-triangle-exclamation"></i> Danger zone</h3></div><div style="padding:20px;display:flex;gap:12px"><button class="btn bd" id="resetDataBtn">Reset agent data</button><button class="btn bw" id="clearMsgsBtn">Clear message counters</button></div></div></div>
 
-    <!-- CLIENTS -->
-    <div class="page" id="page-clients">
-      <div class="top-bar"><h2 class="page-title"><i class="fas fa-user-friends"></i> Clients</h2><input type="text" id="clientSearch" placeholder="Search by name/phone" style="width: 200px;"></div>
-      <div id="clientGrid" class="client-grid"></div>
-    </div>
+    <!-- COMMENTS page (simplified) -->
+    <div class="page" id="page-comments"><div class="topbar"><h2><i class="fa fa-comments"></i> Auto comment AI</h2><div><button class="btn bs" id="enableCommentsBtn"><i class="fa fa-play"></i> Enable</button><button class="btn bd" id="disableCommentsBtn"><i class="fa fa-stop"></i> Disable</button><button class="btn bp" id="saveCommentSettingsBtn"><i class="fa fa-save"></i> Save prompt</button></div></div><div class="sgrid" style="grid-template-columns:repeat(3,1fr)"><div class="sc blue"><div class="sl">Today replies</div><div class="sv" id="cs-today">—</div></div><div class="sc green"><div class="sl">Total replies</div><div class="sv" id="cs-total">—</div></div><div class="sc"><div class="sl">Status</div><div class="sv" id="cs-status" style="font-size:1rem">—</div></div></div><div class="card"><div class="chd"><h3>Reply prompt & interval</h3></div><div style="padding:18px"><div class="fg"><label>Check interval (min)</label><input class="fi" id="cs-interval" type="number" value="5"></div><div class="fg" style="margin-top:12px"><label>AI reply prompt</label><textarea class="fi" id="cs-prompt" rows="3"></textarea></div><button class="btn bp" id="checkCommentsNowBtn" style="margin-top:12px"><i class="fa fa-search"></i> Check now</button></div></div><div class="card"><div class="chd"><h3>Comments log</h3><button class="btn bg" id="refreshCommentsLogBtn"><i class="fa fa-refresh"></i> Refresh</button><button class="btn bd" id="clearCommentLogBtn"><i class="fa fa-trash"></i> Clear log</button></div><div style="overflow-x:auto"><table><thead><tr><th>Time</th><th>Comment</th><th>Reply</th><th>Actions</th></tr></thead><tbody id="ctb"></tbody></table></div></div></div>
 
-    <!-- COMMENTS (simplified but functional) -->
-    <div class="page" id="page-comments">
-      <div class="top-bar"><h2 class="page-title"><i class="fas fa-reply-all"></i> Auto comments</h2><button class="btn-primary" id="refreshCommentsBtn"><i class="fas fa-sync-alt"></i> Refresh</button></div>
-      <div class="stats-grid" id="commentStats"></div>
-      <div class="card-white"><div class="card-header">Recent replies log</div><div class="table-wrapper"><table id="commentsLogTable"><thead><tr><th>Time</th><th>Commenter</th><th>Reply</th></tr></thead><tbody><tr><td colspan="3">Loading...</td></tr></tbody></table></div></div>
-    </div>
-
-    <!-- PUBLISHING (clean) -->
-    <div class="page" id="page-publish">
-      <div class="top-bar"><h2 class="page-title"><i class="fas fa-newspaper"></i> Auto publishing</h2><button class="btn-primary" id="publishNowBtn"><i class="fas fa-paper-plane"></i> Publish now</button></div>
-      <div class="settings-card" style="margin-bottom: 20px;"><div class="card-header">Settings</div><div class="stats-grid" style="grid-template-columns:1fr 1fr"><div><label style="font-size:0.7rem">Interval (min)</label><input type="number" id="pubInterval" value="60"></div><div><label style="font-size:0.7rem">Add chat button</label><input type="checkbox" id="addChatBtn" style="width: auto; margin-top: 12px;"></div></div><button class="btn-primary" id="savePubSettings">Save schedule</button></div>
-      <div class="card-white"><div class="card-header">Post content</div><textarea id="postTextArea" rows="12" placeholder="Write your marketing post..."></textarea></div>
-    </div>
-
-    <!-- ADMINS -->
-    <div class="page" id="page-admins">
-      <div class="top-bar"><h2 class="page-title"><i class="fas fa-crown"></i> Admin team</h2></div>
-      <div id="adminsList" class="client-grid"></div>
-    </div>
-
-    <!-- SETTINGS -->
-    <div class="page" id="page-settings">
-      <div class="top-bar"><h2 class="page-title"><i class="fas fa-cog"></i> Configuration</h2><button class="btn-primary" id="saveAllSettings">Save changes</button></div>
-      <div class="settings-grid">
-        <div class="settings-card"><div class="card-header"><i class="fas fa-wallet"></i> Payments</div><label>Binance ID</label><input id="binanceId" placeholder="Binance Pay ID"></div>
-        <div class="settings-card"><div class="card-header"><i class="fas fa-link"></i> Links</div><label>Facebook page</label><input id="fbPageLink"><label style="margin-top:8px">Store URL</label><input id="storeUrl"></div>
-        <div class="settings-card full-width"><div class="card-header"><i class="fas fa-robot"></i> Bot prompt (client)</div><textarea id="botPrompt" rows="5"></textarea></div>
-        <div class="settings-card full-width"><div class="card-header"><i class="fas fa-tools"></i> Danger reset</div><button class="btn-outline" id="resetDataBtn" style="border-color:#ffd6d6; color:#d14"><i class="fas fa-trash-alt"></i> Reset agent data</button></div>
-      </div>
-    </div>
+    <!-- Publishing -->
+    <div class="page" id="page-publishing"><div class="topbar"><h2><i class="fa fa-bullhorn"></i> Publishing</h2><div><button class="btn bp" id="publishNowBtn"><i class="fa fa-paper-plane"></i> Publish now</button><button class="btn bs" id="enableAutoPubBtn">Enable auto</button><button class="btn bd" id="disableAutoPubBtn">Disable auto</button></div></div><div class="card"><div class="chd"><h3>Schedule & preview</h3></div><div style="padding:20px"><div class="fg"><label>Interval (minutes)</label><input class="fi" id="pub-interval" type="number" value="60"></div><div class="fg"><label>Last published</label><div class="fi" id="pub-last">—</div></div><div class="fg"><label><input type="checkbox" id="pub-chatbtn"> Add "Send message" button</label></div><div class="fg"><label>Post content</label><textarea id="pub-text" class="fi" rows="10"></textarea></div><div id="pub-statusbadge"></div></div></div></div>
   </main>
 </div>
 
-<!-- conversation panel -->
-<div id="convPanel" class="conv-panel">
-  <div class="conv-header"><div><strong id="convName">—</strong><div style="font-size:0.7rem" id="convPhone"></div></div><button class="btn-outline" id="closeConvBtn"><i class="fas fa-times"></i></button></div>
-  <div class="conv-msgs" id="convMessages"></div>
-</div>
-
-<!-- modal note -->
-<div id="noteModal" class="modal-mask"><div class="modal-card"><h3>Order note</h3><textarea id="noteText" rows="3" style="margin:12px 0"></textarea><div style="display:flex; gap:8px; justify-content:flex-end"><button id="closeNoteBtn">Cancel</button><button id="saveNoteBtn" class="btn-primary">Save</button></div></div></div>
+<div id="conv-panel"><div class="cvhd" style="padding:16px;display:flex;gap:10px;border-bottom:1px solid #eef"><div><div id="cvn" style="font-weight:700">—</div><div id="cvph" style="font-size:0.7rem;color:#6c86a3">—</div></div><button class="btn bg" id="closeConvBtn"><i class="fa fa-times"></i></button></div><div id="cvmsgs" style="flex:1;overflow-y:auto;padding:12px"></div></div>
+<div class="mov" id="nmod"><div class="modal"><h3>Order note #<span id="noid"></span></h3><textarea id="ntxt" rows="2"></textarea><div class="modal-act" style="margin-top:12px;display:flex;gap:8px"><button class="btn bg" id="closeNoteBtn">Cancel</button><button class="btn bp" id="saveNoteBtn">Save</button></div></div></div>
+<div class="mov" id="cedit-mod"><div class="modal"><h3>Edit reply</h3><textarea id="cedit-txt" rows="3"></textarea><div class="modal-act"><button class="btn bg" id="closeEditModalBtn">Cancel</button><button class="btn bp" id="saveEditReplyBtn">Save</button></div></div></div>
 
 <script>
-  // MOCK API with localStorage + realistic behavior (fully functional frontend simulation with persistent data)
-  let ordersDB = [];
-  let clientsDB = [];
-  let commentLogs = [];
-  let settingsData = {
-    binance_id: "BYPRO_PAY_ID",
-    fb_page: "https://facebook.com/bypro",
-    store_url: "https://bypro.store",
-    bot_prompt: "أنت مساعد B.Y PRO الذكي. ساعد العملاء في اختيار الخدمات: تطوير مواقع، تطبيقات، ذكاء اصطناعي، هوية بصرية، استشارات. كن ودوداً ومهنياً بالعربية.",
-    owner_prompt: "Admin: استخدم الأدوات والإحصائيات لتقديم تقارير."
-  };
-  let commentsEnabled = true;
-  let publishSettings = { interval: 60, post_text: "🚀 B.Y PRO – أحدث حلول الذكاء الاصطناعي والبرمجة لتطوير أعمالك. اطلب استشارتك الآن!", add_chat_button: true, enabled: true, last_published: new Date().toISOString() };
-  let stats = { total_orders: 0, today_orders: 0, unique_clients: 0, completed: 0, pending: 0, msgs_received: 124, msgs_sent: 98 };
+// NO LOGIN — direct load
+const API_BASE = '';
+let allOrders = [], allClients = [], failCounts = {};
+let lineChart, pieChart, lastTimestamp = '';
+let editingCommentIndex = -1, allCommentsLog = [];
 
-  function loadInitialData() {
-    const storedOrders = localStorage.getItem("bypro_orders");
-    if(storedOrders) ordersDB = JSON.parse(storedOrders);
-    else {
-      ordersDB = [
-        { id: 1001, name: "Ahmed Mansour", service: "Website Dev", budget: "$850", status: "new", timestamp: new Date(Date.now() - 86400000).toISOString(), phone: "+21355123456", note: "" },
-        { id: 1002, name: "Sara Benali", service: "AI Chatbot", budget: "$1200", status: "new", timestamp: new Date().toISOString(), phone: "+21366112233", note: "" },
-        { id: 1003, name: "Karim Lounis", service: "Mobile App", budget: "$2100", status: "completed", timestamp: new Date(Date.now() - 172800000).toISOString(), phone: "+21377123456", note: "" }
-      ];
-      saveOrders();
-    }
-    const storedClients = localStorage.getItem("bypro_clients");
-    if(storedClients) clientsDB = JSON.parse(storedClients);
-    else {
-      const clientMap = new Map();
-      ordersDB.forEach(o => { if(!clientMap.has(o.phone)) clientMap.set(o.phone, { id: o.phone, name: o.name, phone: o.phone, orders: [], last_seen: o.timestamp }); clientMap.get(o.phone).orders.push({service: o.service, budget: o.budget, status: o.status}); });
-      clientsDB = Array.from(clientMap.values());
-      saveClients();
-    }
-    const storedComments = localStorage.getItem("bypro_comments");
-    if(storedComments) commentLogs = JSON.parse(storedComments);
-    else commentLogs = [{ time: new Date().toLocaleString(), commenter: "Ali_dz", reply: "شكراً على الخدمات المميزة 👍", post_text: "خدمات B.Y PRO" }];
-    const storedPub = localStorage.getItem("bypro_pub");
-    if(storedPub) publishSettings = JSON.parse(storedPub);
-    else publishSettings.post_text = document.getElementById("postTextArea")?.value || publishSettings.post_text;
-    stats.total_orders = ordersDB.length;
-    stats.pending = ordersDB.filter(o=>o.status==='new').length;
-    stats.completed = ordersDB.filter(o=>o.status==='completed').length;
-    stats.unique_clients = clientsDB.length;
-    stats.today_orders = ordersDB.filter(o=> new Date(o.timestamp).toDateString() === new Date().toDateString()).length;
-  }
+async function toast(msg, type=''){ const e=document.getElementById('toast'),i=document.getElementById('tin'); i.className=`tin ${type==='ok'?'ok':type==='err'?'err':''}`; i.innerHTML=`${type==='ok'?'✓':type==='err'?'⚠':'ℹ️'} ${msg}`; e.classList.add('show'); setTimeout(()=>e.classList.remove('show'),2800); }
 
-  function saveOrders() { localStorage.setItem("bypro_orders", JSON.stringify(ordersDB)); updateStats(); }
-  function saveClients() { localStorage.setItem("bypro_clients", JSON.stringify(clientsDB)); }
-  function saveComments() { localStorage.setItem("bypro_comments", JSON.stringify(commentLogs)); }
-  function savePub() { localStorage.setItem("bypro_pub", JSON.stringify(publishSettings)); }
+function toggleSidebar(){ document.getElementById('sidebar').classList.toggle('open'); document.getElementById('overlay').classList.toggle('show'); }
+document.getElementById('hamBtn').onclick=toggleSidebar; document.getElementById('overlay').onclick=toggleSidebar;
+document.querySelectorAll('.nbtn').forEach(btn=>{ btn.onclick=()=>{ const page=btn.dataset.page; document.querySelectorAll('.page').forEach(p=>p.classList.remove('active')); document.getElementById(`page-${page}`).classList.add('active'); document.querySelectorAll('.nbtn').forEach(b=>b.classList.remove('active')); btn.classList.add('active'); if(page==='analytics') loadAnalytics(); if(page==='orders') loadOrders(); if(page==='clients') loadClients(); if(page==='admins') loadAdmins(); if(page==='settings') loadSettings(); if(page==='comments') loadCommentsPage(); if(page==='publishing') loadPublishPage(); toggleSidebar(); }; });
 
-  function updateStats() {
-    stats.total_orders = ordersDB.length;
-    stats.pending = ordersDB.filter(o=>o.status==='new').length;
-    stats.completed = ordersDB.filter(o=>o.status==='completed').length;
-    stats.unique_clients = clientsDB.length;
-    stats.today_orders = ordersDB.filter(o=> new Date(o.timestamp).toDateString() === new Date().toDateString()).length;
-  }
-
-  function renderAnalytics() {
-    const grid = document.getElementById("statGrid");
-    grid.innerHTML = `
-      <div class="stat-card"><div class="stat-title">Total orders</div><div class="stat-number">${stats.total_orders}</div></div>
-      <div class="stat-card"><div class="stat-title">Today</div><div class="stat-number">${stats.today_orders}</div></div>
-      <div class="stat-card"><div class="stat-title">Clients</div><div class="stat-number">${stats.unique_clients}</div></div>
-      <div class="stat-card"><div class="stat-title">Completed</div><div class="stat-number">${stats.completed}</div></div>
-      <div class="stat-card"><div class="stat-title">Pending</div><div class="stat-number">${stats.pending}</div></div>
-      <div class="stat-card"><div class="stat-title">Messages In</div><div class="stat-number">${stats.msgs_received}</div></div>`;
-    const dailyMap = {};
-    ordersDB.forEach(o => { let d = o.timestamp.split('T')[0]; dailyMap[d] = (dailyMap[d]||0)+1; });
-    const last7 = [...Array(7)].map((_,i) => { let d = new Date(); d.setDate(d.getDate()-i); return d.toISOString().split('T')[0]; }).reverse();
-    const vals = last7.map(d => dailyMap[d]||0);
-    if(window.trendChart) window.trendChart.destroy();
-    const ctx = document.getElementById('trendChart').getContext('2d');
-    window.trendChart = new Chart(ctx, { type: 'line', data: { labels: last7.map(d=>d.slice(5)), datasets: [{ label: 'Orders', data: vals, borderColor: '#1a5cff', backgroundColor: 'rgba(26,92,255,0.03)', fill: true, tension: 0.3 }] }, options: { responsive: true, maintainAspectRatio: true } });
-    const catCount = { Website:0, App:0, AI:0, Design:0 };
-    ordersDB.forEach(o=>{ if(o.service?.includes('Web')) catCount.Website++; else if(o.service?.includes('App')) catCount.App++; else if(o.service?.includes('AI')) catCount.AI++; else catCount.Design++; });
-    if(window.pieChartIns) window.pieChartIns.destroy();
-    window.pieChartIns = new Chart(document.getElementById('pieChart'), { type: 'doughnut', data: { labels: Object.keys(catCount), datasets: [{ data: Object.values(catCount), backgroundColor: ['#1a5cff','#3b82f6','#5c9eff','#93b4ff'] }] }, options: { plugins: { legend: { position: 'bottom' } } } });
-    const logDiv = document.getElementById('liveLogs');
-    logDiv.innerHTML = `<div>✅ Dashboard ready • ${new Date().toLocaleTimeString()}</div><div>📦 Last order: ${ordersDB[ordersDB.length-1]?.name || 'none'}</div><div>🤖 Auto-comments active</div>`;
-  }
-
-  function renderOrders(filter="") {
-    let filtered = ordersDB.filter(o => o.name?.toLowerCase().includes(filter) || o.service?.toLowerCase().includes(filter));
-    const tbody = document.querySelector("#ordersTable tbody");
-    if(!filtered.length) { tbody.innerHTML = "<tr><td colspan='7'>No orders</td></tr>"; return; }
-    tbody.innerHTML = filtered.map(o => `<tr><td>#${o.id}</td><td>${o.name}<br><small>${o.phone||''}</small></td><td>${o.service}</td><td>${o.budget}</td><td><span class="badge-status ${o.status==='completed'?'badge-done':''}">${o.status==='completed'?'✅ Done':'🆕 New'}</span></td><td>${new Date(o.timestamp).toLocaleDateString()}</td><td><button class="btn-sm" onclick="completeOrder(${o.id})">✔ Complete</button> <button class="btn-sm" onclick="deleteOrder(${o.id})">🗑</button> <button class="btn-sm" onclick="addNote(${o.id})">✏️ Note</button></td></tr>`).join('');
-  }
-  window.completeOrder = (id) => { let idx = ordersDB.findIndex(o=>o.id===id); if(idx!==-1) ordersDB[idx].status = "completed"; saveOrders(); renderOrders(document.getElementById("orderSearch")?.value.toLowerCase()||""); renderAnalytics(); renderClients(); toast("Order completed","ok"); };
-  window.deleteOrder = (id) => { if(confirm("Delete order?")) { ordersDB = ordersDB.filter(o=>o.id!==id); saveOrders(); renderOrders(""); renderAnalytics(); renderClients(); toast("Deleted","")} };
-  let currentOrderId = null;
-  window.addNote = (id) => { currentOrderId = id; document.getElementById("noteText").value = ordersDB.find(o=>o.id===id)?.note || ""; document.getElementById("noteModal").style.display = "flex"; };
-  document.getElementById("saveNoteBtn")?.addEventListener("click",()=>{ if(currentOrderId){ let ord = ordersDB.find(o=>o.id===currentOrderId); if(ord) ord.note = document.getElementById("noteText").value; saveOrders(); renderOrders(""); } document.getElementById("noteModal").style.display = "none"; });
-  document.getElementById("closeNoteBtn")?.addEventListener("click",()=>document.getElementById("noteModal").style.display="none");
-
-  function renderClients() { const search = document.getElementById("clientSearch")?.value.toLowerCase()||""; let filtered = clientsDB.filter(c=>c.name?.toLowerCase().includes(search)||c.phone?.includes(search)); const grid = document.getElementById("clientGrid"); grid.innerHTML = filtered.map((c,i)=>`<div class="client-card" onclick="openConversation(${i})"><div class="client-name">${c.name}</div><div class="client-meta"><span><i class="fas fa-phone"></i> ${c.phone}</span><span>📦 ${c.orders.length} orders</span></div></div>`).join(''); }
-  window.openConversation = (idx) => { let c = clientsDB[idx]; document.getElementById("convName").innerText = c.name; document.getElementById("convPhone").innerText = c.phone; const msgsDiv = document.getElementById("convMessages"); msgsDiv.innerHTML = `<div class="msg-bubble msg-user">مرحباً أريد استشارة</div><div class="msg-bubble msg-bot">أهلاً ${c.name}، كيف يمكنني مساعدتك في خدمات B.Y PRO؟</div>`; document.getElementById("convPanel").classList.add("open"); };
-  document.getElementById("closeConvBtn")?.addEventListener("click",()=>document.getElementById("convPanel").classList.remove("open"));
-
-  function renderComments() { const statDiv = document.getElementById("commentStats"); statDiv.innerHTML = `<div class="stat-card"><div class="stat-title">Today replies</div><div class="stat-number">${commentLogs.filter(l=>l.time?.includes(new Date().toLocaleDateString())).length}</div></div><div class="stat-card"><div class="stat-title">Total</div><div class="stat-number">${commentLogs.length}</div></div>`; const tbody = document.querySelector("#commentsLogTable tbody"); tbody.innerHTML = commentLogs.slice(-5).reverse().map(l=>`<tr><td>${l.time}</td><td>${l.commenter}</td><td>${l.reply.substring(0,60)}</td></tr>`).join(''); }
-  function renderAdmins() { document.getElementById("adminsList").innerHTML = `<div class="client-card"><div class="client-name"><i class="fas fa-crown"></i> Owner (Master)</div><div>ID: admin_bypro</div><div class="btn-sm" style="margin-top:8px">👑 Full access</div></div><div class="client-card"><div class="client-name"><i class="fas fa-user-shield"></i> Co-Admin</div><div>ID: yacine_agent</div><div class="btn-sm">⚙️ Manager</div></div>`; }
-  function renderSettings() { document.getElementById("binanceId").value = settingsData.binance_id; document.getElementById("fbPageLink").value = settingsData.fb_page; document.getElementById("storeUrl").value = settingsData.store_url; document.getElementById("botPrompt").value = settingsData.bot_prompt; }
-  document.getElementById("saveAllSettings")?.addEventListener("click",()=>{ settingsData.binance_id = document.getElementById("binanceId").value; settingsData.fb_page = document.getElementById("fbPageLink").value; settingsData.store_url = document.getElementById("storeUrl").value; settingsData.bot_prompt = document.getElementById("botPrompt").value; localStorage.setItem("bypro_settings", JSON.stringify(settingsData)); toast("Settings saved","ok"); });
-  document.getElementById("resetDataBtn")?.addEventListener("click",()=>{ if(confirm("⚠️ Reset ALL orders & comments? Keep structure?")){ ordersDB = []; clientsDB = []; commentLogs = []; localStorage.removeItem("bypro_orders"); localStorage.removeItem("bypro_clients"); localStorage.removeItem("bypro_comments"); loadInitialData(); renderAnalytics(); renderOrders(); renderClients(); renderComments(); toast("Data reset",""); } });
-  function toast(msg,type){ let t = document.createElement("div"); t.innerText = msg; t.style.position="fixed"; t.style.bottom="20px"; t.style.right="20px"; t.style.background="#1a5cff"; t.style.color="white"; t.style.padding="8px 16px"; t.style.borderRadius="40px"; t.style.fontSize="0.8rem"; t.style.zIndex=9999; document.body.appendChild(t); setTimeout(()=>t.remove(),2000); }
-
-  function initUI() {
-    loadInitialData(); renderAnalytics(); renderOrders(); renderClients(); renderComments(); renderAdmins(); renderSettings();
-    document.getElementById("postTextArea").value = publishSettings.post_text;
-    document.getElementById("pubInterval").value = publishSettings.interval;
-    document.getElementById("addChatBtn").checked = publishSettings.add_chat_button;
-    document.getElementById("publishNowBtn")?.addEventListener("click",()=>{ toast("✅ Published to Facebook (demo)", "ok"); publishSettings.last_published = new Date().toISOString(); savePub(); });
-    document.getElementById("savePubSettings")?.addEventListener("click",()=>{ publishSettings.interval = parseInt(document.getElementById("pubInterval").value); publishSettings.post_text = document.getElementById("postTextArea").value; publishSettings.add_chat_button = document.getElementById("addChatBtn").checked; savePub(); toast("Publish settings saved","ok"); });
-    document.getElementById("orderSearch")?.addEventListener("input", e=> renderOrders(e.target.value.toLowerCase()));
-    document.getElementById("clientSearch")?.addEventListener("input", ()=>renderClients());
-    document.getElementById("refreshCommentsBtn")?.addEventListener("click",()=>{ renderComments(); toast("Comments refreshed",""); });
-    setInterval(()=>{ document.getElementById("liveClock").innerText = new Date().toLocaleTimeString(); },1000);
-    const navBtns = document.querySelectorAll(".nav-item");
-    navBtns.forEach(btn => { btn.addEventListener("click",()=>{ const pageId = btn.dataset.page; document.querySelectorAll(".page").forEach(p=>p.classList.remove("active-page")); document.getElementById(`page-${pageId}`).classList.add("active-page"); navBtns.forEach(b=>b.classList.remove("active")); btn.classList.add("active"); if(window.innerWidth<780) document.getElementById("sidebar").classList.remove("mobile-open"); }); });
-    document.getElementById("menuToggleBtn")?.addEventListener("click",()=>document.getElementById("sidebar").classList.toggle("mobile-open"));
-  }
-  initUI();
+async function loadAnalytics(){ try{ const [dr,cr]=await Promise.all([fetch('/api/dashboard'),fetch('/api/comments/stats')]); const d=await dr.json(), s=d.stats, cs=await cr.json(); document.getElementById('statsGrid').innerHTML=`<div class="sc blue"><div class="sl">Orders</div><div class="sv">${s.total_orders||0}</div><i class="fa fa-box si"></i></div><div class="sc green"><div class="sl">Today</div><div class="sv">${s.today_orders||0}</div></div><div class="sc"><div class="sl">Clients</div><div class="sv">${s.unique_clients||0}</div></div><div class="sc green"><div class="sl">Completed</div><div class="sv">${d.completed||0}</div></div><div class="sc yellow"><div class="sl">Pending</div><div class="sv">${d.pending||0}</div></div><div class="sc red"><div class="sl">Blocked</div><div class="sv">${s.blocked||0}</div></div><div class="sc purple"><div class="sl">Msgs in</div><div class="sv">${s.msgs_received||0}</div></div><div class="sc"><div class="sl">Msgs out</div><div class="sv">${s.msgs_sent||0}</div></div>`; document.getElementById('rlbl').innerHTML=`<i class="fa fa-circle" style="color:#22c55e;font-size:.6rem"></i> Updated ${new Date().toLocaleTimeString()}`; if(d.start_time){ let m=Math.floor((Date.now()-new Date(d.start_time))/60000); document.getElementById('uptime-lbl').textContent=`Uptime: ${Math.floor(m/60)}h ${m%60}m`; } let days=Object.keys(d.daily).sort(), vals=days.map(k=>d.daily[k]); if(lineChart)lineChart.destroy(); lineChart=new Chart(document.getElementById('lchart'),{type:'line',data:{labels:days.map(k=>k.slice(5)),datasets:[{data:vals,borderColor:'#1e40af',backgroundColor:'rgba(30,64,175,0.05)',fill:true,tension:0.3}]},options:{responsive:true,plugins:{legend:{display:false}}}}); const cats=d.categories; let labels=Object.keys(cats).filter(k=>cats[k]>0), data=labels.map(k=>cats[k]); if(pieChart)pieChart.destroy(); if(labels.length) pieChart=new Chart(document.getElementById('pchart'),{type:'doughnut',data:{labels,datasets:[{data,backgroundColor:['#2563eb','#0e7b32','#7c3aed','#ea8c2b','#0891b2']}]},options:{plugins:{legend:{position:'bottom'}}}}); await loadLogs(); }catch(e){console.error(e)} }
+async function loadLogs(){ let r=await fetch('/api/logs'), logs=await r.json(); document.getElementById('logbox').innerHTML=logs.map(l=>`<div style="padding:4px 0;border-bottom:1px solid #2d3748">[${l.time}] ${l.msg}</div>`).join('')||'<div>No logs</div>'; }
+async function loadOrders(){ let r=await fetch('/api/orders'); allOrders=await r.json(); renderOrders(); }
+function renderOrders(){ let f=allOrders,q=document.getElementById('osrch').value.toLowerCase(),st=document.getElementById('ostat').value; let filtered=f.filter(o=>(o.name+o.service).toLowerCase().includes(q)&&(st?o.status===st:true)); document.getElementById('otb').innerHTML=filtered.map(o=>`<tr><td>#${o.id}</td><td><strong>${o.name||'—'}</strong>${o.note?`<br><span style="font-size:.7rem">📝${o.note}</span>`:''}</td><td><span class="bdg-tag">${o.service||''}</span></td><td>${o.budget_range||o.budget||'—'}$</td><td><span class="${o.status==='مكتمل'?'bdg bdg-done':'bdg bdg-new'}">${o.status==='مكتمل'?'Done':'New'}</span></td><td><button class="btn bs" onclick="completeOrder(${o.id})"><i class="fa fa-check"></i></button> <button class="btn bw" onclick="openNoteModal(${o.id})"><i class="fa fa-pen"></i></button> <button class="btn bd" onclick="deleteOrder(${o.id})"><i class="fa fa-trash"></i></button></td></tr>`).join(''); }
+window.completeOrder=async(id)=>{await fetch(`/api/order/${id}/complete`,{method:'POST'}); toast('Completed','ok'); loadOrders(); loadAnalytics(); };
+window.deleteOrder=async(id)=>{if(!confirm('Delete order?'))return; await fetch(`/api/order/${id}/delete`,{method:'POST'}); toast('Deleted'); loadOrders(); loadAnalytics(); };
+window.openNoteModal=(id)=>{ window._noteId=id; document.getElementById('noid').innerText=id; document.getElementById('ntxt').value=''; document.getElementById('nmod').classList.add('open'); };
+document.getElementById('saveNoteBtn').onclick=async()=>{ let note=document.getElementById('ntxt').value; await fetch(`/api/order/${window._noteId}/note`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({note})}); document.getElementById('nmod').classList.remove('open'); toast('Note saved','ok'); loadOrders(); };
+document.getElementById('closeNoteBtn').onclick=()=>document.getElementById('nmod').classList.remove('open');
+async function loadClients(){ let r=await fetch('/api/clients'); allClients=await r.json(); filterClients(); }
+function filterClients(){ let q=document.getElementById('csrch').value.toLowerCase(); let f=allClients.filter(c=>(c.name+c.phone).toLowerCase().includes(q)); document.getElementById('cgrid').innerHTML=f.map((c,i)=>`<div class="cc2" onclick="openConversation(${i})"><div class="cn">${c.name||c.id}</div><div class="cm">📞 ${c.phone||'-'} · ${c.orders.length} orders</div>${c.orders.length?`<div class="cob">${c.orders.length}</div>`:''}</div>`).join(''); }
+window.openConversation=(idx)=>{ let c=allClients[idx]; document.getElementById('cvn').innerHTML=c.name||c.id; document.getElementById('cvph').innerHTML=c.phone||''; let msgs=c.conversation||[]; document.getElementById('cvmsgs').innerHTML=msgs.length?msgs.map(m=>`<div style="margin:6px 0;padding:6px 10px;background:#f4f9fe;border-radius:12px">${m}</div>`).join(''):'<div class="empty">No messages</div>'; document.getElementById('conv-panel').classList.add('open'); };
+document.getElementById('closeConvBtn').onclick=()=>document.getElementById('conv-panel').classList.remove('open');
+async function loadAdmins(){ let r=await fetch('/api/admins'), d=await r.json(); let html=''; html+=`<div class="ac"><div><i class="fa fa-crown"></i> Owner: ${d.owner}</div></div>`; (d.verified||[]).forEach(u=>{ if(u!==d.owner) html+=`<div class="ac"><span>🛡️ ${u}</span> <button class="btn bd" onclick="removeAdmin('${u}')">Remove</button></div>`; }); document.getElementById('admlist').innerHTML=html||'<div class="empty">No additional</div>'; }
+window.removeAdmin=async(uid)=>{ if(confirm('Remove admin?')){ await fetch(`/api/admin/remove/${uid}`,{method:'POST'}); toast('Removed'); loadAdmins(); } };
+async function loadSettings(){ let r=await fetch('/api/settings'), d=await r.json(); document.getElementById('settingsGrid').innerHTML=`<div class="scard"><h3>API & payment</h3><div class="fg"><label>Binance Pay ID</label><input class="fi" id="cfg-bin" value="${d.binance_id||''}"></div><div class="fg"><label>AI API URL</label><input class="fi" id="cfg-ai" value="${d.ai_api_url||''}"></div></div><div class="scard"><h3>Links</h3><div class="fg"><label>FB Page</label><input class="fi" id="cfg-fb" value="${d.fb_page||''}"></div><div class="fg"><label>Website</label><input class="fi" id="cfg-web" value="${d.company_website||''}"></div></div>`; document.getElementById('cfg-bot')?0:0; }
+document.getElementById('saveAllSettings').onclick=async()=>{ await fetch('/api/settings',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({binance_id:document.getElementById('cfg-bin')?.value||'',ai_api_url:document.getElementById('cfg-ai')?.value||'',bot_prompt:'',owner_prompt:''})}); toast('Settings saved','ok'); };
+document.getElementById('resetDataBtn').onclick=async()=>{ let pwd=prompt('Admin password?'); if(!pwd)return; let r=await fetch('/api/reset',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({password:pwd})}); if((await r.json()).success) toast('Reset done','ok'); else toast('Wrong pass','err'); };
+document.getElementById('clearMsgsBtn').onclick=async()=>{ let pwd=prompt('Admin password?'); if(!pwd)return; await fetch('/api/clear_msgs',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({password:pwd})}); toast('Counters cleared'); loadAnalytics(); };
+async function loadCommentsPage(){ let sr=await fetch('/api/comments/stats'), s=await sr.json(); document.getElementById('cs-today').innerText=s.today||0; document.getElementById('cs-total').innerText=s.total||0; document.getElementById('cs-status').innerHTML=s.enabled?'🟢 Active':'🔴 Inactive'; let set=await fetch('/api/comments/settings'), cfg=await set.json(); document.getElementById('cs-interval').value=cfg.check_interval_minutes||5; document.getElementById('cs-prompt').value=cfg.prompt||''; refreshCommentLog(); }
+async function refreshCommentLog(){ let r=await fetch('/api/comments/log'); allCommentsLog=await r.json(); let tb=document.getElementById('ctb'); if(!allCommentsLog.length){tb.innerHTML='<tr><td colspan="4" class="empty">No comments</td></tr>';return;} tb.innerHTML=allCommentsLog.map((l,idx)=>`<tr><td style="font-size:.7rem">${l.time}</td><td>${l.comment?.substring(0,50)}</td><td>${l.reply?.substring(0,50)}</td><td><button class="btn bg" onclick="editCommentLog(${idx})">Edit</button> <button class="btn bd" onclick="deleteCommentLog(${idx})">Del</button></td></tr>`).join(''); }
+window.editCommentLog=(idx)=>{ editingCommentIndex=idx; document.getElementById('cedit-txt').value=allCommentsLog[idx]?.reply||''; document.getElementById('cedit-mod').classList.add('open'); };
+document.getElementById('saveEditReplyBtn').onclick=async()=>{ let reply=document.getElementById('cedit-txt').value; if(editingCommentIndex>=0){ await fetch('/api/comments/log/edit',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({index:editingCommentIndex,reply})}); toast('Updated'); refreshCommentLog(); document.getElementById('cedit-mod').classList.remove('open'); } };
+document.getElementById('closeEditModalBtn').onclick=()=>document.getElementById('cedit-mod').classList.remove('open');
+window.deleteCommentLog=async(idx)=>{ if(confirm('Delete entry?')){ await fetch('/api/comments/log/delete',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({index:idx})}); toast('Deleted'); refreshCommentLog(); } };
+document.getElementById('enableCommentsBtn').onclick=()=>fetch('/api/comments/settings',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({enabled:true})}).then(()=>toast('Enabled','ok'));
+document.getElementById('disableCommentsBtn').onclick=()=>fetch('/api/comments/settings',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({enabled:false})}).then(()=>toast('Disabled'));
+document.getElementById('saveCommentSettingsBtn').onclick=async()=>{ await fetch('/api/comments/settings',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({check_interval_minutes:parseInt(document.getElementById('cs-interval').value),prompt:document.getElementById('cs-prompt').value})}); toast('Saved'); };
+document.getElementById('checkCommentsNowBtn').onclick=()=>{ fetch('/api/comments/check_now',{method:'POST'}); toast('Checking...'); };
+document.getElementById('refreshCommentsLogBtn').onclick=refreshCommentLog;
+document.getElementById('clearCommentLogBtn').onclick=async()=>{ let p=prompt('Password:'); if(p) await fetch('/api/comments/log/clear',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({password:p})}); toast('Cleared'); refreshCommentLog(); };
+async function loadPublishPage(){ let r=await fetch('/api/publish/settings'), s=await r.json(); document.getElementById('pub-interval').value=s.interval_minutes||60; document.getElementById('pub-text').value=s.post_text||''; document.getElementById('pub-chatbtn').checked=s.add_chat_button!==false; document.getElementById('pub-last').innerHTML=s.last_published?new Date(s.last_published).toLocaleString():'Never'; document.getElementById('pub-statusbadge').innerHTML=s.enabled?'<span class="bdg bdg-done">Auto active</span>':'<span class="bdg">Auto off</span>'; }
+document.getElementById('publishNowBtn').onclick=async()=>{ let text=document.getElementById('pub-text').value; if(!text)return toast('Empty text','err'); await fetch('/api/publish/now',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({text,add_chat_button:document.getElementById('pub-chatbtn').checked})}); toast('Published','ok'); loadPublishPage(); };
+document.getElementById('enableAutoPubBtn').onclick=async()=>{ await fetch('/api/publish/settings',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({enabled:true,interval_minutes:parseInt(document.getElementById('pub-interval').value),post_text:document.getElementById('pub-text').value})}); toast('Auto enabled'); loadPublishPage(); };
+document.getElementById('disableAutoPubBtn').onclick=async()=>{ await fetch('/api/publish/settings',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({enabled:false})}); toast('Auto disabled'); loadPublishPage(); };
+document.getElementById('refreshLogsBtn').onclick=loadLogs;
+document.getElementById('osrch').oninput=()=>renderOrders();
+document.getElementById('ostat').onchange=()=>renderOrders();
+document.getElementById('csrch').oninput=filterClients;
+loadAnalytics(); loadOrders(); loadClients(); loadAdmins(); loadSettings(); loadCommentsPage(); loadPublishPage();
+setInterval(()=>{ if(document.getElementById('page-analytics').classList.contains('active')) loadAnalytics(); },30000);
 </script>
 </body>
 </html>
