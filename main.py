@@ -1,6 +1,9 @@
 # ========================================================================
-# B.Y PRO Marketing Agent - Render Server
+# B.Y PRO Marketing Agent - Render Server (Final)
 # ========================================================================
+import sys
+sys.stdout.reconfigure(line_buffering=True)  # ← مهم: يُظهر logs فوراً
+
 import os
 import re
 import json
@@ -29,9 +32,9 @@ SECRET_FILES = [
 ]
 
 def load_secrets_from_github():
-    print("🔐 [STARTUP] تحميل الأسرار...")
+    print("🔐 [STARTUP] تحميل الأسرار من GitHub...", flush=True)
     if not GITHUB_TOKEN:
-        print("⚠️ GITHUB_TOKEN غير موجود")
+        print("⚠️ GITHUB_TOKEN غير موجود", flush=True)
         return
     headers = {'Authorization': f'token {GITHUB_TOKEN}', 'Accept': 'application/vnd.github.raw'}
     for path in SECRET_FILES:
@@ -39,7 +42,7 @@ def load_secrets_from_github():
         try:
             r = requests.get(url, headers=headers, params={'ref': GITHUB_BRANCH}, timeout=15)
             if r.status_code != 200:
-                print(f"⚠️ فشل {path}: {r.status_code}")
+                print(f"⚠️ فشل {path}: {r.status_code}", flush=True)
                 continue
             for line in r.text.splitlines():
                 line = line.strip()
@@ -49,9 +52,9 @@ def load_secrets_from_github():
                 k, v = k.strip(), v.strip().strip('"').strip("'")
                 if k and v:
                     os.environ[k] = v
-            print(f"✅ تم: {path}")
+            print(f"✅ تم: {path}", flush=True)
         except Exception as e:
-            print(f"❌ {path}: {e}")
+            print(f"❌ {path}: {e}", flush=True)
 
 load_secrets_from_github()
 
@@ -63,7 +66,6 @@ VERIFY_TOKEN      = os.environ.get('VERIFY_TOKEN', 'bypro_verify_2026')
 OWNER_FB_ID       = os.environ.get('OWNER_FB_ID', '')
 PAGE_ID           = os.environ.get('PAGE_ID', '923170140890240')
 PAGE_NAME         = os.environ.get('PAGE_NAME', 'B.Y PRO Marketing Agent')
-USER_TOKEN        = os.environ.get('USER_TOKEN', '')
 
 OPENROUTER_API_KEY = os.environ.get('OPENROUTER_API_KEY')
 OPENROUTER_MODEL   = os.environ.get('OPENROUTER_MODEL', 'openai/gpt-4o-mini')
@@ -90,17 +92,17 @@ def get_mongo():
     if _orders_col is not None:
         return _orders_col, _settings_col
     if not MONGODB_URI:
-        print("❌ MONGODB_URI غير موجود")
+        print("❌ MONGODB_URI غير موجود", flush=True)
         return None, None
     try:
         _mongo_client = MongoClient(MONGODB_URI, serverSelectionTimeoutMS=15000, tlsAllowInvalidCertificates=True)
         _mongo_client.admin.command('ping')
         _orders_col = _mongo_client[ORDERS_DB_NAME][ORDERS_COLLECTION]
         _settings_col = _mongo_client[SETTINGS_DB_NAME][SETTINGS_COLLECTION]
-        print("✅ MongoDB متصل")
+        print("✅ MongoDB متصل", flush=True)
         return _orders_col, _settings_col
     except Exception as e:
-        print(f"❌ MongoDB: {e}")
+        print(f"❌ MongoDB: {e}", flush=True)
         return None, None
 
 # ========================================================================
@@ -109,36 +111,19 @@ def get_mongo():
 _cache = {
     'sessions': {},
     'stats': {'msgs_received': 0, 'msgs_sent': 0, 'start_time': datetime.now().isoformat()},
-    'categories': None,  # تُحمّل من MongoDB
-    'owner_id': None,    # يُكتشف تلقائياً
+    'categories': None,
+    'owner_id': None,
 }
 logs = deque(maxlen=200)
 
 def add_log(msg):
     entry = {'time': datetime.now().strftime('%H:%M:%S'), 'msg': msg}
     logs.appendleft(entry)
-    print(f"[{entry['time']}] {msg}")
+    print(f"[{entry['time']}] {msg}", flush=True)
 
 # ========================================================================
-# 5. تحميل التصنيفات من MongoDB
+# 5. التصنيفات من MongoDB
 # ========================================================================
-def load_categories():
-    """تحميل التصنيفات من DashboardDB.settings (نفس مصدر clients.html)"""
-    _, settings_col = get_mongo()
-    if settings_col is None:
-        return None
-    try:
-        doc = settings_col.find_one({'key': SETTINGS_KEY})
-        if doc and doc.get('value') and doc['value'].get('categories'):
-            cats = doc['value']['categories']
-            _cache['categories'] = cats
-            print(f"✅ تم تحميل {len(cats)} تصنيف من MongoDB")
-            return cats
-        print("⚠️ لا توجد إعدادات في MongoDB — استخدام الافتراضي")
-    except Exception as e:
-        print(f"❌ فشل تحميل التصنيفات: {e}")
-    return None
-
 DEFAULT_CATEGORIES = [
     {"id": "design", "enabled": True, "name": "التصميم البصري", "icon": "fa-solid fa-palette", "services": ["شعارات","هوية بصرية","تعديل صور","سوشيال ميديا","بطاقات","منشورات","أغلفة"]},
     {"id": "web", "enabled": True, "name": "مواقع الويب", "icon": "fa-solid fa-globe", "services": ["صفحة هبوط","متجر إلكتروني","موقع ثابت","موقع ديناميكي","مدونة","لوحة تحكم"]},
@@ -151,6 +136,21 @@ DEFAULT_CATEGORIES = [
     {"id": "other", "enabled": True, "name": "أخرى", "icon": "fa-solid fa-box", "services": ["خدمة مخصصة"]},
 ]
 
+def load_categories():
+    _, settings_col = get_mongo()
+    if settings_col is None:
+        return None
+    try:
+        doc = settings_col.find_one({'key': SETTINGS_KEY})
+        if doc and doc.get('value') and doc['value'].get('categories'):
+            cats = doc['value']['categories']
+            _cache['categories'] = cats
+            add_log(f"✅ تم تحميل {len(cats)} تصنيف من MongoDB")
+            return cats
+    except Exception as e:
+        add_log(f"❌ فشل تحميل التصنيفات: {e}")
+    return None
+
 def get_categories():
     if _cache['categories'] is None:
         load_categories()
@@ -159,20 +159,34 @@ def get_categories():
     return _cache['categories']
 
 def format_categories_for_ai():
-    """تنسيق التصنيفات لتمريرها للـ AI"""
+    """عرض التصنيفات مع ID للـ AI"""
     cats = get_categories()
     lines = []
     for c in cats:
         if not c.get('enabled', True):
             continue
-        name = c.get('name', c.get('id', ''))
+        cat_id = c.get('id', '')
+        name = c.get('name', cat_id)
         services = c.get('services', [])
-        svc_labels = [s.get('label_ar') or s.get('label_en') or s.get('id') for s in services if (isinstance(s, dict) and s.get('enabled', True)) or isinstance(s, str)]
-        lines.append(f"- {name}: {', '.join(svc_labels)}")
+        svc_labels = []
+        for s in services:
+            if isinstance(s, dict):
+                if s.get('enabled', True):
+                    lbl = s.get('label_ar') or s.get('label_en') or s.get('id', '')
+                    svc_labels.append(lbl)
+            elif isinstance(s, str):
+                svc_labels.append(s)
+        lines.append(f"[{cat_id}] {name}: {', '.join(svc_labels)}")
     return "\n".join(lines)
 
+def find_category(cat_id):
+    for c in get_categories():
+        if c.get('id') == cat_id:
+            return c
+    return None
+
 # ========================================================================
-# 6. اكتشاف معرّف المدير
+# 6. معرّف المدير
 # ========================================================================
 def get_owner_id():
     if _cache['owner_id']:
@@ -183,7 +197,7 @@ def get_owner_id():
     return None
 
 # ========================================================================
-# 7. OpenRouter AI مع أسعار واقعية
+# 7. OpenRouter AI
 # ========================================================================
 def get_ai_response(prompt):
     if not OPENROUTER_API_KEY:
@@ -216,10 +230,9 @@ def get_ai_response(prompt):
         return None
 
 # ========================================================================
-# 8. شخصيات AI
+# 8. الشخصيات
 # ========================================================================
 def get_bot_personality():
-    """شخصية البوت مع الأسعار الواقعية والتصنيفات"""
     cats_text = format_categories_for_ai()
     return f"""أنت وكيل تسويق لخدمة العملاء في شركة B.Y PRO للتكنولوجيا والبرمجيات.
 
@@ -229,93 +242,102 @@ def get_bot_personality():
 - تفهم احتياج العميل قبل أي شيء.
 - أجب بنفس لغة العميل (عربي، إنجليزي، فرنسي).
 
-طريقة عملك:
-1. رحّب بالعميل وافهم ما يريده.
-2. إذا سأل عن الخدمات، اعرض عليه القائمة التالية:
+الخدمات المتاحة (استخدم الـ ID بين الأقواس):
 {cats_text}
-3. اسأل أسئلة لفهم المشروع (1-2 سؤال في كل مرة).
-4. بعد الفهم، قدّم السعر التقريبي والمدة.
-5. إذا وافق العميل، اطلب منه بياناته.
 
-الخدمات والأسعار التقريبية (بالدولار الأمريكي):
-- موقع ويب بسيط (صفحة هبوط): 1500$-4000$ (2-4 أسابيع)
-- موقع ويب متكامل: 4000$-12000$ (6-12 أسبوع)
+طريقة عملك:
+1. رحّب واسأل كيف يمكنك المساعدة.
+2. إذا سأل عن الخدمات، اعرض القائمة.
+3. افهم تفاصيل المشروع (اسأل 1-2 سؤال في كل مرة).
+4. اسأل إذا كان لديه نموذج/تصميم جاهز.
+5. قدّم السعر التقريبي والمدة بوضوح.
+6. إذا وافق، اطلب بياناته (اسم، هاتف، بريد، سوشيال).
+
+الأسعار التقريبية الواقعية (بالدولار):
+- صفحة هبوط بسيطة: 1500$-4000$ (2-4 أسابيع)
+- موقع متكامل: 4000$-12000$ (6-12 أسبوع)
 - متجر إلكتروني: 3500$-15000$ (10-20 أسبوع)
-- تطبيق جوال بسيط: 5000$-20000$ (2-4 أشهر)
-- تطبيق جوال معقد: 25000$-60000$ (4-8 أشهر)
-- بوت ذكاء اصطناعي: 300$-2000$ (1-3 أسابيع)
-- تصميم شعار: 150$-500$ (3-7 أيام)
-- هوية بصرية كاملة: 800$-3000$ (2-4 أسابيع)
-- مونتاج فيديو قصير (ريلز): 30$-100$
-- مونتاج فيديو يوتيوب (5-10 دقائق): 150$-500$
-- موشن جرافيك (60 ثانية): 500$-1500$
-- برنامج مخصص/نظام (ERP/CRM): 8000$-40000$ (2-6 أشهر)
+- تطبيق بسيط: 5000$-20000$ (2-4 أشهر)
+- تطبيق معقد: 25000$-60000$ (4-8 أشهر)
+- بوت AI: 300$-2000$ (1-3 أسابيع)
+- شعار: 150$-500$ (3-7 أيام)
+- هوية بصرية: 800$-3000$ (2-4 أسابيع)
+- ريلز (مونتاج): 30$-100$
+- فيديو يوتيوب: 150$-500$
+- موشن جرافيك (60 ث): 500$-1500$
+- نظام ERP/CRM: 8000$-40000$ (2-6 أشهر)
 - سكربت مخصص: 500$-3000$
 
-طريقة التحويل: إذا طلب العميل بالدينار الجزائري، استخدم: 1$ = 240 دج.
+التحويل: 1$ = 240 دج (إذا طلب الدينار الجزائري).
 
-قواعد أساسية:
-- لا تكرر نفسك.
-- لا تظهر كبوت أبداً.
-- لا تطلب بيانات شخصية قبل الاتفاق على السعر.
-- كن واقعياً في الأسعار — لا تبالغ ولا تقلل.
+⚠️ مهم جداً: في نهاية كل رد، أضف سطراً منفصلاً بالشكل:
+[CATEGORY:id]
+[SERVICE:اسم_الخدمة]
 
-مهم جداً: لا تسجّل الطلب ولا تطلب البيانات إلا بعد موافقة العميل صراحةً على السعر والمدة."""
+حيث id هو معرّف التصنيف من القائمة أعلاه.
+مثال: [CATEGORY:web]
+[SERVICE:صفحة هبوط]
 
-OWNER_PERSONALITY = """أنت وكيل تسويق لخدمة العملاء في شركة B.Y PRO للتكنولوجيا والبرمجيات.
+هذه الوسوم تُستخدم داخلياً وسيتم حذفها قبل إرسال الرد للعميل. لا تشرحها للعميل."""
 
-الشخص الذي تتحدث معه الآن هو المدير العام للشركة:
-الاسم: ياسين بن مقران
-الصفة: مؤسس ومدير شركة B.Y PRO.
+OWNER_PERSONALITY = """أنت وكيل تسويق لخدمة العملاء في شركة B.Y PRO.
+
+المتحدث هو المدير العام: ياسين بن مقران — مؤسس الشركة.
 
 قواعد:
 - ناده "سيدي المدير" أو "سيدي ياسين"
-- هو مديرك وليس عميلاً — لا تعرض عليه خدمات
-- لا تسأله عن بيانات شخصية
-- ردودك مختصرة وتخص إدارة البوت فقط
-- أجبه بنفس اللغة التي يكتب بها
-- لا تبدأ كل رد بـ "سيدي المدير" """
+- هو مديرك وليس عميلاً
+- لا تعرض خدمات
+- ردودك مختصرة
+- أجبه بنفس لغته
+- لا تبدأ كل رد بالتحية"""
+
+def parse_ai_tags(text):
+    """استخراج الوسوم من رد AI"""
+    cat = re.search(r'\[CATEGORY:([a-zA-Z0-9_\-]+)\]', text)
+    svc = re.search(r'\[SERVICE:([^\]]+)\]', text)
+    clean = re.sub(r'\[CATEGORY:[^\]]+\]', '', text)
+    clean = re.sub(r'\[SERVICE:[^\]]+\]', '', clean)
+    return clean.strip(), (cat.group(1) if cat else None), (svc.group(1).strip() if svc else None)
 
 def ask_ai(user_msg, sess, extra_instruction="", personality=None):
-    context = "\n".join(sess.get('conversation', [])[-12:])
-    stage_hints = {
-        'welcome': "رحّب بالعميل واسأل كيف يمكنك مساعدته.",
-        'explore': "افهم احتياج العميل. اسأل سؤالاً أو سؤالين. إذا سأل عن الخدمات، اعرض القائمة.",
-        'service_selected': "العميل اختار خدمة. اسأله عن اسم مشروعه.",
-        'project_named': "العميل ذكر اسم المشروع. اطلب منه وصف المشروع بالتفصيل.",
-        'details_collected': "العميل شرح مشروعه. اسأله إذا كان لديه نموذج أو تصميم جاهز.",
-        'model_collected': "قدّم السعر التقريبي والمدة بوضوح. انتظر موافقته.",
-        'price_proposed': "انتظر موافقة العميل على السعر.",
-        'collecting_name': "اطلب من العميل اسمه الكامل.",
-        'collecting_phone': f"اسم العميل: {sess.get('name','')}. اطلب رقم هاتفه.",
-        'collecting_email': f"اسم العميل: {sess.get('name','')}. اطلب بريده الإلكتروني (اختياري).",
-        'collecting_social': "اطلب روابط تواصله (سوشيال ميديا) إن وجدت.",
-        'done': "الطلب مكتمل. اشكر العميل.",
-    }
-    active_personality = personality or get_bot_personality()
+    context = "\n".join(sess.get('conversation', [])[-14:])
     stage = sess.get('stage', 'welcome')
-    hint = stage_hints.get(stage, "")
-    full_prompt = f"""{active_personality}
+    hints = {
+        'welcome': "رحّب بالعميل واسأل كيف يمكنك مساعدته.",
+        'explore': "افهم ما يريد. اسأل 1-2 سؤال. إذا سأل عن الخدمات اعرض القائمة.",
+        'details': "اطلب من العميل تفاصيل مشروعه كاملة (الأهداف، المميزات، المتطلبات).",
+        'model': "اسأل العميل إذا كان لديه نموذج أو تصميم جاهز.",
+        'price': "قدّم السعر والمدة بوضوح. انتظر موافقته.",
+        'collecting_name': "اطلب من العميل اسمه الكامل.",
+        'collecting_phone': f"الاسم: {sess.get('name','')}. اطلب رقم هاتفه.",
+        'collecting_email': "اطلب بريده الإلكتروني (اختياري).",
+        'collecting_social': "اطلب روابط سوشيال ميديا (اختياري).",
+    }
+    p = personality or get_bot_personality()
+    hint = hints.get(stage, "")
+    full = f"""{p}
 
-[حالة المحادثة: {hint}]
+[المرحلة الحالية: {stage}]
+[توجيه: {hint}]
 {extra_instruction}
 
 سجل المحادثة:
 {context}
 
-المستخدم: {user_msg}
+العميل: {user_msg}
 الوكيل:"""
-    response = get_ai_response(full_prompt)
-    if response:
-        return response[:2000]
-    return "عذراً، حدث خطأ تقني مؤقت. أعد رسالتك من فضلك."
+    res = get_ai_response(full)
+    if res:
+        return res[:2500]
+    return "عذراً، حدث خطأ تقني. أعد رسالتك من فضلك."
 
 # ========================================================================
 # 9. فيسبوك
 # ========================================================================
 def send_fb(recipient_id, text):
     if not PAGE_ACCESS_TOKEN:
-        add_log("❌ PAGE_ACCESS_TOKEN غير موجود")
+        add_log("❌ PAGE_ACCESS_TOKEN مفقود")
         return False
     try:
         url = f'https://graph.facebook.com/v18.0/me/messages?access_token={PAGE_ACCESS_TOKEN}'
@@ -323,9 +345,9 @@ def send_fb(recipient_id, text):
         r = requests.post(url, json=payload, timeout=8)
         if r.status_code == 200:
             _cache['stats']['msgs_sent'] += 1
-            add_log(f"📤 {str(recipient_id)[:10]}: {text[:50]}")
+            add_log(f"📤 {str(recipient_id)[:12]}: {text[:60]}")
             return True
-        add_log(f"❌ فشل: {r.status_code} - {r.text[:150]}")
+        add_log(f"❌ فشل الإرسال: {r.status_code} - {r.text[:150]}")
         return False
     except Exception as e:
         add_log(f"❌ إرسال: {e}")
@@ -334,17 +356,20 @@ def send_fb(recipient_id, text):
 # ========================================================================
 # 10. الجلسات
 # ========================================================================
+def new_session():
+    return {
+        'name': '', 'service': '', 'category': '', 'categoryName': '', 'categoryIcon': '',
+        'projectName': '', 'projectDetails': '', 'hasModel': None,
+        'budget': 0, 'duration': '',
+        'phone': '', 'email': '', 'social': [],
+        'stage': 'welcome', 'conversation': [],
+    }
+
 def get_session(sender_id):
     sid = str(sender_id)
     if sid not in _cache['sessions']:
-        _cache['sessions'][sid] = {
-            'name': '', 'service': '', 'category': '', 'categoryName': '', 'categoryIcon': '',
-            'projectName': '', 'projectDetails': '', 'hasModel': None,
-            'budget': 0, 'duration': '',
-            'phone': '', 'email': '', 'social': [],
-            'stage': 'welcome', 'conversation': [],
-            'price_offered': False,
-        }
+        print(f"🆕 [SESSION] جلسة جديدة لـ {sid[:15]}", flush=True)
+        _cache['sessions'][sid] = new_session()
     return _cache['sessions'][sid]
 
 def add_conv(sender_id, role, message):
@@ -354,7 +379,7 @@ def add_conv(sender_id, role, message):
         sess['conversation'] = sess['conversation'][-20:]
 
 # ========================================================================
-# 11. استخراج البيانات
+# 11. استخراج
 # ========================================================================
 def extract_phone(text):
     for pat in [r'(\+213[567][0-9]{8})', r'(0[567][0-9]{8})', r'(\+[1-9][0-9]{7,14})', r'([0-9]{10,13})']:
@@ -368,26 +393,24 @@ def extract_email(text):
     return m.group(0) if m else None
 
 def extract_name(text):
-    patterns = [
-        r'اسمي[:\s]*([\u0600-\u06FF\s]{3,30})',
-        r'الاسم[:\s]*([\u0600-\u06FF\s]{3,30})',
-        r'my name is[:\s]*([a-zA-Z\s]{3,30})',
-        r'name[:\s]*([a-zA-Z\s]{3,30})',
-    ]
-    for pat in patterns:
+    for pat in [r'اسمي[:\s]*([\u0600-\u06FF\s]{3,30})', r'الاسم[:\s]*([\u0600-\u06FF\s]{3,30})',
+                r'my name is[:\s]*([a-zA-Z\s]{3,30})', r'name[:\s]*([a-zA-Z\s]{3,30})']:
         m = re.search(pat, text, re.I)
         if m:
-            name = m.group(1).strip()
-            if 2 <= len(name.split()) <= 4 and len(name) <= 30:
-                return name
+            n = m.group(1).strip()
+            if 2 <= len(n.split()) <= 5 and len(n) <= 40:
+                return n
     return None
 
 def is_confirmation(text):
-    words = ['نعم', 'موافق', 'تمام', 'اوكي', 'اوك', 'ok', 'yes', 'موافقة', 'ماشي', 'اتفقنا', 'ممتاز', 'أوافق']
+    words = ['نعم', 'موافق', 'تمام', 'اوكي', 'اوك', 'ok', 'yes', 'موافقة', 'ماشي', 'اتفقنا', 'ممتاز', 'أوافق', 'نبدا', 'نبدأ']
     return any(w in text.lower() for w in words)
 
+def is_skip(text):
+    return text.lower().strip() in ['تخطي', 'skip', 'لا', 'no', 'بدون', 'بلا', 'مش']
+
 # ========================================================================
-# 12. حفظ الطلب في MongoDB (بنية clients.html)
+# 12. حفظ الطلب (بنية clients.html بالضبط)
 # ========================================================================
 def save_order(sess, sender_id):
     col, _ = get_mongo()
@@ -395,21 +418,21 @@ def save_order(sess, sender_id):
         add_log("⚠️ MongoDB غير متاح")
         return None
     try:
-        # إيجاد التصنيف
-        cat = None
-        for c in get_categories():
-            if c.get('id') == sess.get('category') or c.get('name') == sess.get('categoryName'):
-                cat = c
-                break
+        cat = find_category(sess.get('category', ''))
+        cat_name = cat.get('name', sess.get('categoryName', 'أخرى')) if cat else sess.get('categoryName', 'أخرى')
+        cat_icon = cat.get('icon', 'fa-solid fa-box') if cat else sess.get('categoryIcon', 'fa-solid fa-box')
+
+        details = sess.get('projectDetails', '')
+        proj_name = details[:80] if details else sess.get('service', '')
 
         doc = {
             'id': f"ORD-{int(time.time() * 1000)}",
             'category': sess.get('category', 'other'),
-            'categoryName': sess.get('categoryName', 'أخرى'),
-            'categoryIcon': sess.get('categoryIcon', 'fa-solid fa-box'),
+            'categoryName': cat_name,
+            'categoryIcon': cat_icon,
             'service': sess.get('service', ''),
-            'projectName': sess.get('projectName', ''),
-            'projectDetails': sess.get('projectDetails', ''),
+            'projectName': proj_name,
+            'projectDetails': details,
             'hasModel': sess.get('hasModel', False) if sess.get('hasModel') is not None else False,
             'modelFiles': [],
             'modelUrls': [],
@@ -421,10 +444,6 @@ def save_order(sess, sender_id):
             'createdAt': datetime.now(timezone.utc).isoformat(),
             'status': 'pending',
             'isNew': True,
-            # حقول إضافية للتمييز
-            'source': 'messenger',
-            'source_page_id': PAGE_ID,
-            'sender_id': sender_id,
         }
         result = col.insert_one(doc)
         add_log(f"✅ طلب محفوظ: {result.inserted_id}")
@@ -434,20 +453,20 @@ def save_order(sess, sender_id):
         return None
 
 # ========================================================================
-# 13. معالجة الرسائل — التسلسل الجديد
+# 13. معالجة الرسائل
 # ========================================================================
 def process_message(sender_id, text):
     sender_id = str(sender_id)
     _cache['stats']['msgs_received'] += 1
 
-    print("=" * 70)
-    print(f"📨 من {sender_id[:15]}: {text[:100]}")
-    print("=" * 70)
+    print("=" * 70, flush=True)
+    print(f"📨 [MSG] من {sender_id}", flush=True)
+    print(f"📝 [MSG] النص: {text}", flush=True)
 
-    # اكتشاف المدير تلقائياً
-    owner_id = get_owner_id()
-    if owner_id and sender_id == owner_id:
-        print(f"👑 [OWNER] المدير — استخدام OWNER_PERSONALITY")
+    # المدير
+    owner = get_owner_id()
+    if owner and sender_id == owner:
+        print(f"👑 [OWNER] المدير", flush=True)
         sess = get_session(sender_id)
         add_conv(sender_id, 'المستخدم', text)
         reply = ask_ai(text, sess, personality=OWNER_PERSONALITY)
@@ -458,229 +477,192 @@ def process_message(sender_id, text):
     sess = get_session(sender_id)
     add_conv(sender_id, 'المستخدم', text)
     stage = sess.get('stage', 'welcome')
-    print(f"🎯 المرحلة: {stage}")
+    print(f"🎯 [STAGE] {stage}", flush=True)
 
-    # ====== 1. الترحيب ======
+    # ===== 1. welcome =====
     if stage == 'welcome':
-        print(f"👋 ترحيب")
-        reply = ask_ai(text, sess, extra_instruction="رحّب بالعميل واسأل كيف يمكنك مساعدته. لا تطوّل.")
-        send_fb(sender_id, reply)
-        add_conv(sender_id, 'الوكيل', reply)
+        raw = ask_ai(text, sess, extra_instruction="رحّب بالعميل واسأل كيف يمكنك مساعدته اليوم. رد مختصر.")
+        clean, cat_id, svc = parse_ai_tags(raw)
+        send_fb(sender_id, clean)
+        add_conv(sender_id, 'الوكيل', clean)
         sess['stage'] = 'explore'
         return
 
-    # ====== 2. الاستكشاف ======
+    # ===== 2. explore =====
     if stage == 'explore':
-        print(f"🔍 استكشاف")
-        # نتحقق أولاً: هل اختار خدمة محددة؟
-        reply = ask_ai(text, sess, extra_instruction="افهم ما يريده العميل. إذا سأل عن الخدمات، اعرض القائمة. اسأل سؤالاً أو سؤالين.")
-        send_fb(sender_id, reply)
-        add_conv(sender_id, 'الوكيل', reply)
-
-        # نحاول استخراج التصنيف/الخدمة من رد العميل
-        text_lower = (text + ' ' + reply).lower()
-        for cat in get_categories():
-            cat_name = cat.get('name', '').lower()
-            cat_id = cat.get('id', '').lower()
-            if cat_name in text_lower or cat_id in text_lower:
-                sess['category'] = cat.get('id', '')
+        raw = ask_ai(text, sess, extra_instruction="افهم احتياج العميل. اسأل سؤالاً أو سؤالين. إذا سأل عن الخدمات اعرض القائمة.")
+        clean, cat_id, svc = parse_ai_tags(raw)
+        if cat_id:
+            cat = find_category(cat_id)
+            if cat:
+                sess['category'] = cat_id
                 sess['categoryName'] = cat.get('name', '')
                 sess['categoryIcon'] = cat.get('icon', 'fa-solid fa-box')
-                print(f"📂 تصنيف: {sess['categoryName']}")
-                break
+                print(f"📂 [CATEGORY] {cat.get('name')}", flush=True)
+        if svc:
+            sess['service'] = svc
+            print(f"🛠️ [SERVICE] {svc}", flush=True)
 
-        # ننتقل لاختيار الخدمة
-        sess['stage'] = 'service_selected'
+        send_fb(sender_id, clean)
+        add_conv(sender_id, 'الوكيل', clean)
+
+        # ننتقل لمرحلة التفاصيل بعد التعرف على الخدمة
+        if sess.get('service'):
+            sess['stage'] = 'details'
         return
 
-    # ====== 3. اختيار الخدمة ======
-    if stage == 'service_selected':
-        print(f"🛠️ خدمة")
-        if not sess.get('service'):
-            reply = ask_ai(text, sess, extra_instruction="العميل يحدد الخدمة. اسأله عن اسم مشروعه.")
-            send_fb(sender_id, reply)
-            add_conv(sender_id, 'الوكيل', reply)
-            # نحاول استخراج اسم الخدمة من النص
-            sess['service'] = text.strip()[:100]
-            sess['stage'] = 'project_named'
-        else:
-            sess['stage'] = 'project_named'
-            reply = ask_ai(text, sess, extra_instruction="اسأل العميل عن اسم مشروعه.")
-            send_fb(sender_id, reply)
-            add_conv(sender_id, 'الوكيل', reply)
-        return
-
-    # ====== 4. اسم المشروع ======
-    if stage == 'project_named':
-        print(f"📝 اسم المشروع")
-        if not sess.get('projectName'):
-            sess['projectName'] = text.strip()[:200]
-            print(f"✅ المشروع: {sess['projectName'][:50]}")
-        reply = ask_ai(text, sess, extra_instruction="اطلب من العميل وصف المشروع بالتفصيل (الأهداف، المميزات، المتطلبات).")
-        send_fb(sender_id, reply)
-        add_conv(sender_id, 'الوكيل', reply)
-        sess['stage'] = 'details_collected'
-        return
-
-    # ====== 5. تفاصيل المشروع ======
-    if stage == 'details_collected':
-        print(f"📋 التفاصيل")
+    # ===== 3. details =====
+    if stage == 'details':
         if not sess.get('projectDetails'):
             sess['projectDetails'] = text.strip()[:2000]
-            print(f"✅ التفاصيل: {len(sess['projectDetails'])} حرف")
-        reply = ask_ai(text, sess, extra_instruction="اسأل العميل إذا كان لديه نموذج أو تصميم جاهز.")
-        send_fb(sender_id, reply)
-        add_conv(sender_id, 'الوكيل', reply)
-        sess['stage'] = 'model_collected'
+            print(f"✅ [DETAILS] {len(sess['projectDetails'])} حرف", flush=True)
+        raw = ask_ai(text, sess, extra_instruction="اسأل العميل إذا كان لديه نموذج أو تصميم جاهز للمشروع.")
+        clean, _, _ = parse_ai_tags(raw)
+        send_fb(sender_id, clean)
+        add_conv(sender_id, 'الوكيل', clean)
+        sess['stage'] = 'model'
         return
 
-    # ====== 6. النموذج/التصميم ======
-    if stage == 'model_collected':
-        print(f"🖼️ النموذج")
-        text_lower = text.lower()
-        if any(w in text_lower for w in ['نعم', 'yes', 'عندي', 'لدي', 'موجود']):
+    # ===== 4. model =====
+    if stage == 'model':
+        tl = text.lower()
+        if any(w in tl for w in ['نعم', 'yes', 'عندي', 'لدي', 'موجود', 'عندى']):
             sess['hasModel'] = True
-        elif any(w in text_lower for w in ['لا', 'no', 'ليس', 'ماعندي', 'مش']):
+        elif any(w in tl for w in ['لا', 'no', 'ليس', 'ماعندي', 'مش', 'بدون']):
             sess['hasModel'] = False
-        else:
-            sess['hasModel'] = None
+        print(f"🖼️ [MODEL] {sess['hasModel']}", flush=True)
 
-        # نقدّم السعر
-        reply = ask_ai(text, sess, extra_instruction="قدّم السعر التقريبي والمدة بوضوح. استخدم أسعاراً واقعية بالدولار. إذا طلب الدينار الجزائري، استخدم 1$=240 دج. انتظر موافقة العميل.")
-        send_fb(sender_id, reply)
-        add_conv(sender_id, 'الوكيل', reply)
-        sess['stage'] = 'price_proposed'
-        sess['price_offered'] = True
+        raw = ask_ai(text, sess, extra_instruction="قدّم السعر التقريبي والمدة بوضوح بالدولار (أو الدينار إذا طلب، 1$=240دج). انتظر موافقة العميل.")
+        clean, cat_id, svc = parse_ai_tags(raw)
+        if cat_id:
+            cat = find_category(cat_id)
+            if cat:
+                sess['category'] = cat_id
+                sess['categoryName'] = cat.get('name', '')
+                sess['categoryIcon'] = cat.get('icon', 'fa-solid fa-box')
+        send_fb(sender_id, clean)
+        add_conv(sender_id, 'الوكيل', clean)
 
-        # نحاول استخراج السعر من الرد
-        price_match = re.search(r'(\d{2,6})\s*[-–]\s*(\d{2,6})\s*\$', reply)
-        single = re.search(r'(\d{3,6})\s*\$', reply)
-        if price_match:
-            sess['budget'] = int(price_match.group(1))
-        elif single:
-            sess['budget'] = int(single.group(1))
-        dur = re.search(r'(\d+[-–]\d+\s*(?:يوم|أيام|أسبوع|أسابيع|شهر|أشهر|day|days|week|weeks|month|months))', reply, re.I)
-        if dur:
-            sess['duration'] = dur.group(1)
+        # نحاول استخراج السعر
+        pm = re.search(r'(\d{2,6})\s*[-–]\s*(\d{2,6})\s*\$', clean)
+        sp = re.search(r'(\d{3,6})\s*\$', clean)
+        if pm:
+            sess['budget'] = int(pm.group(1))
+        elif sp:
+            sess['budget'] = int(sp.group(1))
+        dm = re.search(r'(\d+[-–]\d+\s*(?:يوم|أيام|أسبوع|أسابيع|شهر|أشهر|day|days|week|weeks|month|months))', clean, re.I)
+        if dm:
+            sess['duration'] = dm.group(1)
+
+        sess['stage'] = 'price'
         return
 
-    # ====== 7. السعر (انتظار الموافقة) ======
-    if stage == 'price_proposed':
-        print(f"💰 السعر")
+    # ===== 5. price =====
+    if stage == 'price':
         if is_confirmation(text):
-            print(f"✅ العميل وافق → جمع البيانات")
+            print(f"✅ [CONFIRM] العميل وافق", flush=True)
             sess['stage'] = 'collecting_name'
             send_fb(sender_id, "ممتاز! نحتاج بعض المعلومات لتسجيل طلبك.\nما اسمك الكامل؟")
         else:
-            reply = ask_ai(text, sess, extra_instruction="العميل يستفسر أو يريد تعديلاً. أجبه باختصار.")
-            send_fb(sender_id, reply)
-            add_conv(sender_id, 'الوكيل', reply)
+            raw = ask_ai(text, sess, extra_instruction="العميل يستفسر عن السعر. أجبه باختصار. ذكّره بالسؤال: هل توافق؟")
+            clean, _, _ = parse_ai_tags(raw)
+            send_fb(sender_id, clean)
+            add_conv(sender_id, 'الوكيل', clean)
         return
 
-    # ====== 8. جمع الاسم ======
+    # ===== 6. name =====
     if stage == 'collecting_name':
-        print(f"📛 الاسم")
         name = extract_name(text)
         if not name and len(text.split()) <= 5 and len(text) <= 40:
-            name = text.strip()
+            if not any(w in text.lower() for w in ['نعم', 'لا', 'كيف', 'متى', 'ماذا', 'شكرا']):
+                name = text.strip()
         if name:
             sess['name'] = name
             sess['stage'] = 'collecting_phone'
-            print(f"✅ {name}")
+            print(f"✅ [NAME] {name}", flush=True)
             send_fb(sender_id, f"تمام {name}، ما رقم هاتفك؟")
         else:
             send_fb(sender_id, "ما اسمك الكامل؟")
         return
 
-    # ====== 9. جمع الهاتف ======
+    # ===== 7. phone =====
     if stage == 'collecting_phone':
-        print(f"📞 الهاتف")
         phone = extract_phone(text)
         if phone:
             sess['phone'] = phone
             sess['stage'] = 'collecting_email'
-            print(f"✅ {phone}")
+            print(f"✅ [PHONE] {phone}", flush=True)
             send_fb(sender_id, "هل لديك بريد إلكتروني؟ (اختياري — أرسل 'تخطي' للمتابعة)")
         else:
-            send_fb(sender_id, "أرسل رقم هاتفك فقط (مثال: +213795082763 أو 0555123456)")
+            send_fb(sender_id, "أرسل رقم هاتفك (مثال: +213795082763 أو 0555123456)")
         return
 
-    # ====== 10. جمع البريد ======
+    # ===== 8. email =====
     if stage == 'collecting_email':
-        print(f"📧 البريد")
-        text_lower = text.lower().strip()
-        if text_lower in ['تخطي', 'skip', 'لا', 'no', 'بدون']:
+        if is_skip(text):
             sess['email'] = ''
             sess['stage'] = 'collecting_social'
-            send_fb(sender_id, "هل لديك روابط سوشيال ميديا (فيسبوك، إنستغرام...)؟ (اختياري — أرسل 'تخطي')")
+            send_fb(sender_id, "هل لديك روابط سوشيال ميديا؟ (اختياري — أرسل 'تخطي')")
         else:
             email = extract_email(text)
             if email:
                 sess['email'] = email
                 sess['stage'] = 'collecting_social'
-                print(f"✅ {email}")
+                print(f"✅ [EMAIL] {email}", flush=True)
                 send_fb(sender_id, "هل لديك روابط سوشيال ميديا؟ (اختياري — أرسل 'تخطي')")
             else:
                 send_fb(sender_id, "البريد غير صالح. أرسل بريداً صحيحاً أو 'تخطي'.")
         return
 
-    # ====== 11. جمع السوشيال ======
+    # ===== 9. social =====
     if stage == 'collecting_social':
-        print(f"🔗 السوشيال")
-        text_lower = text.lower().strip()
-        if text_lower in ['تخطي', 'skip', 'لا', 'no', 'بدون']:
-            sess['social'] = []
-        else:
-            # نحاول استخراج رابط
-            url_match = re.search(r'https?://[^\s]+', text)
-            if url_match:
-                sess['social'].append({'platform': 'social', 'url': url_match.group(0)})
+        if not is_skip(text):
+            url = re.search(r'https?://[^\s]+', text)
+            if url:
+                sess['social'].append({'platform': 'social', 'url': url.group(0)})
             else:
                 sess['social'].append({'platform': 'social', 'url': text.strip()[:200]})
+        else:
+            sess['social'] = []
 
-        # حفظ الطلب
-        print(f"💾 حفظ الطلب...")
-        order_id = save_order(sess, sender_id)
-        if order_id:
-            print(f"✅ تم حفظ الطلب")
-            send_fb(sender_id, f"شكراً {sess['name']}! تم تسجيل طلبك بنجاح ✅\n\nسنتواصل معك قريباً لمناقشة التفاصيل والبدء في مشروعك.\n\nفريق B.Y PRO")
+        print(f"💾 [SAVE] جاري حفظ الطلب...", flush=True)
+        oid = save_order(sess, sender_id)
+        if oid:
+            print(f"✅ [SAVED] {oid}", flush=True)
+            msg = (
+                f"شكراً {sess.get('name', '')} على ثقتك بنا 🌟\n\n"
+                f"تم تسجيل طلبك بنجاح.\n"
+                f"سنتواصل معك مجدداً لمناقشة التفاصيل والبدء في مشروعك.\n\n"
+                f"فريق B.Y PRO"
+            )
+            send_fb(sender_id, msg)
         else:
             send_fb(sender_id, "حدث خطأ تقني أثناء حفظ الطلب. سنتواصل معك قريباً.")
-            add_log("❌ فشل حفظ الطلب")
-
-        # إعادة تعيين الجلسة
-        _cache['sessions'][sender_id] = {
-            'name': '', 'service': '', 'category': '', 'categoryName': '', 'categoryIcon': '',
-            'projectName': '', 'projectDetails': '', 'hasModel': None,
-            'budget': 0, 'duration': '', 'phone': '', 'email': '', 'social': [],
-            'stage': 'welcome', 'conversation': [], 'price_offered': False,
-        }
+        _cache['sessions'][sender_id] = new_session()
         return
 
     # fallback
-    print(f"🔄 fallback")
-    reply = ask_ai(text, sess)
-    send_fb(sender_id, reply)
-    add_conv(sender_id, 'الوكيل', reply)
+    print(f"🔄 [FALLBACK] {stage}", flush=True)
+    raw = ask_ai(text, sess)
+    clean, _, _ = parse_ai_tags(raw)
+    send_fb(sender_id, clean)
+    add_conv(sender_id, 'الوكيل', clean)
 
 # ========================================================================
 # 14. Webhook
 # ========================================================================
 @app.route('/webhook', methods=['GET'])
 def verify():
-    token = request.args.get('hub.verify_token')
-    challenge = request.args.get('hub.challenge')
-    if token == VERIFY_TOKEN:
-        print(f"✅ Webhook verified")
-        return challenge
+    if request.args.get('hub.verify_token') == VERIFY_TOKEN:
+        print(f"✅ Webhook verified", flush=True)
+        return request.args.get('hub.challenge')
     return "Verification failed", 403
 
 @app.route('/webhook', methods=['POST'])
 def webhook():
     body = request.json
-    print("=" * 70)
-    print(f"📥 Webhook")
-    print("=" * 70)
+    print("=" * 70, flush=True)
+    print(f"📥 [WEBHOOK] حدث جديد", flush=True)
 
     if not body or body.get('object') != 'page':
         return 'OK', 200
@@ -691,22 +673,22 @@ def webhook():
             message = msg.get('message', {})
 
             if 'text' in message:
-                print(f"📨 نص من {sender[:12]}: {message['text'][:80]}")
+                print(f"📨 [TEXT] من {sender}: {message['text'][:80]}", flush=True)
                 threading.Thread(target=process_message, args=(sender, message['text']), daemon=True).start()
                 continue
-
             if 'postback' in msg:
-                print(f"🔘 postback")
+                print(f"🔘 [POSTBACK] من {sender}", flush=True)
                 continue
             if message.get('is_echo'):
-                print(f"🔁 echo")
+                print(f"🔁 [ECHO]", flush=True)
                 continue
             if 'delivery' in msg:
-                print(f"✓ delivery")
+                print(f"✓ [DELIVERY]", flush=True)
                 continue
             if 'read' in msg:
-                print(f"👁️ read")
+                print(f"👁️ [READ]", flush=True)
                 continue
+            print(f"❓ [UNKNOWN] {json.dumps(msg)[:200]}", flush=True)
 
     return 'OK', 200
 
@@ -723,30 +705,39 @@ def api_orders():
         o['_id'] = str(o['_id'])
     return jsonify(orders)
 
-@app.route('/api/clients', methods=['GET'])
-def api_clients():
-    col, _ = get_mongo()
-    if col is None:
-        return jsonify([])
-    orders = list(col.find().sort('createdAt', -1))
-    clients = {}
-    for o in orders:
-        sid = o.get('sender_id', '')
-        if not sid or sid in clients:
-            continue
-        clients[sid] = {
-            'id': sid,
-            'name': o.get('fullName', ''),
-            'phone': o.get('phone', ''),
-            'source': 'messenger',
-            'status': o.get('status', 'pending'),
-            'order': {
-                'service': o.get('service', ''),
-                'project_name': o.get('projectName', ''),
-                'project_details': o.get('projectDetails', ''),
-            },
-        }
-    return jsonify(list(clients.values()))
+@app.route('/api/categories', methods=['GET'])
+def api_categories():
+    return jsonify(get_categories())
+
+@app.route('/api/reload_categories', methods=['POST'])
+def api_reload_categories():
+    _cache['categories'] = None
+    load_categories()
+    return jsonify({'success': True, 'count': len(get_categories())})
+
+@app.route('/api/logs', methods=['GET'])
+def api_logs():
+    return jsonify(list(logs)[:100])
+
+@app.route('/api/set_owner', methods=['POST'])
+def api_set_owner():
+    global OWNER_FB_ID
+    data = request.json or {}
+    oid = str(data.get('owner_id', '')).strip()
+    if oid:
+        OWNER_FB_ID = oid
+        _cache['owner_id'] = oid
+        add_log(f"👑 تم تعيين المدير: {oid}")
+        return jsonify({'success': True, 'owner_id': oid})
+    return jsonify({'success': False, 'error': 'owner_id required'}), 400
+
+@app.route('/api/whoami', methods=['GET'])
+def api_whoami():
+    """يُظهر PSID الفعلي لآخر مرسل"""
+    if _cache['sessions']:
+        sids = list(_cache['sessions'].keys())
+        return jsonify({'last_senders': sids[-10:]})
+    return jsonify({'last_senders': []})
 
 @app.route('/api/dashboard', methods=['GET'])
 def api_dashboard():
@@ -758,36 +749,15 @@ def api_dashboard():
         pending = col.count_documents({'status': 'pending'})
     return jsonify({'total_orders': total, 'completed': completed, 'pending': pending})
 
-@app.route('/api/logs', methods=['GET'])
-def api_logs():
-    return jsonify(list(logs)[:100])
-
-@app.route('/api/categories', methods=['GET'])
-def api_categories():
-    return jsonify(get_categories())
-
-@app.route('/api/reload_categories', methods=['POST'])
-def api_reload_categories():
-    _cache['categories'] = None
-    load_categories()
-    return jsonify({'success': True, 'count': len(get_categories())})
-
-@app.route('/api/set_owner', methods=['POST'])
-def api_set_owner():
-    """لتعيين معرّف المدير يدوياً"""
-    global OWNER_FB_ID
-    data = request.json or {}
-    owner_id = str(data.get('owner_id', '')).strip()
-    if owner_id:
-        OWNER_FB_ID = owner_id
-        _cache['owner_id'] = owner_id
-        return jsonify({'success': True, 'owner_id': owner_id})
-    return jsonify({'success': False, 'error': 'owner_id required'}), 400
-
 @app.route('/health')
 def health():
     col, _ = get_mongo()
-    return jsonify({'status': 'ok', 'mongo': col is not None, 'owner_id': _cache.get('owner_id')})
+    return jsonify({
+        'status': 'ok',
+        'mongo': col is not None,
+        'owner_id': _cache.get('owner_id'),
+        'categories_loaded': len(get_categories()),
+    })
 
 # ========================================================================
 # 16. Keep-Alive
@@ -804,21 +774,18 @@ def keep_alive():
 # 17. التشغيل
 # ========================================================================
 if __name__ == '__main__':
-    print("=" * 70)
-    print("🚀 B.Y PRO Marketing Agent")
-    print("=" * 70)
-    print(f"👤 Owner ID: {OWNER_FB_ID or 'غير محدد'}")
-    print(f"📄 Page ID: {PAGE_ID}")
-    print(f"🤖 AI: {OPENROUTER_MODEL}")
-    print(f"🔑 PAGE_ACCESS_TOKEN: {'موجود' if PAGE_ACCESS_TOKEN else 'مفقود!'}")
-    print(f"🔑 USER_TOKEN: {'موجود' if USER_TOKEN else 'مفقود!'}")
+    print("=" * 70, flush=True)
+    print("🚀 B.Y PRO Marketing Agent", flush=True)
+    print("=" * 70, flush=True)
+    print(f"👤 Owner ID: {OWNER_FB_ID or 'غير محدد'}", flush=True)
+    print(f"📄 Page ID: {PAGE_ID}", flush=True)
+    print(f"🤖 AI: {OPENROUTER_MODEL}", flush=True)
+    print(f"🔑 PAGE_ACCESS_TOKEN: {'موجود' if PAGE_ACCESS_TOKEN else 'مفقود!'}", flush=True)
     col, _ = get_mongo()
-    print(f"🗄️ MongoDB: {'متصل' if col is not None else 'غير متصل'}")
-    # تحميل التصنيفات
+    print(f"🗄️ MongoDB: {'متصل' if col is not None else 'غير متصل'}", flush=True)
     load_categories()
-    print("=" * 70 + "\n")
+    print("=" * 70 + "\n", flush=True)
 
     threading.Thread(target=keep_alive, daemon=True).start()
-
     port = int(os.environ.get('PORT', 5000))
     app.run(host='0.0.0.0', port=port, debug=False)
