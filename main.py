@@ -2,7 +2,7 @@
 # B.Y PRO Marketing Agent - Render Server (Final)
 # ========================================================================
 import sys
-sys.stdout.reconfigure(line_buffering=True)  # ← مهم: يُظهر logs فوراً
+sys.stdout.reconfigure(line_buffering=True)
 
 import os
 import re
@@ -16,6 +16,21 @@ from collections import deque
 from pymongo import MongoClient
 
 app = Flask(__name__)
+
+# ========================================================================
+# 0. CORS
+# ========================================================================
+@app.after_request
+def add_cors(response):
+    response.headers['Access-Control-Allow-Origin'] = '*'
+    response.headers['Access-Control-Allow-Methods'] = 'GET, POST, PUT, DELETE, OPTIONS'
+    response.headers['Access-Control-Allow-Headers'] = 'Content-Type, Authorization'
+    return response
+
+@app.route('/api/<path:_any>', methods=['OPTIONS'])
+@app.route('/<path:_any>', methods=['OPTIONS'])
+def cors_preflight(_any=None):
+    return '', 204
 
 # ========================================================================
 # 1. تحميل الأسرار من GitHub
@@ -63,7 +78,7 @@ load_secrets_from_github()
 # ========================================================================
 PAGE_ACCESS_TOKEN = os.environ.get('PAGE_ACCESS_TOKEN')
 VERIFY_TOKEN      = os.environ.get('VERIFY_TOKEN', 'bypro_verify_2026')
-OWNER_FB_ID       = os.environ.get('OWNER_FB_ID', '')
+OWNER_FB_ID       = os.environ.get('OWNER_FB_ID', '25923199944038952')
 PAGE_ID           = os.environ.get('PAGE_ID', '923170140890240')
 PAGE_NAME         = os.environ.get('PAGE_NAME', 'B.Y PRO Marketing Agent')
 
@@ -122,7 +137,7 @@ def add_log(msg):
     print(f"[{entry['time']}] {msg}", flush=True)
 
 # ========================================================================
-# 5. التصنيفات من MongoDB
+# 5. التصنيفات
 # ========================================================================
 DEFAULT_CATEGORIES = [
     {"id": "design", "enabled": True, "name": "التصميم البصري", "icon": "fa-solid fa-palette", "services": ["شعارات","هوية بصرية","تعديل صور","سوشيال ميديا","بطاقات","منشورات","أغلفة"]},
@@ -159,7 +174,6 @@ def get_categories():
     return _cache['categories']
 
 def format_categories_for_ai():
-    """عرض التصنيفات مع ID للـ AI"""
     cats = get_categories()
     lines = []
     for c in cats:
@@ -186,7 +200,7 @@ def find_category(cat_id):
     return None
 
 # ========================================================================
-# 6. معرّف المدير
+# 6. المدير
 # ========================================================================
 def get_owner_id():
     if _cache['owner_id']:
@@ -251,10 +265,10 @@ def get_bot_personality():
 3. افهم تفاصيل المشروع (اسأل 1-2 سؤال في كل مرة).
 4. اسأل إذا كان لديه نموذج/تصميم جاهز.
 5. قدّم السعر التقريبي والمدة بوضوح.
-6. إذا وافق، اطلب بياناته (اسم، هاتف، بريد، سوشيال).
+6. إذا وافق، اطلب بياناته.
 
 الأسعار التقريبية الواقعية (بالدولار):
-- صفحة هبوط بسيطة: 1500$-4000$ (2-4 أسابيع)
+- صفحة هبوط: 1500$-4000$ (2-4 أسابيع)
 - موقع متكامل: 4000$-12000$ (6-12 أسبوع)
 - متجر إلكتروني: 3500$-15000$ (10-20 أسبوع)
 - تطبيق بسيط: 5000$-20000$ (2-4 أشهر)
@@ -262,23 +276,33 @@ def get_bot_personality():
 - بوت AI: 300$-2000$ (1-3 أسابيع)
 - شعار: 150$-500$ (3-7 أيام)
 - هوية بصرية: 800$-3000$ (2-4 أسابيع)
-- ريلز (مونتاج): 30$-100$
+- ريلز: 30$-100$
 - فيديو يوتيوب: 150$-500$
-- موشن جرافيك (60 ث): 500$-1500$
-- نظام ERP/CRM: 8000$-40000$ (2-6 أشهر)
+- موشن جرافيك (60ث): 500$-1500$
+- ERP/CRM: 8000$-40000$ (2-6 أشهر)
 - سكربت مخصص: 500$-3000$
 
-التحويل: 1$ = 240 دج (إذا طلب الدينار الجزائري).
+التحويل: 1$ = 240 دج.
 
-⚠️ مهم جداً: في نهاية كل رد، أضف سطراً منفصلاً بالشكل:
+⚠️ في نهاية كل رد، أضف سطرين منفصلين:
 [CATEGORY:id]
 [SERVICE:اسم_الخدمة]
 
-حيث id هو معرّف التصنيف من القائمة أعلاه.
-مثال: [CATEGORY:web]
-[SERVICE:صفحة هبوط]
+هذه الوسوم تُحذف تلقائياً قبل الإرسال."""
 
-هذه الوسوم تُستخدم داخلياً وسيتم حذفها قبل إرسال الرد للعميل. لا تشرحها للعميل."""
+DATA_COLLECTION_PERSONALITY = """أنت وكيل تسويق في B.Y PRO.
+
+مهمتك الآن: جمع بيانات العميل فقط.
+
+قواعد صارمة:
+- لا تعرض خدمات.
+- لا تذكر أسعاراً.
+- لا تشرح أي شيء.
+- اسأل السؤال المطلوب فقط.
+- ردودك قصيرة جداً (سطر واحد).
+- لا تخرج عن الموضوع.
+- لا تكرر التحية.
+- أجب بنفس لغة العميل."""
 
 OWNER_PERSONALITY = """أنت وكيل تسويق لخدمة العملاء في شركة B.Y PRO.
 
@@ -293,7 +317,6 @@ OWNER_PERSONALITY = """أنت وكيل تسويق لخدمة العملاء في
 - لا تبدأ كل رد بالتحية"""
 
 def parse_ai_tags(text):
-    """استخراج الوسوم من رد AI"""
     cat = re.search(r'\[CATEGORY:([a-zA-Z0-9_\-]+)\]', text)
     svc = re.search(r'\[SERVICE:([^\]]+)\]', text)
     clean = re.sub(r'\[CATEGORY:[^\]]+\]', '', text)
@@ -306,19 +329,15 @@ def ask_ai(user_msg, sess, extra_instruction="", personality=None):
     hints = {
         'welcome': "رحّب بالعميل واسأل كيف يمكنك مساعدته.",
         'explore': "افهم ما يريد. اسأل 1-2 سؤال. إذا سأل عن الخدمات اعرض القائمة.",
-        'details': "اطلب من العميل تفاصيل مشروعه كاملة (الأهداف، المميزات، المتطلبات).",
+        'details': "اطلب تفاصيل المشروع (الأهداف، المميزات، المتطلبات).",
         'model': "اسأل العميل إذا كان لديه نموذج أو تصميم جاهز.",
         'price': "قدّم السعر والمدة بوضوح. انتظر موافقته.",
-        'collecting_name': "اطلب من العميل اسمه الكامل.",
-        'collecting_phone': f"الاسم: {sess.get('name','')}. اطلب رقم هاتفه.",
-        'collecting_email': "اطلب بريده الإلكتروني (اختياري).",
-        'collecting_social': "اطلب روابط سوشيال ميديا (اختياري).",
     }
     p = personality or get_bot_personality()
     hint = hints.get(stage, "")
     full = f"""{p}
 
-[المرحلة الحالية: {stage}]
+[المرحلة: {stage}]
 [توجيه: {hint}]
 {extra_instruction}
 
@@ -368,7 +387,7 @@ def new_session():
 def get_session(sender_id):
     sid = str(sender_id)
     if sid not in _cache['sessions']:
-        print(f"🆕 [SESSION] جلسة جديدة لـ {sid[:15]}", flush=True)
+        print(f"🆕 [SESSION] {sid}", flush=True)
         _cache['sessions'][sid] = new_session()
     return _cache['sessions'][sid]
 
@@ -379,7 +398,7 @@ def add_conv(sender_id, role, message):
         sess['conversation'] = sess['conversation'][-20:]
 
 # ========================================================================
-# 11. استخراج
+# 11. الاستخراج — مُحسَّن
 # ========================================================================
 def extract_phone(text):
     for pat in [r'(\+213[567][0-9]{8})', r'(0[567][0-9]{8})', r'(\+[1-9][0-9]{7,14})', r'([0-9]{10,13})']:
@@ -393,24 +412,53 @@ def extract_email(text):
     return m.group(0) if m else None
 
 def extract_name(text):
-    for pat in [r'اسمي[:\s]*([\u0600-\u06FF\s]{3,30})', r'الاسم[:\s]*([\u0600-\u06FF\s]{3,30})',
-                r'my name is[:\s]*([a-zA-Z\s]{3,30})', r'name[:\s]*([a-zA-Z\s]{3,30})']:
-        m = re.search(pat, text, re.I)
+    """استخراج الاسم من نص مثل 'اسمي أحمد' أو 'أنا محمد علي'"""
+    t = text.strip()
+    t = re.sub(r'^(مرحبا|أهلا|السلام عليكم|hi|hello)\s*', '', t, flags=re.I)
+    patterns = [
+        r'اسمي\s+([\u0600-\u06FF]+(?:\s+[\u0600-\u06FF]+)?)',
+        r'الاسم\s+([\u0600-\u06FF]+(?:\s+[\u0600-\u06FF]+)?)',
+        r'انا\s+([\u0600-\u06FF]+(?:\s+[\u0600-\u06FF]+)?)',
+        r'أنا\s+([\u0600-\u06FF]+(?:\s+[\u0600-\u06FF]+)?)',
+        r'my name is\s+([a-zA-Z]+(?:\s+[a-zA-Z]+)?)',
+        r"i'm\s+([a-zA-Z]+(?:\s+[a-zA-Z]+)?)",
+        r'name\s*[:=]\s*([a-zA-Z\u0600-\u06FF]+(?:\s+[a-zA-Z\u0600-\u06FF]+)?)',
+    ]
+    for pat in patterns:
+        m = re.search(pat, t, re.I)
         if m:
-            n = m.group(1).strip()
-            if 2 <= len(n.split()) <= 5 and len(n) <= 40:
-                return n
+            name = m.group(1).strip()
+            name = re.sub(r'\s+(و|ثم|بعدها)$', '', name)
+            if 1 <= len(name.split()) <= 4 and 2 <= len(name) <= 40:
+                return name
+    words = t.split()
+    if 1 <= len(words) <= 3 and len(t) <= 30:
+        if not any(w in t.lower() for w in ['نعم', 'لا', 'كيف', 'متى', 'ماذا', 'شكرا', 'مرحبا', 'اهلا', 'السلام']):
+            return t
     return None
 
 def is_confirmation(text):
-    words = ['نعم', 'موافق', 'تمام', 'اوكي', 'اوك', 'ok', 'yes', 'موافقة', 'ماشي', 'اتفقنا', 'ممتاز', 'أوافق', 'نبدا', 'نبدأ']
+    words = ['نعم', 'موافق', 'تمام', 'اوكي', 'اوك', 'ok', 'yes', 'موافقة', 'ماشي', 'اتفقنا', 'ممتاز', 'أوافق', 'نبدا', 'نبدأ', 'يلا']
     return any(w in text.lower() for w in words)
 
 def is_skip(text):
-    return text.lower().strip() in ['تخطي', 'skip', 'لا', 'no', 'بدون', 'بلا', 'مش']
+    tl = text.lower().strip()
+    skip_words = [
+        'تخطي', 'skip', 'بدون', 'بلا', 'مش',
+        'لا املك', 'لا أملك', 'لااملك', 'لا امتلك',
+        'ليس لدي', 'ليس عندي', 'ليست لدي',
+        'ما عندي', 'ماعندي', 'ما لدي', 'مالدي',
+        'لا يوجد', 'لايوجد',
+        'بدون بريد', 'بدون ايميل', 'تجاوز', 'تجاوزها',
+        'مو موجود', 'غير موجود', 'ما عنديش', 'ماعنديش',
+        'no email', 'no social', 'none', 'nothing', 'nope'
+    ]
+    if tl in ['لا', 'no', 'nope']:
+        return True
+    return any(w in tl for w in skip_words)
 
 # ========================================================================
-# 12. حفظ الطلب (بنية clients.html بالضبط)
+# 12. حفظ الطلب
 # ========================================================================
 def save_order(sess, sender_id):
     col, _ = get_mongo()
@@ -463,7 +511,6 @@ def process_message(sender_id, text):
     print(f"📨 [MSG] من {sender_id}", flush=True)
     print(f"📝 [MSG] النص: {text}", flush=True)
 
-    # المدير
     owner = get_owner_id()
     if owner and sender_id == owner:
         print(f"👑 [OWNER] المدير", flush=True)
@@ -506,7 +553,6 @@ def process_message(sender_id, text):
         send_fb(sender_id, clean)
         add_conv(sender_id, 'الوكيل', clean)
 
-        # ننتقل لمرحلة التفاصيل بعد التعرف على الخدمة
         if sess.get('service'):
             sess['stage'] = 'details'
         return
@@ -516,7 +562,7 @@ def process_message(sender_id, text):
         if not sess.get('projectDetails'):
             sess['projectDetails'] = text.strip()[:2000]
             print(f"✅ [DETAILS] {len(sess['projectDetails'])} حرف", flush=True)
-        raw = ask_ai(text, sess, extra_instruction="اسأل العميل إذا كان لديه نموذج أو تصميم جاهز للمشروع.")
+        raw = ask_ai(text, sess, extra_instruction="اسأل العميل إذا كان لديه نموذج أو تصميم جاهز للمشروع. سؤال واحد فقط.")
         clean, _, _ = parse_ai_tags(raw)
         send_fb(sender_id, clean)
         add_conv(sender_id, 'الوكيل', clean)
@@ -543,7 +589,6 @@ def process_message(sender_id, text):
         send_fb(sender_id, clean)
         add_conv(sender_id, 'الوكيل', clean)
 
-        # نحاول استخراج السعر
         pm = re.search(r'(\d{2,6})\s*[-–]\s*(\d{2,6})\s*\$', clean)
         sp = re.search(r'(\d{3,6})\s*\$', clean)
         if pm:
@@ -560,11 +605,11 @@ def process_message(sender_id, text):
     # ===== 5. price =====
     if stage == 'price':
         if is_confirmation(text):
-            print(f"✅ [CONFIRM] العميل وافق", flush=True)
+            print(f"✅ [CONFIRM] وافق", flush=True)
             sess['stage'] = 'collecting_name'
             send_fb(sender_id, "ممتاز! نحتاج بعض المعلومات لتسجيل طلبك.\nما اسمك الكامل؟")
         else:
-            raw = ask_ai(text, sess, extra_instruction="العميل يستفسر عن السعر. أجبه باختصار. ذكّره بالسؤال: هل توافق؟")
+            raw = ask_ai(text, sess, extra_instruction="العميل يستفسر. أجبه باختصار. ذكّره بالسؤال: هل توافق؟")
             clean, _, _ = parse_ai_tags(raw)
             send_fb(sender_id, clean)
             add_conv(sender_id, 'الوكيل', clean)
@@ -573,15 +618,13 @@ def process_message(sender_id, text):
     # ===== 6. name =====
     if stage == 'collecting_name':
         name = extract_name(text)
-        if not name and len(text.split()) <= 5 and len(text) <= 40:
-            if not any(w in text.lower() for w in ['نعم', 'لا', 'كيف', 'متى', 'ماذا', 'شكرا']):
-                name = text.strip()
         if name:
             sess['name'] = name
             sess['stage'] = 'collecting_phone'
             print(f"✅ [NAME] {name}", flush=True)
             send_fb(sender_id, f"تمام {name}، ما رقم هاتفك؟")
         else:
+            print(f"⚠️ [NAME] لم يُستخرج", flush=True)
             send_fb(sender_id, "ما اسمك الكامل؟")
         return
 
@@ -594,7 +637,8 @@ def process_message(sender_id, text):
             print(f"✅ [PHONE] {phone}", flush=True)
             send_fb(sender_id, "هل لديك بريد إلكتروني؟ (اختياري — أرسل 'تخطي' للمتابعة)")
         else:
-            send_fb(sender_id, "أرسل رقم هاتفك (مثال: +213795082763 أو 0555123456)")
+            print(f"⚠️ [PHONE] لم يُستخرج", flush=True)
+            send_fb(sender_id, "أرسل رقم هاتفك (مثال: +213795082763)")
         return
 
     # ===== 8. email =====
@@ -602,7 +646,8 @@ def process_message(sender_id, text):
         if is_skip(text):
             sess['email'] = ''
             sess['stage'] = 'collecting_social'
-            send_fb(sender_id, "هل لديك روابط سوشيال ميديا؟ (اختياري — أرسل 'تخطي')")
+            print(f"⏭️ [EMAIL] تخطي", flush=True)
+            send_fb(sender_id, "حسناً. هل لديك روابط سوشيال ميديا؟ (اختياري — أرسل 'تخطي')")
         else:
             email = extract_email(text)
             if email:
@@ -611,6 +656,7 @@ def process_message(sender_id, text):
                 print(f"✅ [EMAIL] {email}", flush=True)
                 send_fb(sender_id, "هل لديك روابط سوشيال ميديا؟ (اختياري — أرسل 'تخطي')")
             else:
+                print(f"⚠️ [EMAIL] لم يُستخرج", flush=True)
                 send_fb(sender_id, "البريد غير صالح. أرسل بريداً صحيحاً أو 'تخطي'.")
         return
 
@@ -625,7 +671,7 @@ def process_message(sender_id, text):
         else:
             sess['social'] = []
 
-        print(f"💾 [SAVE] جاري حفظ الطلب...", flush=True)
+        print(f"💾 [SAVE] حفظ الطلب...", flush=True)
         oid = save_order(sess, sender_id)
         if oid:
             print(f"✅ [SAVED] {oid}", flush=True)
@@ -688,7 +734,7 @@ def webhook():
             if 'read' in msg:
                 print(f"👁️ [READ]", flush=True)
                 continue
-            print(f"❓ [UNKNOWN] {json.dumps(msg)[:200]}", flush=True)
+            print(f"❓ [UNKNOWN]", flush=True)
 
     return 'OK', 200
 
@@ -709,7 +755,7 @@ def api_orders():
 def api_categories():
     return jsonify(get_categories())
 
-@app.route('/api/reload_categories', methods=['POST'])
+@app.route('/api/reload_categories', methods=['GET', 'POST'])
 def api_reload_categories():
     _cache['categories'] = None
     load_categories()
@@ -719,11 +765,14 @@ def api_reload_categories():
 def api_logs():
     return jsonify(list(logs)[:100])
 
-@app.route('/api/set_owner', methods=['POST'])
+@app.route('/api/set_owner', methods=['GET', 'POST'])
 def api_set_owner():
     global OWNER_FB_ID
-    data = request.json or {}
-    oid = str(data.get('owner_id', '')).strip()
+    if request.method == 'GET':
+        oid = request.args.get('owner_id', '').strip()
+    else:
+        data = request.json or {}
+        oid = str(data.get('owner_id', '')).strip()
     if oid:
         OWNER_FB_ID = oid
         _cache['owner_id'] = oid
@@ -731,13 +780,23 @@ def api_set_owner():
         return jsonify({'success': True, 'owner_id': oid})
     return jsonify({'success': False, 'error': 'owner_id required'}), 400
 
+@app.route('/api/set_owner_direct/<owner_id>', methods=['GET'])
+def api_set_owner_direct(owner_id):
+    global OWNER_FB_ID
+    oid = str(owner_id).strip()
+    if oid:
+        OWNER_FB_ID = oid
+        _cache['owner_id'] = oid
+        add_log(f"👑 تم تعيين المدير: {oid}")
+        return jsonify({'success': True, 'owner_id': oid})
+    return jsonify({'success': False, 'error': 'invalid'}), 400
+
 @app.route('/api/whoami', methods=['GET'])
 def api_whoami():
-    """يُظهر PSID الفعلي لآخر مرسل"""
-    if _cache['sessions']:
-        sids = list(_cache['sessions'].keys())
-        return jsonify({'last_senders': sids[-10:]})
-    return jsonify({'last_senders': []})
+    return jsonify({
+        'owner_id': _cache.get('owner_id'),
+        'sessions': list(_cache['sessions'].keys())[-10:]
+    })
 
 @app.route('/api/dashboard', methods=['GET'])
 def api_dashboard():
