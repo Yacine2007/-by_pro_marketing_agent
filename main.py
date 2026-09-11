@@ -1,5 +1,6 @@
 # ========================================================================
-# B.Y PRO Marketing Agent - Render Server (Final)
+# B.Y PRO Marketing Agent - Render Server
+# Owner messages are routed to the Dashboard's Executive Assistant
 # ========================================================================
 import sys
 sys.stdout.reconfigure(line_buffering=True)
@@ -93,6 +94,13 @@ SETTINGS_DB_NAME   = os.environ.get('SETTINGS_DB_NAME', 'DashboardDB')
 SETTINGS_COLLECTION = 'settings'
 SETTINGS_KEY       = 'service_settings'
 
+# ==== Dashboard shared collections ====
+DASHBOARD_DB_NAME     = 'DashboardDB'
+CHAT_COLLECTION       = 'chat_history'
+CLIENTS_COLLECTION    = 'clients'
+PROJECTS_COLLECTION   = 'projects_registry'
+DASH_SETTINGS_COLL    = 'settings'
+
 SELF_URL = os.environ.get('SELF_URL', 'https://by-pro-marketing-agent-v2jk.onrender.com')
 
 # ========================================================================
@@ -120,6 +128,12 @@ def get_mongo():
         print(f"❌ MongoDB: {e}", flush=True)
         return None, None
 
+def _ensure_mongo():
+    global _mongo_client
+    if _mongo_client is None:
+        get_mongo()
+    return _mongo_client
+
 # ========================================================================
 # 4. التخزين المؤقت
 # ========================================================================
@@ -137,7 +151,7 @@ def add_log(msg):
     print(f"[{entry['time']}] {msg}", flush=True)
 
 # ========================================================================
-# 5. التصنيفات
+# 5. التصنيفات (للعملاء)
 # ========================================================================
 DEFAULT_CATEGORIES = [
     {"id": "design", "enabled": True, "name": "التصميم البصري", "icon": "fa-solid fa-palette", "services": ["شعارات","هوية بصرية","تعديل صور","سوشيال ميديا","بطاقات","منشورات","أغلفة"]},
@@ -211,7 +225,7 @@ def get_owner_id():
     return None
 
 # ========================================================================
-# 7. OpenRouter AI
+# 7. OpenRouter AI — استدعاءات خام
 # ========================================================================
 def get_ai_response(prompt):
     if not OPENROUTER_API_KEY:
@@ -243,8 +257,248 @@ def get_ai_response(prompt):
         add_log(f"❌ AI: {e}")
         return None
 
+def call_ai_with_messages(messages, max_tokens=2500):
+    if not OPENROUTER_API_KEY:
+        add_log("❌ OPENROUTER_API_KEY غير موجود")
+        return None
+    try:
+        headers = {
+            'Authorization': f'Bearer {OPENROUTER_API_KEY}',
+            'Content-Type': 'application/json',
+            'HTTP-Referer': SELF_URL,
+            'X-Title': 'B.Y PRO Executive Assistant',
+        }
+        payload = {
+            'model': OPENROUTER_MODEL,
+            'messages': messages,
+            'temperature': 0.7,
+            'max_tokens': max_tokens,
+        }
+        r = requests.post(OPENROUTER_URL, headers=headers, json=payload, timeout=90)
+        if r.status_code == 200:
+            result = r.json()
+            choices = result.get('choices') or []
+            if not choices:
+                return None
+            answer = choices[0].get('message', {}).get('content', '')
+            if answer and answer.strip():
+                return answer.strip()
+            return None
+        add_log(f"❌ EA HTTP {r.status_code}: {r.text[:150]}")
+        return None
+    except Exception as e:
+        add_log(f"❌ EA: {e}")
+        return None
+
 # ========================================================================
-# 8. الشخصيات
+# 7b. Executive Assistant Bridge — يعتمد على نفس بيانات Dashboard
+# ========================================================================
+def get_dashboard_settings():
+    client = _ensure_mongo()
+    if client is None:
+        return {}
+    out = {}
+    try:
+        col = client[DASHBOARD_DB_NAME][DASH_SETTINGS_COLL]
+        for doc in col.find({}):
+            k = doc.get('key')
+            if k:
+                out[k] = doc.get('value')
+    except Exception as e:
+        add_log(f"⚠️ settings load: {e}")
+    return out
+
+def get_chat_history():
+    client = _ensure_mongo()
+    if client is None:
+        return []
+    try:
+        col = client[DASHBOARD_DB_NAME][CHAT_COLLECTION]
+        out = []
+        for d in col.find({}).sort('_id', 1):
+            out.append({
+                'role': d.get('role'),
+                'content': d.get('content', ''),
+                'meta': d.get('meta') or {},
+            })
+        return out
+    except Exception as e:
+        add_log(f"⚠️ chat load: {e}")
+        return []
+
+def save_chat_message(role, content, meta=None):
+    client = _ensure_mongo()
+    if client is None:
+        return False
+    try:
+        col = client[DASHBOARD_DB_NAME][CHAT_COLLECTION]
+        doc = {
+            'role': role,
+            'content': content,
+            'timestamp': datetime.now(timezone.utc).isoformat(),
+        }
+        if meta:
+            doc['meta'] = meta
+        col.insert_one(doc)
+        return True
+    except Exception as e:
+        add_log(f"⚠️ chat save: {e}")
+        return False
+
+def get_clients_for_ai(limit=200):
+    client = _ensure_mongo()
+    if client is None:
+        return []
+    try:
+        col = client[DASHBOARD_DB_NAME][CLIENTS_COLLECTION]
+        out = []
+        for d in col.find({}).sort('_id', -1).limit(limit):
+            order = d.get('order') or {}
+            socials = order.get('social_accounts') or d.get('social_accounts') or []
+            out.append({
+                'id': str(d.get('_id', ''))[-6:],
+                'name': d.get('name', ''),
+                'email': d.get('email', ''),
+                'phone': d.get('phone', ''),
+                'source': d.get('source', ''),
+                'status': d.get('status', ''),
+                'service': order.get('service', ''),
+                'project': order.get('project_name', '') or d.get('project_name', ''),
+                'socials': [{'platform': s.get('platform', ''), 'url': s.get('url', '')}
+                            for s in socials if isinstance(s, dict)],
+            })
+        return out
+    except Exception as e:
+        add_log(f"⚠️ clients load: {e}")
+        return []
+
+def get_pending_orders_for_ai(limit=50):
+    col, _ = get_mongo()
+    if col is None:
+        return []
+    try:
+        query = {'$or': [
+            {'status': 'new'},
+            {'status': {'$exists': False}},
+            {'status': None},
+            {'status': 'pending'},
+        ]}
+        out = []
+        for d in col.find(query).sort([('createdAt', -1), ('_id', -1)]).limit(limit):
+            out.append({
+                'name': d.get('fullName') or d.get('name', ''),
+                'email': d.get('email', ''),
+                'phone': d.get('phone', ''),
+                'service': d.get('service', ''),
+                'project': d.get('projectName', ''),
+            })
+        return out
+    except Exception as e:
+        add_log(f"⚠️ orders load: {e}")
+        return []
+
+def get_company_summary():
+    client = _ensure_mongo()
+    if client is None:
+        return ''
+    try:
+        db = client[DASHBOARD_DB_NAME]
+        col = db[PROJECTS_COLLECTION]
+        clients_count = db[CLIENTS_COLLECTION].count_documents({})
+        projects_count = col.count_documents({'kind': 'project'})
+        completed = col.count_documents({'kind': 'project', 'progress': {'$gte': 100}})
+        return (
+            "=== Company Summary ===\n"
+            f"Customers: {clients_count}\n"
+            f"Projects: {projects_count}\n"
+            f"Completed projects: {completed}\n"
+        )
+    except Exception as e:
+        add_log(f"⚠️ summary: {e}")
+        return ''
+
+DEFAULT_SYSTEM_PROMPT_FALLBACK = (
+    'You are the executive assistant managing B.Y PRO Technologie, a multinational digital software company. '
+    'Your director is Yacine, the founder and owner of B.Y PRO. '
+    'Address him ONLY as "Sir" or "Director Yacine". '
+    'Speak professionally and formally, in the language he uses. '
+    'You have full read access to the business data: clients, pending orders, projects, transactions, service settings, and system health. '
+    'You can answer questions about any client, help him search for them by name, email, phone, project, service, or source, and report on pending orders. '
+    'When asked about a specific client, provide their name, contact details, project info, status, and any notes you see. '
+    'When asked about orders, tell him how many are pending and summarize the most recent ones. '
+    'You always know the current date and time — use it when answering questions about "today", "yesterday", "this week", etc. '
+    'When your reply contains code, tables, or data that could be useful to copy, present it cleanly using Markdown: '
+    'use triple backticks for code and pipe-tables for tabular data. '
+    'Company details: Technology, Software Services, Development & AI. '
+    'Website: https://by-pro.kesug.com/ (backup: http://bypro.great-site.net/).'
+)
+
+def build_executive_context():
+    settings = get_dashboard_settings()
+    now = datetime.now()
+    weekday = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'][now.weekday()]
+
+    clients = get_clients_for_ai(200)
+    pending = get_pending_orders_for_ai(50)
+    summary = get_company_summary()
+
+    company_info = {
+        'company_website': settings.get('company_website', ''),
+        'company_backup_website': settings.get('company_backup_website', ''),
+        'company_tagline': settings.get('company_tagline', ''),
+        'company_description': settings.get('company_description', ''),
+    }
+
+    return (
+        "=== CURRENT DATE & TIME ===\n"
+        f"Today is {weekday}, {now.strftime('%Y-%m-%d')} — local time {now.strftime('%H:%M:%S')}.\n"
+        "When the director asks about 'today', 'yesterday', 'this week', 'this month', etc., use this reference.\n\n"
+        "You are the executive assistant of B.Y PRO Technologie. "
+        "Your director is Yacine (address him as 'Sir' or 'Director Yacine'). "
+        "You have LIVE read access to the business data shown below. "
+        "You can answer questions about any client, search clients by name/email/phone/service/project/status/source, "
+        "report on pending orders, and provide summaries. "
+        "When the director asks about a specific client, look them up in the list and give full details. "
+        "When he asks about new orders, report the pending_orders_count and list the pending orders. "
+        "When your reply contains code, tables, or structured data, format it as Markdown: "
+        "use triple backticks (```) for code blocks, and pipe-tables (| col1 | col2 |) for tabular data. "
+        "Always use the LIVE DATA below. Never invent clients or orders.\n\n"
+        "=== LIVE BUSINESS CONTEXT ===\n"
+        f"Clients count: {len(clients)}\n"
+        f"Pending orders count: {len(pending)}\n\n"
+        f"Clients list:\n{json.dumps(clients, ensure_ascii=False)}\n\n"
+        f"Pending orders:\n{json.dumps(pending, ensure_ascii=False)}\n\n"
+        f"Company summary:\n{summary}\n\n"
+        f"Company info:\n{json.dumps(company_info, ensure_ascii=False)}\n"
+    )
+
+def ask_executive_assistant(user_msg):
+    settings = get_dashboard_settings()
+    system_prompt = (settings.get('system_prompt') or '').strip() or DEFAULT_SYSTEM_PROMPT_FALLBACK
+    system_context = build_executive_context()
+
+    # Save the owner's message into chat_history (visible on Dashboard)
+    save_chat_message('user', user_msg, meta={'source': 'messenger'})
+
+    # Rebuild message list from persisted history
+    history = get_chat_history()
+    non_sys = [m for m in history if m.get('role') in ('user', 'assistant')]
+    if len(non_sys) > 20:
+        non_sys = non_sys[-20:]
+
+    messages = [{'role': 'system', 'content': system_prompt + '\n\n' + system_context}]
+    for m in non_sys:
+        messages.append({'role': m['role'], 'content': m.get('content', '')})
+
+    reply = call_ai_with_messages(messages, max_tokens=2500)
+    if reply is None:
+        return None
+
+    save_chat_message('assistant', reply, meta={'source': 'messenger'})
+    return reply
+
+# ========================================================================
+# 8. الشخصيات — للعملاء فقط
 # ========================================================================
 def get_bot_personality():
     cats_text = format_categories_for_ai()
@@ -304,18 +558,6 @@ DATA_COLLECTION_PERSONALITY = """أنت وكيل تسويق في B.Y PRO.
 - لا تكرر التحية.
 - أجب بنفس لغة العميل."""
 
-OWNER_PERSONALITY = """أنت وكيل تسويق لخدمة العملاء في شركة B.Y PRO.
-
-المتحدث هو المدير العام: ياسين بن مقران — مؤسس الشركة.
-
-قواعد:
-- ناده "سيدي المدير" أو "سيدي ياسين"
-- هو مديرك وليس عميلاً
-- لا تعرض خدمات
-- ردودك مختصرة
-- أجبه بنفس لغته
-- لا تبدأ كل رد بالتحية"""
-
 def parse_ai_tags(text):
     cat = re.search(r'\[CATEGORY:([a-zA-Z0-9_\-]+)\]', text)
     svc = re.search(r'\[SERVICE:([^\]]+)\]', text)
@@ -372,8 +614,38 @@ def send_fb(recipient_id, text):
         add_log(f"❌ إرسال: {e}")
         return False
 
+def send_fb_long(recipient_id, text, max_len=1900):
+    """تقسيم الرسائل الطويلة لتجاوز حد Messenger (2000 حرف)."""
+    if text is None:
+        return False
+    text = str(text)
+    if len(text) <= max_len:
+        return send_fb(recipient_id, text)
+
+    chunks = []
+    remaining = text
+    while remaining:
+        if len(remaining) <= max_len:
+            chunks.append(remaining)
+            break
+        split_at = remaining.rfind('\n', 0, max_len)
+        if split_at < max_len // 2:
+            split_at = remaining.rfind(' ', 0, max_len)
+        if split_at < max_len // 2:
+            split_at = max_len
+        chunks.append(remaining[:split_at])
+        remaining = remaining[split_at:].lstrip()
+
+    ok = True
+    for i, chunk in enumerate(chunks):
+        if i > 0:
+            time.sleep(0.35)
+        if not send_fb(recipient_id, chunk):
+            ok = False
+    return ok
+
 # ========================================================================
-# 10. الجلسات
+# 10. الجلسات — للعملاء فقط
 # ========================================================================
 def new_session():
     return {
@@ -398,7 +670,7 @@ def add_conv(sender_id, role, message):
         sess['conversation'] = sess['conversation'][-20:]
 
 # ========================================================================
-# 11. الاستخراج — مُحسَّن
+# 11. الاستخراج
 # ========================================================================
 def extract_phone(text):
     for pat in [r'(\+213[567][0-9]{8})', r'(0[567][0-9]{8})', r'(\+[1-9][0-9]{7,14})', r'([0-9]{10,13})']:
@@ -412,7 +684,6 @@ def extract_email(text):
     return m.group(0) if m else None
 
 def extract_name(text):
-    """استخراج الاسم من نص مثل 'اسمي أحمد' أو 'أنا محمد علي'"""
     t = text.strip()
     t = re.sub(r'^(مرحبا|أهلا|السلام عليكم|hi|hello)\s*', '', t, flags=re.I)
     patterns = [
@@ -458,7 +729,7 @@ def is_skip(text):
     return any(w in tl for w in skip_words)
 
 # ========================================================================
-# 12. حفظ الطلب
+# 12. حفظ الطلب — للعملاء
 # ========================================================================
 def save_order(sess, sender_id):
     col, _ = get_mongo()
@@ -511,22 +782,33 @@ def process_message(sender_id, text):
     print(f"📨 [MSG] من {sender_id}", flush=True)
     print(f"📝 [MSG] النص: {text}", flush=True)
 
+    # ============================================================
+    # OWNER PATH → Executive Assistant
+    # ============================================================
     owner = get_owner_id()
     if owner and sender_id == owner:
-        print(f"👑 [OWNER] المدير", flush=True)
-        sess = get_session(sender_id)
-        add_conv(sender_id, 'المستخدم', text)
-        reply = ask_ai(text, sess, personality=OWNER_PERSONALITY)
-        send_fb(sender_id, reply)
-        add_conv(sender_id, 'الوكيل', reply)
+        print(f"👑 [OWNER] → المساعد التنفيذي (Dashboard)", flush=True)
+        try:
+            reply = ask_executive_assistant(text)
+        except Exception as e:
+            add_log(f"❌ EA bridge: {e}")
+            reply = None
+
+        if not reply:
+            reply = "عذراً سيدي، حدث خطأ مؤقت في المساعد التنفيذي. أعد المحاولة من فضلك."
+
+        send_fb_long(sender_id, reply)
         return
 
+    # ============================================================
+    # CUSTOMER PATH → marketing flow
+    # ============================================================
     sess = get_session(sender_id)
     add_conv(sender_id, 'المستخدم', text)
     stage = sess.get('stage', 'welcome')
     print(f"🎯 [STAGE] {stage}", flush=True)
 
-    # ===== 1. welcome =====
+    # 1. welcome
     if stage == 'welcome':
         raw = ask_ai(text, sess, extra_instruction="رحّب بالعميل واسأل كيف يمكنك مساعدته اليوم. رد مختصر.")
         clean, cat_id, svc = parse_ai_tags(raw)
@@ -535,7 +817,7 @@ def process_message(sender_id, text):
         sess['stage'] = 'explore'
         return
 
-    # ===== 2. explore =====
+    # 2. explore
     if stage == 'explore':
         raw = ask_ai(text, sess, extra_instruction="افهم احتياج العميل. اسأل سؤالاً أو سؤالين. إذا سأل عن الخدمات اعرض القائمة.")
         clean, cat_id, svc = parse_ai_tags(raw)
@@ -557,7 +839,7 @@ def process_message(sender_id, text):
             sess['stage'] = 'details'
         return
 
-    # ===== 3. details =====
+    # 3. details
     if stage == 'details':
         if not sess.get('projectDetails'):
             sess['projectDetails'] = text.strip()[:2000]
@@ -569,7 +851,7 @@ def process_message(sender_id, text):
         sess['stage'] = 'model'
         return
 
-    # ===== 4. model =====
+    # 4. model
     if stage == 'model':
         tl = text.lower()
         if any(w in tl for w in ['نعم', 'yes', 'عندي', 'لدي', 'موجود', 'عندى']):
@@ -602,7 +884,7 @@ def process_message(sender_id, text):
         sess['stage'] = 'price'
         return
 
-    # ===== 5. price =====
+    # 5. price
     if stage == 'price':
         if is_confirmation(text):
             print(f"✅ [CONFIRM] وافق", flush=True)
@@ -615,7 +897,7 @@ def process_message(sender_id, text):
             add_conv(sender_id, 'الوكيل', clean)
         return
 
-    # ===== 6. name =====
+    # 6. name
     if stage == 'collecting_name':
         name = extract_name(text)
         if name:
@@ -628,7 +910,7 @@ def process_message(sender_id, text):
             send_fb(sender_id, "ما اسمك الكامل؟")
         return
 
-    # ===== 7. phone =====
+    # 7. phone
     if stage == 'collecting_phone':
         phone = extract_phone(text)
         if phone:
@@ -641,7 +923,7 @@ def process_message(sender_id, text):
             send_fb(sender_id, "أرسل رقم هاتفك (مثال: +213795082763)")
         return
 
-    # ===== 8. email =====
+    # 8. email
     if stage == 'collecting_email':
         if is_skip(text):
             sess['email'] = ''
@@ -660,7 +942,7 @@ def process_message(sender_id, text):
                 send_fb(sender_id, "البريد غير صالح. أرسل بريداً صحيحاً أو 'تخطي'.")
         return
 
-    # ===== 9. social =====
+    # 9. social
     if stage == 'collecting_social':
         if not is_skip(text):
             url = re.search(r'https?://[^\s]+', text)
@@ -842,6 +1124,7 @@ if __name__ == '__main__':
     print(f"🔑 PAGE_ACCESS_TOKEN: {'موجود' if PAGE_ACCESS_TOKEN else 'مفقود!'}", flush=True)
     col, _ = get_mongo()
     print(f"🗄️ MongoDB: {'متصل' if col is not None else 'غير متصل'}", flush=True)
+    print(f"👑 Owner → Executive Assistant (Dashboard AI)", flush=True)
     load_categories()
     print("=" * 70 + "\n", flush=True)
 
