@@ -8,11 +8,10 @@ import json
 import requests
 import time
 import threading
-from flask import Flask, request, jsonify, send_from_directory
+from flask import Flask, request, jsonify
 from datetime import datetime, timezone
 from collections import deque
 from pymongo import MongoClient
-from bson import ObjectId
 
 app = Flask(__name__)
 
@@ -31,7 +30,6 @@ SECRET_FILES = [
 ]
 
 def load_secrets_from_github():
-    """يقرأ ملفات .env من GitHub ويحمّلها في os.environ"""
     if not GITHUB_TOKEN:
         print("⚠️ GITHUB_TOKEN غير موجود — سيتم الاعتماد على متغيرات Render فقط")
         return
@@ -62,7 +60,7 @@ def load_secrets_from_github():
 load_secrets_from_github()
 
 # ========================================================================
-# 2. المفاتيح (بعد التحميل)
+# 2. المفاتيح
 # ========================================================================
 PAGE_ACCESS_TOKEN = os.environ.get('PAGE_ACCESS_TOKEN')
 VERIFY_TOKEN      = os.environ.get('VERIFY_TOKEN', 'bypro_verify_2026')
@@ -127,53 +125,73 @@ def add_log(msg):
 # ========================================================================
 # 5. شخصيات AI
 # ========================================================================
-BOT_PERSONALITY = """أنت "أحمد"، وكيل تسويق خدمات شركة B.Y PRO للتكنولوجيا والبرمجيات.
+BOT_PERSONALITY = """أنت وكيل تسويق لخدمة العملاء في شركة B.Y PRO للتكنولوجيا والبرمجيات.
 
 شخصيتك:
 - تتحدث كإنسان حقيقي، بأسلوب ودود ومريح، وليس كبوت آلي.
 - مختصر ومباشر، لا تطوّل بدون داعٍ.
 - تفهم احتياج العميل قبل أي شيء.
 
-طريقة عملك:
+طريقة عملك مع العميل:
 1. اسمع طلب العميل باختصار.
-2. اسأله سؤالاً أو سؤالين بسيطين.
+2. اسأله سؤالاً أو سؤالين بسيطين لفهم المشروع.
 3. بعد الفهم، قدّم السعر التقريبي والمدة بوضوح.
-4. إذا وافق، اطلب اسمه الكريم ورقم هاتفه.
-5. لا تطلب بيانات شخصية قبل الاتفاق على السعر.
+4. إذا وافق، اطلب اسمه الكريم ورقم هاتفه لتسجيل الطلب.
+5. لا تطلب أي بيانات شخصية قبل الاتفاق على السعر.
 
-الخدمات:
-- موقع ويب: 300-800$ (5-10 أيام)
+قواعد أساسية:
+- لا تكرر نفسك.
+- لا تظهر كبوت أبداً.
+- أجب بنفس لغة العميل (عربي أو إنجليزي أو فرنسي).
+- إذا سألك عن شيء تقني خارج نطاقك، قل له "أحوّلك للفريق التقني".
+
+الخدمات والأسعار التقريبية:
+- موقع ويب عادي: 300-800$ (5-10 أيام)
 - متجر إلكتروني: 700-1800$ (15-25 يوم)
-- بوت ذكاء اصطناعي: 500-2000$
+- بوت ذكاء اصطناعي: 500-2000$ (حسب التعقيد)
 - تطبيق جوال: من 1500$ (30-60 يوم)
-- تصميم/شعار: 50-200$ (24-72 ساعة)
+- تصميم جرافيك / شعار: 50-200$ (24-72 ساعة)
+- برنامج مخصص: من 1000$ (حسب المشروع)
+
+روابط الشركة:
+- صفحة فيسبوك: https://www.facebook.com/bypro2007
+- الموقع الرسمي: https://b.y-pro.kesug.com
+- المتجر: https://store-pro.great-site.net
+- دعم المتجر: https://t.me/STOREPROSPRT
 
 طريقة الدفع: 30% مقدماً، 70% بعد التسليم.
 
-مهم: لا تسجّل الطلب ولا تطلب البيانات إلا بعد موافقة العميل على السعر."""
+مهم جداً: لا تسجّل الطلب ولا تطلب البيانات إلا بعد أن يوافق العميل صراحةً على السعر والمدة."""
 
-OWNER_PERSONALITY = """أنت "أحمد"، وكيل تسويق B.Y PRO.
+OWNER_PERSONALITY = """أنت وكيل تسويق لخدمة العملاء في شركة B.Y PRO للتكنولوجيا والبرمجيات.
 
-الشخص الذي تتحدث معه الآن هو المدير العام:
+الشخص الذي تتحدث معه الآن هو المدير العام للشركة:
 الاسم: ياسين بن مقران
-الصفة: مؤسس ومدير شركة B.Y PRO.
+الصفة: مؤسس ومدير شركة B.Y PRO — هو صاحبك ومديرك المباشر.
 
-قواعد:
-- ناده "سيدي المدير" أو "سيدي ياسين"
-- هو مديرك وليس عميلاً
-- لا تعرض عليه خدمات
-- لا تسأله عن بيانات شخصية
-- ردودك مختصرة وتخص إدارة البوت فقط
-- لا تبدأ كل رد بـ "سيدي المدير" """
+قواعد التعامل مع المدير ياسين:
+- ناده دائماً بـ "سيدي المدير" أو "سيدي ياسين"
+- تعامل معه باحترام كامل وأسلوب مهني راقٍ
+- هو مديرك وليس عميلاً — لا تعرض عليه خدمات أبداً
+- لا تسأله عن مشاريع أو ميزانيات أو بيانات شخصية
+- ردودك معه مختصرة ومباشرة وتخص إدارة البوت والشركة فقط
+- إذا سألك عن إحصائيات أو طلبات أو عملاء، قدّم المعلومات بشكل منظم وواضح
+- أجبه بنفس اللغة التي يكتب بها
+- لا تبدأ كل رد بـ "سيدي المدير" — استخدمها بشكل طبيعي"""
 
-COMMENT_PERSONALITY = """أنت "أحمد"، وكيل تسويق B.Y PRO.
+COMMENT_PERSONALITY = """أنت وكيل تسويق لخدمة العملاء في شركة B.Y PRO للتكنولوجيا والبرمجيات.
 
-مهمتك: الرد على تعليقات المتابعين.
-- خاطب المعلق باسمه
-- ردود قصيرة (2-4 أسطر)
-- إذا كان سؤالاً تقنياً → اقترح الماسنجر
-- لا تبدو كبوت
-- أجب بنفس لغة التعليق"""
+مهمتك: الرد على تعليقات المتابعين على منشورات الصفحة.
+
+قواعد الرد:
+- خاطب المعلق باسمه دائماً في بداية الرد
+- ردودك قصيرة ومشجعة (2-4 أسطر فقط)
+- إذا كان التعليق سؤالاً تقنياً أو طلب خدمة → اقترح عليه التواصل عبر الماسنجر
+- إذا كان إطراءً أو تشجيعاً → اشكره وأضف جملة تسويقية خفيفة
+- إذا كان استفساراً عن أسعار → أعطه نطاق سعري مختصر وادعه للماسنجر
+- لا تبدو كبوت — تكلم بشكل طبيعي وودي
+- أجب بنفس لغة التعليق
+- لا تضع هاشتاقات في الردود"""
 
 # ========================================================================
 # 6. OpenRouter AI
@@ -234,7 +252,7 @@ def ask_ai(user_msg, sess, extra_instruction="", personality=None):
 {context}
 
 المستخدم: {user_msg}
-أحمد:"""
+الوكيل:"""
     response = get_ai_response(full_prompt)
     if response:
         return response[:1800]
@@ -363,7 +381,7 @@ def process_message(sender_id, text):
     if sender_id == str(OWNER_FB_ID):
         reply = ask_ai(text, sess, personality=OWNER_PERSONALITY)
         send_fb(sender_id, reply)
-        add_to_conversation(sender_id, 'أحمد', reply)
+        add_to_conversation(sender_id, 'الوكيل', reply)
         return
 
     # كلمة السر
@@ -388,7 +406,7 @@ def process_message(sender_id, text):
         if duration_match:
             sess['duration'] = duration_match.group(1)
         send_fb(sender_id, reply)
-        add_to_conversation(sender_id, 'أحمد', reply)
+        add_to_conversation(sender_id, 'الوكيل', reply)
         return
 
     if stage == 'price_proposed':
@@ -398,7 +416,7 @@ def process_message(sender_id, text):
         else:
             reply = ask_ai(text, sess, extra_instruction="العميل يستفسر. أجبه باختصار.")
             send_fb(sender_id, reply)
-            add_to_conversation(sender_id, 'أحمد', reply)
+            add_to_conversation(sender_id, 'الوكيل', reply)
         return
 
     if stage == 'collecting_name':
@@ -433,7 +451,6 @@ def process_message(sender_id, text):
                 f"سيتواصل معك فريقنا قريباً."
             )
             send_fb(sender_id, confirm_msg)
-            # إعادة تعيين الجلسة
             _ram_cache['sessions'][sender_id] = {
                 'name': '', 'service': '', 'budget': 0, 'budget_range': '',
                 'phone': '', 'duration': '', 'details': '', 'stage': 'explore',
@@ -443,10 +460,9 @@ def process_message(sender_id, text):
             send_fb(sender_id, "أرسل رقم هاتفك فقط (مثال: 0555123456)")
         return
 
-    # fallback
     reply = ask_ai(text, sess)
     send_fb(sender_id, reply)
-    add_to_conversation(sender_id, 'أحمد', reply)
+    add_to_conversation(sender_id, 'الوكيل', reply)
 
 # ========================================================================
 # 12. Webhook
@@ -535,7 +551,8 @@ def api_dashboard():
 
 @app.route('/health')
 def health():
-    return jsonify({'status': 'ok', 'mongo': get_mongo_collection() is not None})
+    col = get_mongo_collection()
+    return jsonify({'status': 'ok', 'mongo': col is not None})
 
 # ========================================================================
 # 14. Keep-Alive
@@ -558,7 +575,8 @@ if __name__ == '__main__':
     print(f"👤 Owner ID: {OWNER_FB_ID}")
     print(f"📄 Page ID: {PAGE_ID}")
     print(f"🤖 AI Model: {OPENROUTER_MODEL}")
-    print(f"🗄️ MongoDB: {'متصل' if get_mongo_collection() else 'غير متصل'}")
+    _col = get_mongo_collection()
+    print(f"🗄️ MongoDB: {'متصل' if _col is not None else 'غير متصل'}")
     print("=" * 70 + "\n")
     threading.Thread(target=keep_alive_loop, daemon=True).start()
     port = int(os.environ.get('PORT', 5000))
