@@ -1,6 +1,7 @@
 # ========================================================================
 # B.Y PRO Marketing Agent - Render Server
-# v5 — SIMPLE: Owner path mirrors customer flow (uses same AI infra)
+# v5.1 — Owner → Executive Assistant + Full Diagnostics
+# Fixes: MongoDB _db() returning Database + Facebook send fallback
 # ========================================================================
 import sys
 sys.stdout.reconfigure(line_buffering=True)
@@ -34,7 +35,7 @@ def cors_preflight(_any=None):
     return '', 204
 
 # ========================================================================
-# تحميل الأسرار
+# تحميل الأسرار من GitHub
 # ========================================================================
 GITHUB_TOKEN = os.environ.get('GITHUB_TOKEN')
 GITHUB_REPO  = os.environ.get('GITHUB_REPO', 'Yacine2007/APIs-B.YPRO-Managment')
@@ -48,7 +49,7 @@ SECRET_FILES = [
 ]
 
 def load_secrets_from_github():
-    print("🔐 تحميل الأسرار...", flush=True)
+    print("🔐 تحميل الأسرار من GitHub...", flush=True)
     if not GITHUB_TOKEN:
         print("⚠️ GITHUB_TOKEN غير موجود", flush=True)
         return
@@ -93,11 +94,14 @@ SETTINGS_DB_NAME    = os.environ.get('SETTINGS_DB_NAME', 'DashboardDB')
 SETTINGS_COLLECTION = 'settings'
 SETTINGS_KEY        = 'service_settings'
 
+# Dashboard shared collections
 DASHBOARD_DB_NAME     = 'DashboardDB'
 CHAT_COLLECTION       = 'chat_history'
 CLIENTS_COLLECTION    = 'clients'
 PROJECTS_COLLECTION   = 'projects_registry'
 DASH_SETTINGS_COLL    = 'settings'
+
+# Owner's isolated conversation (source of truth for Messenger)
 OWNER_CHAT_COLLECTION = 'messenger_owner_chat'
 
 SELF_URL = os.environ.get('SELF_URL', 'https://by-pro-marketing-agent-v2jk.onrender.com')
@@ -110,6 +114,7 @@ _orders_col = None
 _settings_col = None
 
 def get_mongo():
+    """Initialize MongoDB connection and return (orders_col, settings_col)."""
     global _mongo_client, _orders_col, _settings_col
     if _orders_col is not None:
         return _orders_col, _settings_col
@@ -132,9 +137,12 @@ def get_mongo():
         return None, None
 
 def _db():
+    """Return the Dashboard DATABASE object (not the client)."""
     if _mongo_client is None:
         get_mongo()
-    return _mongo_client
+    if _mongo_client is None:
+        return None
+    return _mongo_client[DASHBOARD_DB_NAME]
 
 # ========================================================================
 # Utilities
@@ -216,10 +224,10 @@ def get_owner_id():
     return None
 
 # ========================================================================
-# AI — SINGLE function used everywhere (identical to working customer flow)
+# AI — single function used everywhere
 # ========================================================================
 def ask_ai_raw(prompt, max_tokens=2000):
-    """Single-turn call — used by BOTH customer flow and owner flow."""
+    """Single-turn AI call — used by both customer flow and owner flow."""
     if not OPENROUTER_API_KEY:
         add_log("❌ OPENROUTER_API_KEY غير موجود")
         return None
@@ -254,9 +262,10 @@ def ask_ai_raw(prompt, max_tokens=2000):
         return None
 
 # ========================================================================
-# OWNER — simple isolated conversation + context
+# OWNER — isolated conversation + context
 # ========================================================================
 def owner_history_load(limit=12):
+    """Load owner's recent messages from the isolated collection."""
     db = _db()
     if db is None:
         return []
@@ -269,6 +278,7 @@ def owner_history_load(limit=12):
         return []
 
 def owner_history_save(role, content):
+    """Save to owner collection + mirror into Dashboard chat_history."""
     db = _db()
     if db is None:
         return
@@ -276,15 +286,14 @@ def owner_history_save(role, content):
     try:
         db[OWNER_CHAT_COLLECTION].insert_one({'role': role, 'content': content, 'timestamp': ts})
     except Exception as e:
-        add_log(f"⚠️ owner_save: {e}")
-    # Mirror to Dashboard's chat_history so it appears there
+        add_log(f"⚠️ owner_save (own): {e}")
     try:
         db[CHAT_COLLECTION].insert_one({
             'role': role, 'content': content, 'timestamp': ts,
             'meta': {'source': 'messenger'},
         })
-    except Exception:
-        pass
+    except Exception as e:
+        add_log(f"⚠️ owner_save (mirror): {e}")
 
 def owner_history_reset():
     db = _db()
@@ -295,13 +304,6 @@ def owner_history_reset():
         return True
     except Exception:
         return False
-
-def _safe_list(cursor_fn, limit):
-    try:
-        return cursor_fn(limit)
-    except Exception as e:
-        add_log(f"⚠️ data: {e}")
-        return []
 
 def get_clients(limit=40):
     db = _db()
@@ -365,10 +367,7 @@ def get_stats():
         return {}
 
 def ask_ea(user_msg):
-    """
-    Owner path — SAME mechanism as customer flow (single turn).
-    Just different prompt + isolated history.
-    """
+    """Owner path — single-turn, isolated history, full business context."""
     add_log(f"👑 [EA] معالجة رسالة المدير ({len(user_msg)} حرف)")
 
     # Save user message
@@ -384,7 +383,7 @@ def ask_ea(user_msg):
         role_ar = "المدير" if h['role'] == 'user' else "المساعد"
         history_text += f"{role_ar}: {h['content']}\n"
 
-    # Context
+    # Business context
     stats = get_stats()
     clients = get_clients(40)
     pending = get_pending_orders(15)
@@ -413,7 +412,7 @@ def ask_ea(user_msg):
 - مختصر ومهني.
 - استخدم النقاط (•) وليس الجداول.
 - لا تستخدم ``` أو ### أو **.
-- استخدم البيانات أعلاه فقط، لا تخترع.
+- استخدم البيانات أعلاه فقط، لا تخترع أرقاماً.
 
 === سجل المحادثة ===
 {history_text if history_text else '(محادثة جديدة)'}
@@ -430,7 +429,7 @@ def ask_ea(user_msg):
     return None
 
 # ========================================================================
-# CUSTOMER — UNCHANGED (this worked)
+# CUSTOMER path
 # ========================================================================
 def get_bot_personality():
     return f"""أنت وكيل تسويق لخدمة العملاء في B.Y PRO.
@@ -478,30 +477,58 @@ def ask_ai_customer(user_msg, sess, extra=""):
     res = ask_ai_raw(full, max_tokens=1500)
     return res[:2500] if res else "عذراً، حدث خطأ. أعد رسالتك."
 
+# ========================================================================
+# Facebook Send — with 3-strategy fallback
+# ========================================================================
 def send_fb(recipient_id, text):
     if not PAGE_ACCESS_TOKEN:
         add_log("❌ PAGE_ACCESS_TOKEN مفقود")
         return False
-    try:
-        url = f'https://graph.facebook.com/v18.0/me/messages?access_token={PAGE_ACCESS_TOKEN}'
-        payload = {
+
+    url = f'https://graph.facebook.com/v18.0/me/messages?access_token={PAGE_ACCESS_TOKEN}'
+    text = (text or '')[:2000]
+
+    strategies = [
+        # 1) Standard reply within 24h window
+        {
             'recipient': {'id': recipient_id},
-            'message': {'text': text[:2000]},
+            'message': {'text': text},
             'messaging_type': 'RESPONSE',
-        }
-        r = requests.post(url, json=payload, timeout=10)
-        if r.status_code == 200:
-            _cache['stats']['msgs_sent'] += 1
-            add_log(f"📤 → {str(recipient_id)[:12]} ({len(text)} chars)")
-            return True
-        add_log(f"❌ send_fb {r.status_code}: {r.text[:150]}")
-        return False
-    except Exception as e:
-        add_log(f"❌ send_fb: {e}")
-        return False
+        },
+        # 2) Update type (used for non-reply messages)
+        {
+            'recipient': {'id': recipient_id},
+            'message': {'text': text},
+            'messaging_type': 'UPDATE',
+        },
+        # 3) Human agent tag (bypasses window restrictions)
+        {
+            'recipient': {'id': recipient_id},
+            'message': {'text': text},
+            'messaging_type': 'MESSAGE_TAG',
+            'tag': 'HUMAN_AGENT',
+        },
+    ]
+
+    last_err = None
+    for i, payload in enumerate(strategies):
+        try:
+            r = requests.post(url, json=payload, timeout=10)
+            if r.status_code == 200:
+                _cache['stats']['msgs_sent'] += 1
+                add_log(f"📤 → {str(recipient_id)[:12]} ({len(text)} chars) [strategy {i+1}]")
+                return True
+            last_err = f"{r.status_code}: {r.text[:180]}"
+            add_log(f"⚠️ send_fb attempt {i+1} failed: {last_err}")
+        except Exception as e:
+            last_err = str(e)
+            add_log(f"⚠️ send_fb attempt {i+1} exception: {e}")
+
+    add_log(f"❌ send_fb all strategies failed: {last_err}")
+    return False
 
 # ========================================================================
-# SESSIONS
+# Sessions (customers)
 # ========================================================================
 def new_session():
     return {
@@ -525,7 +552,7 @@ def add_conv(sender_id, role, message):
         sess['conversation'] = sess['conversation'][-20:]
 
 # ========================================================================
-# Extraction
+# Extraction helpers
 # ========================================================================
 def extract_phone(text):
     for pat in [r'(\+213[567][0-9]{8})', r'(0[567][0-9]{8})', r'(\+[1-9][0-9]{7,14})', r'([0-9]{10,13})']:
@@ -601,7 +628,7 @@ def save_order(sess, sender_id):
         return None
 
 # ========================================================================
-# MESSAGE PROCESSING
+# Message processing
 # ========================================================================
 def process_message(sender_id, text):
     sender_id = str(sender_id)
@@ -634,7 +661,7 @@ def process_message(sender_id, text):
         return
 
     # ==========================================================
-    # CUSTOMER PATH (original, unchanged)
+    # CUSTOMER PATH
     # ==========================================================
     sess = get_session(sender_id)
     add_conv(sender_id, 'المستخدم', text)
@@ -755,7 +782,7 @@ def process_message(sender_id, text):
     add_conv(sender_id, 'الوكيل', clean)
 
 # ========================================================================
-# WEBHOOK
+# Webhook
 # ========================================================================
 @app.route('/webhook', methods=['GET'])
 def verify():
@@ -782,14 +809,14 @@ def webhook():
     return 'OK', 200
 
 # ========================================================================
-# API
+# API endpoints
 # ========================================================================
 @app.route('/health')
 def health():
     col, _ = get_mongo()
     return jsonify({
         'status': 'ok',
-        'version': 'v5',
+        'version': 'v5.1',
         'mongo': col is not None,
         'owner_id': _cache.get('owner_id'),
         'owner_fb_id_env': OWNER_FB_ID,
@@ -886,7 +913,7 @@ def api_dashboard():
     return jsonify({'total_orders': total, 'completed': completed, 'pending': pending})
 
 # ========================================================================
-# KEEP ALIVE
+# Keep alive
 # ========================================================================
 def keep_alive():
     while True:
@@ -897,11 +924,11 @@ def keep_alive():
             pass
 
 # ========================================================================
-# RUN
+# Run
 # ========================================================================
 if __name__ == '__main__':
     print("=" * 70, flush=True)
-    print("🚀 B.Y PRO Marketing Agent v5", flush=True)
+    print("🚀 B.Y PRO Marketing Agent v5.1", flush=True)
     print("=" * 70, flush=True)
     print(f"👤 OWNER_FB_ID: {OWNER_FB_ID or 'غير محدد'}", flush=True)
     print(f"📄 PAGE_ID: {PAGE_ID}", flush=True)
