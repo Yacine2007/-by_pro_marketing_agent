@@ -1,13 +1,31 @@
 services:
   - type: web
-    name: bypro-bot
+    name: by-pro-marketing-agent
     env: python
+    region: frankfurt
+    plan: free
     buildCommand: pip install -r requirements.txt
-    startCommand: gunicorn app:app
+    startCommand: python main.py
+    healthCheckPath: /health
+    autoDeploy: true
     envVars:
-      - key: PAGE_ACCESS_TOKEN
-        value: "توكنك_هنا"
+      - key: PYTHON_VERSION
+        value: 3.11.0
+      - key: GITHUB_TOKEN
+        sync: false
+      - key: GITHUB_REPO
+        value: Yacine2007/APIs-B.YPRO-Managment
+      - key: GITHUB_BRANCH
+        value: main
       - key: VERIFY_TOKEN
-        value: "by_pro_verify"
+        value: bypro_verify_2026
       - key: OWNER_FB_ID
-        value: "61580260328404"
+        value: "122126937801008677"
+      - key: PAGE_ID
+        value: "923170140890240"
+      - key: PAGE_NAME
+        value: B.Y PRO Marketing Agent
+      - key: OPENROUTER_MODEL
+        value: openai/gpt-4o-mini
+      - key: SELF_URL
+        value: https://by-pro-marketing-agent.onrender.com
