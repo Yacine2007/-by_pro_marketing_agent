@@ -1,5 +1,5 @@
 # ========================================================================
-# B.Y PRO Marketing Agent - Render Server (with detailed logging)
+# B.Y PRO Marketing Agent - Render Server (with startup test + ping)
 # Flask + OpenRouter + MongoDB + Facebook Messenger Webhook
 # ========================================================================
 import os
@@ -32,7 +32,7 @@ SECRET_FILES = [
 def load_secrets_from_github():
     print("🔐 [STARTUP] جاري تحميل الأسرار من GitHub...")
     if not GITHUB_TOKEN:
-        print("⚠️ [STARTUP] GITHUB_TOKEN غير موجود — سيتم الاعتماد على متغيرات Render فقط")
+        print("⚠️ [STARTUP] GITHUB_TOKEN غير موجود")
         return
     headers = {
         'Authorization': f'token {GITHUB_TOKEN}',
@@ -261,7 +261,7 @@ def send_fb(recipient_id, text):
             _ram_cache['stats']['msgs_sent'] += 1
             add_log(f"✅ [FB] تم الإرسال: {text[:50]}")
             return True
-        add_log(f"❌ [FB] فشل {r.status_code}: {r.text[:150]}")
+        add_log(f"❌ [FB] فشل {r.status_code}: {r.text[:200]}")
         return False
     except Exception as e:
         add_log(f"❌ [FB] استثناء: {e}")
@@ -368,6 +368,12 @@ def process_message(sender_id, text):
     print(f"📝 [MSG] المحتوى: {text}")
     print("=" * 70)
 
+    # ===== اختبار ping =====
+    if text.strip().lower() in ['ping', 'test', 'اختبار', 'تجربة', 'مرحبا', 'hello', 'hi']:
+        print(f"🧪 [TEST] كلمة اختبار — إرسال رد ثابت")
+        send_fb(sender_id, f"🏓 Pong! السيرفر يعمل.\nاستلمت رسالتك: {text}")
+        return
+
     sess = get_session(sender_id)
     add_to_conversation(sender_id, 'المستخدم', text)
     stage = sess.get('stage', 'explore')
@@ -400,16 +406,15 @@ def process_message(sender_id, text):
             sess['budget_range'] = f"{price_match.group(1)}-{price_match.group(2)}"
             sess['budget'] = int(price_match.group(1))
             sess['stage'] = 'price_proposed'
-            print(f"💰 [PRICE] تم اكتشاف سعر: {sess['budget_range']} → المرحلة: price_proposed")
+            print(f"💰 [PRICE] سعر: {sess['budget_range']}")
         elif single_price:
             sess['budget'] = int(single_price.group(1))
             sess['stage'] = 'price_proposed'
-            print(f"💰 [PRICE] تم اكتشاف سعر: {sess['budget']}$ → المرحلة: price_proposed")
+            print(f"💰 [PRICE] سعر: {sess['budget']}$")
 
         duration_match = re.search(r'(\d+[-–]\d+\s*(?:يوم|أيام|day|days|ساعة))', reply, re.I)
         if duration_match:
             sess['duration'] = duration_match.group(1)
-            print(f"⏱️ [DURATION] {sess['duration']}")
 
         send_fb(sender_id, reply)
         add_to_conversation(sender_id, 'الوكيل', reply)
@@ -418,11 +423,11 @@ def process_message(sender_id, text):
     # ---- price_proposed ----
     if stage == 'price_proposed':
         if is_price_confirmation(text):
-            print(f"✅ [CONFIRM] العميل وافق → المرحلة: collecting_name")
+            print(f"✅ [CONFIRM] العميل وافق → collecting_name")
             sess['stage'] = 'collecting_name'
             send_fb(sender_id, "ممتاز! ما اسمك الكريم؟")
         else:
-            print(f"💭 [STAGE:price_proposed] العميل يستفسر — استشارة AI...")
+            print(f"💭 [STAGE:price_proposed] استفسار — AI")
             reply = ask_ai(text, sess, extra_instruction="العميل يستفسر. أجبه باختصار.")
             send_fb(sender_id, reply)
             add_to_conversation(sender_id, 'الوكيل', reply)
@@ -430,23 +435,23 @@ def process_message(sender_id, text):
 
     # ---- collecting_name ----
     if stage == 'collecting_name':
-        print(f"📛 [STAGE:collecting_name] محاولة استخراج الاسم...")
+        print(f"📛 [STAGE:collecting_name] استخراج الاسم...")
         name = extract_name_from_text(text)
         if not name and len(text.split()) <= 4 and len(text) <= 30:
             name = text.strip()
         if name:
             sess['name'] = name
             sess['stage'] = 'collecting_phone'
-            print(f"✅ [NAME] تم استخراج: {name} → المرحلة: collecting_phone")
+            print(f"✅ [NAME] {name} → collecting_phone")
             send_fb(sender_id, f"تمام {name}، ما رقم هاتفك؟")
         else:
-            print(f"⚠️ [NAME] لم يتم استخراج اسم صالح")
+            print(f"⚠️ [NAME] فشل الاستخراج")
             send_fb(sender_id, "ما اسمك الكريم؟")
         return
 
     # ---- collecting_phone ----
     if stage == 'collecting_phone':
-        print(f"📞 [STAGE:collecting_phone] محاولة استخراج رقم الهاتف...")
+        print(f"📞 [STAGE:collecting_phone] استخراج الهاتف...")
         phone = extract_phone(text)
         if phone:
             sess['phone'] = phone
@@ -474,12 +479,12 @@ def process_message(sender_id, text):
                 'conversation': [],
             }
         else:
-            print(f"⚠️ [PHONE] لم يتم استخراج رقم صالح")
+            print(f"⚠️ [PHONE] فشل الاستخراج")
             send_fb(sender_id, "أرسل رقم هاتفك فقط (مثال: 0555123456)")
         return
 
     # ---- fallback ----
-    print(f"🔄 [FALLBACK] مرحلة غير معروفة — استشارة AI...")
+    print(f"🔄 [FALLBACK] استشارة AI...")
     reply = ask_ai(text, sess)
     send_fb(sender_id, reply)
     add_to_conversation(sender_id, 'الوكيل', reply)
@@ -489,13 +494,13 @@ def process_message(sender_id, text):
 # ========================================================================
 @app.route('/webhook', methods=['GET'])
 def verify():
-    print(f"🔍 [WEBHOOK GET] التحقق من webhook...")
+    print(f"🔍 [WEBHOOK GET] التحقق...")
     token = request.args.get('hub.verify_token')
     challenge = request.args.get('hub.challenge')
     if token == VERIFY_TOKEN:
-        print(f"✅ [WEBHOOK GET] تم التحقق بنجاح")
+        print(f"✅ [WEBHOOK GET] تم التحقق")
         return challenge
-    print(f"❌ [WEBHOOK GET] فشل التحقق — token: {token}")
+    print(f"❌ [WEBHOOK GET] فشل — token: {token}")
     return "Verification failed", 403
 
 @app.route('/webhook', methods=['POST'])
@@ -507,7 +512,7 @@ def webhook():
     print("=" * 70)
 
     if not body or body.get('object') != 'page':
-        print(f"⚠️ [WEBHOOK] object ليس page — تم التجاهل")
+        print(f"⚠️ [WEBHOOK] object ليس page")
         return 'OK', 200
 
     for entry in body.get('entry', []):
@@ -515,7 +520,6 @@ def webhook():
             sender = str(msg.get('sender', {}).get('id', ''))
             message = msg.get('message', {})
 
-            # رسالة نصية
             if 'text' in message:
                 print(f"📨 [TEXT] من {sender[:12]}: {message['text'][:80]}")
                 threading.Thread(
@@ -525,28 +529,23 @@ def webhook():
                 ).start()
                 continue
 
-            # postback (أزرار)
             if 'postback' in msg:
-                print(f"🔘 [POSTBACK] من {sender[:12]}: {msg['postback'].get('payload', '')}")
+                print(f"🔘 [POSTBACK] {msg['postback'].get('payload', '')}")
                 continue
 
-            # echo (رسالة أرسلتها الصفحة)
             if message.get('is_echo'):
-                print(f"🔁 [ECHO] رسالة صادرة — تم التجاهل")
+                print(f"🔁 [ECHO] رسالة صادرة — تجاهل")
                 continue
 
-            # delivery
             if 'delivery' in msg:
-                print(f"✓ [DELIVERY] إشعار تسليم من {sender[:12]}")
+                print(f"✓ [DELIVERY] من {sender[:12]}")
                 continue
 
-            # read
             if 'read' in msg:
-                print(f"👁️ [READ] إشعار قراءة من {sender[:12]}")
+                print(f"👁️ [READ] من {sender[:12]}")
                 continue
 
-            # غير معروف
-            print(f"❓ [UNKNOWN] نوع رسالة غير معروف: {json.dumps(msg, ensure_ascii=False)[:200]}")
+            print(f"❓ [UNKNOWN] {json.dumps(msg, ensure_ascii=False)[:200]}")
 
     return 'OK', 200
 
@@ -621,7 +620,27 @@ def keep_alive_loop():
             print(f"⚠️ [KEEP-ALIVE] {e}")
 
 # ========================================================================
-# 15. التشغيل
+# 15. اختبار الإرسال عند بدء التشغيل
+# ========================================================================
+def startup_test():
+    time.sleep(15)
+    print("=" * 70)
+    print("🧪 [TEST] اختبار الإرسال للمالك...")
+    test_msg = (
+        "✅ السيرفر يعمل بنجاح!\n"
+        "🤖 هذا اختبار تلقائي عند بدء التشغيل.\n"
+        f"⏰ الوقت: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n"
+        "أرسل كلمة ping للاختبار."
+    )
+    result = send_fb(OWNER_FB_ID, test_msg)
+    if result:
+        print("✅ [TEST] تم إرسال رسالة الاختبار بنجاح!")
+    else:
+        print("❌ [TEST] فشل إرسال رسالة الاختبار — تحقق من PAGE_ACCESS_TOKEN")
+    print("=" * 70 + "\n")
+
+# ========================================================================
+# 16. التشغيل
 # ========================================================================
 if __name__ == '__main__':
     print("=" * 70)
@@ -630,9 +649,13 @@ if __name__ == '__main__':
     print(f"👤 Owner ID: {OWNER_FB_ID}")
     print(f"📄 Page ID: {PAGE_ID}")
     print(f"🤖 AI Model: {OPENROUTER_MODEL}")
+    print(f"🔑 PAGE_ACCESS_TOKEN: {'موجود (' + PAGE_ACCESS_TOKEN[:20] + '...)' if PAGE_ACCESS_TOKEN else 'مفقود!'}")
     _col = get_mongo_collection()
     print(f"🗄️ MongoDB: {'متصل' if _col is not None else 'غير متصل'}")
     print("=" * 70 + "\n")
+
+    threading.Thread(target=startup_test, daemon=True).start()
     threading.Thread(target=keep_alive_loop, daemon=True).start()
+
     port = int(os.environ.get('PORT', 5000))
     app.run(host='0.0.0.0', port=port, debug=False)
