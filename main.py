@@ -1,5 +1,5 @@
 # ========================================================================
-# B.Y PRO Marketing Agent - Render Server
+# B.Y PRO Marketing Agent - Render Server (with detailed logging)
 # Flask + OpenRouter + MongoDB + Facebook Messenger Webhook
 # ========================================================================
 import os
@@ -30,8 +30,9 @@ SECRET_FILES = [
 ]
 
 def load_secrets_from_github():
+    print("🔐 [STARTUP] جاري تحميل الأسرار من GitHub...")
     if not GITHUB_TOKEN:
-        print("⚠️ GITHUB_TOKEN غير موجود — سيتم الاعتماد على متغيرات Render فقط")
+        print("⚠️ [STARTUP] GITHUB_TOKEN غير موجود — سيتم الاعتماد على متغيرات Render فقط")
         return
     headers = {
         'Authorization': f'token {GITHUB_TOKEN}',
@@ -42,7 +43,7 @@ def load_secrets_from_github():
         try:
             r = requests.get(url, headers=headers, params={'ref': GITHUB_BRANCH}, timeout=15)
             if r.status_code != 200:
-                print(f"⚠️ فشل قراءة {path}: HTTP {r.status_code}")
+                print(f"⚠️ [STARTUP] فشل قراءة {path}: HTTP {r.status_code}")
                 continue
             for line in r.text.splitlines():
                 line = line.strip()
@@ -53,9 +54,9 @@ def load_secrets_from_github():
                 v = v.strip().strip('"').strip("'")
                 if k and v:
                     os.environ[k] = v
-            print(f"✅ تم تحميل: {path}")
+            print(f"✅ [STARTUP] تم تحميل: {path}")
         except Exception as e:
-            print(f"❌ استثناء في {path}: {e}")
+            print(f"❌ [STARTUP] استثناء في {path}: {e}")
 
 load_secrets_from_github()
 
@@ -76,7 +77,7 @@ MONGODB_URI        = os.environ.get('MONGODB_URI')
 ORDERS_DB_NAME     = os.environ.get('ORDERS_DB_NAME', 'bypro_orders')
 ORDERS_COLLECTION  = 'orders'
 
-SELF_URL          = os.environ.get('SELF_URL', 'https://by-pro-marketing-agent.onrender.com')
+SELF_URL          = os.environ.get('SELF_URL', 'https://by-pro-marketing-agent-v2jk.onrender.com')
 COMPANY_WEBSITE   = os.environ.get('COMPANY_WEBSITE', 'https://b.y-pro.kesug.com')
 
 # ========================================================================
@@ -90,20 +91,20 @@ def get_mongo_collection():
     if _orders_col is not None:
         return _orders_col
     if not MONGODB_URI:
-        print("❌ MONGODB_URI غير موجود")
+        print("❌ [MONGO] MONGODB_URI غير موجود")
         return None
     try:
         _mongo_client = MongoClient(MONGODB_URI, serverSelectionTimeoutMS=15000, tlsAllowInvalidCertificates=True)
         _mongo_client.admin.command('ping')
         _orders_col = _mongo_client[ORDERS_DB_NAME][ORDERS_COLLECTION]
-        print("✅ MongoDB متصل")
+        print("✅ [MONGO] متصل بنجاح")
         return _orders_col
     except Exception as e:
-        print(f"❌ فشل اتصال MongoDB: {e}")
+        print(f"❌ [MONGO] فشل الاتصال: {e}")
         return None
 
 # ========================================================================
-# 4. التخزين المؤقت في RAM
+# 4. التخزين المؤقت
 # ========================================================================
 _ram_cache = {
     'sessions': {},
@@ -114,7 +115,6 @@ _ram_cache = {
     'publish_settings': {'enabled': False, 'interval_minutes': 60, 'post_text': '', 'add_chat_button': True, 'last_published': ''},
     'comment_settings': {'enabled': False, 'prompt': '', 'check_interval_minutes': 5},
 }
-_cache_lock = threading.Lock()
 logs = deque(maxlen=100)
 
 def add_log(msg):
@@ -179,26 +179,12 @@ OWNER_PERSONALITY = """أنت وكيل تسويق لخدمة العملاء في
 - أجبه بنفس اللغة التي يكتب بها
 - لا تبدأ كل رد بـ "سيدي المدير" — استخدمها بشكل طبيعي"""
 
-COMMENT_PERSONALITY = """أنت وكيل تسويق لخدمة العملاء في شركة B.Y PRO للتكنولوجيا والبرمجيات.
-
-مهمتك: الرد على تعليقات المتابعين على منشورات الصفحة.
-
-قواعد الرد:
-- خاطب المعلق باسمه دائماً في بداية الرد
-- ردودك قصيرة ومشجعة (2-4 أسطر فقط)
-- إذا كان التعليق سؤالاً تقنياً أو طلب خدمة → اقترح عليه التواصل عبر الماسنجر
-- إذا كان إطراءً أو تشجيعاً → اشكره وأضف جملة تسويقية خفيفة
-- إذا كان استفساراً عن أسعار → أعطه نطاق سعري مختصر وادعه للماسنجر
-- لا تبدو كبوت — تكلم بشكل طبيعي وودي
-- أجب بنفس لغة التعليق
-- لا تضع هاشتاقات في الردود"""
-
 # ========================================================================
 # 6. OpenRouter AI
 # ========================================================================
 def get_ai_response(prompt):
     if not OPENROUTER_API_KEY:
-        add_log("❌ OPENROUTER_API_KEY غير موجود")
+        add_log("❌ [AI] OPENROUTER_API_KEY غير موجود")
         return None
     try:
         headers = {
@@ -213,23 +199,24 @@ def get_ai_response(prompt):
             'temperature': 0.7,
             'max_tokens': 1024,
         }
+        add_log(f"🤖 [AI] إرسال طلب إلى {OPENROUTER_MODEL}...")
         r = requests.post(OPENROUTER_URL, headers=headers, json=payload, timeout=45)
         if r.status_code == 200:
             result = r.json()
             answer = result.get('choices', [{}])[0].get('message', {}).get('content', '')
             if answer and answer.strip():
-                add_log(f"✅ AI: {answer[:50]}...")
+                add_log(f"✅ [AI] استجابة: {answer[:60]}...")
                 return answer.strip()
-            add_log("⚠️ استجابة AI فارغة")
+            add_log("⚠️ [AI] استجابة فارغة")
             return None
         else:
-            add_log(f"❌ AI HTTP {r.status_code}: {r.text[:150]}")
+            add_log(f"❌ [AI] HTTP {r.status_code}: {r.text[:150]}")
             return None
     except requests.exceptions.Timeout:
-        add_log("❌ AI timeout")
+        add_log("❌ [AI] timeout بعد 45 ثانية")
         return None
     except Exception as e:
-        add_log(f"❌ AI exception: {e}")
+        add_log(f"❌ [AI] استثناء: {e}")
         return None
 
 def ask_ai(user_msg, sess, extra_instruction="", personality=None):
@@ -263,20 +250,21 @@ def ask_ai(user_msg, sess, extra_instruction="", personality=None):
 # ========================================================================
 def send_fb(recipient_id, text):
     if not PAGE_ACCESS_TOKEN:
-        add_log("❌ PAGE_ACCESS_TOKEN غير موجود")
+        add_log("❌ [FB] PAGE_ACCESS_TOKEN غير موجود")
         return False
     try:
+        add_log(f"📤 [FB] إرسال إلى {str(recipient_id)[:12]}...")
         url = f'https://graph.facebook.com/v18.0/me/messages?access_token={PAGE_ACCESS_TOKEN}'
         payload = {'recipient': {'id': recipient_id}, 'message': {'text': text}, 'messaging_type': 'RESPONSE'}
         r = requests.post(url, json=payload, timeout=8)
         if r.status_code == 200:
             _ram_cache['stats']['msgs_sent'] += 1
-            add_log(f"📤 إلى {str(recipient_id)[:10]}: {text[:50]}")
+            add_log(f"✅ [FB] تم الإرسال: {text[:50]}")
             return True
-        add_log(f"❌ فشل الإرسال: {r.status_code} - {r.text[:100]}")
+        add_log(f"❌ [FB] فشل {r.status_code}: {r.text[:150]}")
         return False
     except Exception as e:
-        add_log(f"❌ خطأ إرسال: {e}")
+        add_log(f"❌ [FB] استثناء: {e}")
         return False
 
 # ========================================================================
@@ -285,6 +273,7 @@ def send_fb(recipient_id, text):
 def get_session(sender_id):
     sid = str(sender_id)
     if sid not in _ram_cache['sessions']:
+        print(f"🆕 [SESSION] إنشاء جلسة جديدة لـ {sid[:12]}...")
         _ram_cache['sessions'][sid] = {
             'name': '', 'service': '', 'budget': 0, 'budget_range': '',
             'phone': '', 'duration': '', 'details': '', 'stage': 'explore',
@@ -338,7 +327,7 @@ def is_price_confirmation(text):
 def save_order_to_mongo(order_data):
     col = get_mongo_collection()
     if col is None:
-        add_log("⚠️ MongoDB غير متاح — الطلب لن يُحفظ")
+        add_log("⚠️ [MONGO] غير متاح — الطلب لن يُحفظ")
         return None
     try:
         doc = {
@@ -359,11 +348,12 @@ def save_order_to_mongo(order_data):
             'isNew': True,
             'createdAt': datetime.now(timezone.utc).isoformat(),
         }
+        add_log(f"💾 [MONGO] حفظ طلب جديد لـ {order_data.get('name', '?')}...")
         result = col.insert_one(doc)
-        add_log(f"✅ طلب محفوظ في MongoDB: {result.inserted_id}")
+        add_log(f"✅ [MONGO] طلب محفوظ: {result.inserted_id}")
         return str(result.inserted_id)
     except Exception as e:
-        add_log(f"❌ فشل حفظ MongoDB: {e}")
+        add_log(f"❌ [MONGO] فشل الحفظ: {e}")
         return None
 
 # ========================================================================
@@ -372,69 +362,95 @@ def save_order_to_mongo(order_data):
 def process_message(sender_id, text):
     sender_id = str(sender_id)
     _ram_cache['stats']['msgs_received'] += 1
-    add_log(f"📨 من {sender_id[:12]}: {text[:50]}")
+
+    print("=" * 70)
+    print(f"📨 [MSG] رسالة جديدة من {sender_id[:15]}...")
+    print(f"📝 [MSG] المحتوى: {text}")
+    print("=" * 70)
 
     sess = get_session(sender_id)
     add_to_conversation(sender_id, 'المستخدم', text)
+    stage = sess.get('stage', 'explore')
+    print(f"🎯 [STAGE] المرحلة الحالية: {stage}")
 
-    # المدير
+    # ---- المدير ----
     if sender_id == str(OWNER_FB_ID):
+        print(f"👑 [OWNER] المرسل هو المدير — استخدام OWNER_PERSONALITY")
         reply = ask_ai(text, sess, personality=OWNER_PERSONALITY)
+        print(f"💬 [REPLY] جاري الإرسال: {reply[:80]}...")
         send_fb(sender_id, reply)
         add_to_conversation(sender_id, 'الوكيل', reply)
         return
 
-    # كلمة السر
+    # ---- كلمة السر ----
     if re.search(r'كلمة\s*[Ss]ر|password', text.lower()):
+        print(f"🔐 [AUTH] طلب كلمة سر — معطلة حالياً")
         send_fb(sender_id, "هذه الخاصية معطلة. تواصل مع المدير.")
         return
 
-    stage = sess.get('stage', 'explore')
-
+    # ---- explore ----
     if stage == 'explore':
+        print(f"🔍 [STAGE:explore] استشارة AI...")
         reply = ask_ai(text, sess)
+        print(f"💬 [REPLY] {reply[:80]}...")
+
         price_match = re.search(r'(\d{2,5})\s*[-–]\s*(\d{2,5})\s*\$', reply)
         single_price = re.search(r'(\d{3,5})\s*\$', reply)
         if price_match:
             sess['budget_range'] = f"{price_match.group(1)}-{price_match.group(2)}"
             sess['budget'] = int(price_match.group(1))
             sess['stage'] = 'price_proposed'
+            print(f"💰 [PRICE] تم اكتشاف سعر: {sess['budget_range']} → المرحلة: price_proposed")
         elif single_price:
             sess['budget'] = int(single_price.group(1))
             sess['stage'] = 'price_proposed'
+            print(f"💰 [PRICE] تم اكتشاف سعر: {sess['budget']}$ → المرحلة: price_proposed")
+
         duration_match = re.search(r'(\d+[-–]\d+\s*(?:يوم|أيام|day|days|ساعة))', reply, re.I)
         if duration_match:
             sess['duration'] = duration_match.group(1)
+            print(f"⏱️ [DURATION] {sess['duration']}")
+
         send_fb(sender_id, reply)
         add_to_conversation(sender_id, 'الوكيل', reply)
         return
 
+    # ---- price_proposed ----
     if stage == 'price_proposed':
         if is_price_confirmation(text):
+            print(f"✅ [CONFIRM] العميل وافق → المرحلة: collecting_name")
             sess['stage'] = 'collecting_name'
             send_fb(sender_id, "ممتاز! ما اسمك الكريم؟")
         else:
+            print(f"💭 [STAGE:price_proposed] العميل يستفسر — استشارة AI...")
             reply = ask_ai(text, sess, extra_instruction="العميل يستفسر. أجبه باختصار.")
             send_fb(sender_id, reply)
             add_to_conversation(sender_id, 'الوكيل', reply)
         return
 
+    # ---- collecting_name ----
     if stage == 'collecting_name':
+        print(f"📛 [STAGE:collecting_name] محاولة استخراج الاسم...")
         name = extract_name_from_text(text)
         if not name and len(text.split()) <= 4 and len(text) <= 30:
             name = text.strip()
         if name:
             sess['name'] = name
             sess['stage'] = 'collecting_phone'
+            print(f"✅ [NAME] تم استخراج: {name} → المرحلة: collecting_phone")
             send_fb(sender_id, f"تمام {name}، ما رقم هاتفك؟")
         else:
+            print(f"⚠️ [NAME] لم يتم استخراج اسم صالح")
             send_fb(sender_id, "ما اسمك الكريم؟")
         return
 
+    # ---- collecting_phone ----
     if stage == 'collecting_phone':
+        print(f"📞 [STAGE:collecting_phone] محاولة استخراج رقم الهاتف...")
         phone = extract_phone(text)
         if phone:
             sess['phone'] = phone
+            print(f"✅ [PHONE] {phone}")
             order_data = {
                 'name': sess['name'], 'phone': phone,
                 'service': sess.get('service', 'خدمة تقنية'),
@@ -451,15 +467,19 @@ def process_message(sender_id, text):
                 f"سيتواصل معك فريقنا قريباً."
             )
             send_fb(sender_id, confirm_msg)
+            print(f"🔄 [RESET] إعادة تعيين الجلسة")
             _ram_cache['sessions'][sender_id] = {
                 'name': '', 'service': '', 'budget': 0, 'budget_range': '',
                 'phone': '', 'duration': '', 'details': '', 'stage': 'explore',
                 'conversation': [],
             }
         else:
+            print(f"⚠️ [PHONE] لم يتم استخراج رقم صالح")
             send_fb(sender_id, "أرسل رقم هاتفك فقط (مثال: 0555123456)")
         return
 
+    # ---- fallback ----
+    print(f"🔄 [FALLBACK] مرحلة غير معروفة — استشارة AI...")
     reply = ask_ai(text, sess)
     send_fb(sender_id, reply)
     add_to_conversation(sender_id, 'الوكيل', reply)
@@ -469,25 +489,69 @@ def process_message(sender_id, text):
 # ========================================================================
 @app.route('/webhook', methods=['GET'])
 def verify():
-    if request.args.get('hub.verify_token') == VERIFY_TOKEN:
-        return request.args.get('hub.challenge')
+    print(f"🔍 [WEBHOOK GET] التحقق من webhook...")
+    token = request.args.get('hub.verify_token')
+    challenge = request.args.get('hub.challenge')
+    if token == VERIFY_TOKEN:
+        print(f"✅ [WEBHOOK GET] تم التحقق بنجاح")
+        return challenge
+    print(f"❌ [WEBHOOK GET] فشل التحقق — token: {token}")
     return "Verification failed", 403
 
 @app.route('/webhook', methods=['POST'])
 def webhook():
     body = request.json
+    print("=" * 70)
+    print(f"📥 [WEBHOOK POST] استُلم حدث جديد")
+    print(f"📦 [BODY] {json.dumps(body, ensure_ascii=False)[:500]}")
+    print("=" * 70)
+
     if not body or body.get('object') != 'page':
+        print(f"⚠️ [WEBHOOK] object ليس page — تم التجاهل")
         return 'OK', 200
+
     for entry in body.get('entry', []):
         for msg in entry.get('messaging', []):
-            sender = str(msg['sender']['id'])
+            sender = str(msg.get('sender', {}).get('id', ''))
             message = msg.get('message', {})
+
+            # رسالة نصية
             if 'text' in message:
-                threading.Thread(target=process_message, args=(sender, message['text']), daemon=True).start()
+                print(f"📨 [TEXT] من {sender[:12]}: {message['text'][:80]}")
+                threading.Thread(
+                    target=process_message,
+                    args=(sender, message['text']),
+                    daemon=True
+                ).start()
+                continue
+
+            # postback (أزرار)
+            if 'postback' in msg:
+                print(f"🔘 [POSTBACK] من {sender[:12]}: {msg['postback'].get('payload', '')}")
+                continue
+
+            # echo (رسالة أرسلتها الصفحة)
+            if message.get('is_echo'):
+                print(f"🔁 [ECHO] رسالة صادرة — تم التجاهل")
+                continue
+
+            # delivery
+            if 'delivery' in msg:
+                print(f"✓ [DELIVERY] إشعار تسليم من {sender[:12]}")
+                continue
+
+            # read
+            if 'read' in msg:
+                print(f"👁️ [READ] إشعار قراءة من {sender[:12]}")
+                continue
+
+            # غير معروف
+            print(f"❓ [UNKNOWN] نوع رسالة غير معروف: {json.dumps(msg, ensure_ascii=False)[:200]}")
+
     return 'OK', 200
 
 # ========================================================================
-# 13. API للوحة التحكم
+# 13. API
 # ========================================================================
 @app.route('/api/orders', methods=['GET'])
 def api_orders():
@@ -524,19 +588,6 @@ def api_clients():
         }
     return jsonify(list(clients_map.values()))
 
-@app.route('/api/comments/stats', methods=['GET'])
-def api_comments_stats():
-    today = datetime.now().strftime('%Y-%m-%d')
-    return jsonify({'today': _ram_cache['comment_stats'].get(today, 0), 'total': sum(_ram_cache['comment_stats'].values())})
-
-@app.route('/api/publish/settings', methods=['GET'])
-def api_publish_settings():
-    return jsonify(_ram_cache['publish_settings'])
-
-@app.route('/api/logs', methods=['GET'])
-def api_logs():
-    return jsonify(list(logs)[:50])
-
 @app.route('/api/dashboard', methods=['GET'])
 def api_dashboard():
     col = get_mongo_collection()
@@ -548,6 +599,10 @@ def api_dashboard():
         completed = col.count_documents({'status': 'completed'})
         pending = col.count_documents({'status': 'pending'})
     return jsonify({'total_orders': total, 'completed': completed, 'pending': pending})
+
+@app.route('/api/logs', methods=['GET'])
+def api_logs():
+    return jsonify(list(logs)[:50])
 
 @app.route('/health')
 def health():
@@ -563,7 +618,7 @@ def keep_alive_loop():
         try:
             requests.get(SELF_URL, timeout=8)
         except Exception as e:
-            add_log(f"⚠️ Keep-alive: {e}")
+            print(f"⚠️ [KEEP-ALIVE] {e}")
 
 # ========================================================================
 # 15. التشغيل
