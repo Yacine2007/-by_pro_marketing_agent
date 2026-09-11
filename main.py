@@ -1,7 +1,6 @@
 # ========================================================================
 # B.Y PRO Marketing Agent - Render Server
-# Owner messages → Dashboard Executive Assistant
-# v3: Stable long conversations + Messenger-friendly formatting
+# v4 — Minimal & Safe: Owner ↔ Executive Assistant via isolated collection
 # ========================================================================
 import sys
 sys.stdout.reconfigure(line_buffering=True)
@@ -35,7 +34,7 @@ def cors_preflight(_any=None):
     return '', 204
 
 # ========================================================================
-# 1. تحميل الأسرار من GitHub
+# 1. تحميل الأسرار
 # ========================================================================
 GITHUB_TOKEN = os.environ.get('GITHUB_TOKEN')
 GITHUB_REPO  = os.environ.get('GITHUB_REPO', 'Yacine2007/APIs-B.YPRO-Managment')
@@ -88,19 +87,22 @@ OPENROUTER_API_KEY = os.environ.get('OPENROUTER_API_KEY')
 OPENROUTER_MODEL   = os.environ.get('OPENROUTER_MODEL', 'openai/gpt-4o-mini')
 OPENROUTER_URL     = 'https://openrouter.ai/api/v1/chat/completions'
 
-MONGODB_URI        = os.environ.get('MONGODB_URI')
-ORDERS_DB_NAME     = os.environ.get('ORDERS_DB_NAME', 'bypro_orders')
-ORDERS_COLLECTION  = 'orders'
-SETTINGS_DB_NAME   = os.environ.get('SETTINGS_DB_NAME', 'DashboardDB')
+MONGODB_URI         = os.environ.get('MONGODB_URI')
+ORDERS_DB_NAME      = os.environ.get('ORDERS_DB_NAME', 'bypro_orders')
+ORDERS_COLLECTION   = 'orders'
+SETTINGS_DB_NAME    = os.environ.get('SETTINGS_DB_NAME', 'DashboardDB')
 SETTINGS_COLLECTION = 'settings'
-SETTINGS_KEY       = 'service_settings'
+SETTINGS_KEY        = 'service_settings'
 
-# Dashboard shared collections
+# Shared with Dashboard
 DASHBOARD_DB_NAME     = 'DashboardDB'
-CHAT_COLLECTION       = 'chat_history'
+CHAT_COLLECTION       = 'chat_history'          # write-only mirror (so Dashboard shows it)
 CLIENTS_COLLECTION    = 'clients'
 PROJECTS_COLLECTION   = 'projects_registry'
 DASH_SETTINGS_COLL    = 'settings'
+
+# Owner ↔ Messenger isolated collection (read + write source of truth)
+OWNER_CHAT_COLLECTION = 'messenger_owner_chat'
 
 SELF_URL = os.environ.get('SELF_URL', 'https://by-pro-marketing-agent-v2jk.onrender.com')
 
@@ -119,7 +121,11 @@ def get_mongo():
         print("❌ MONGODB_URI غير موجود", flush=True)
         return None, None
     try:
-        _mongo_client = MongoClient(MONGODB_URI, serverSelectionTimeoutMS=15000, tlsAllowInvalidCertificates=True)
+        _mongo_client = MongoClient(
+            MONGODB_URI,
+            serverSelectionTimeoutMS=15000,
+            tlsAllowInvalidCertificates=True,
+        )
         _mongo_client.admin.command('ping')
         _orders_col = _mongo_client[ORDERS_DB_NAME][ORDERS_COLLECTION]
         _settings_col = _mongo_client[SETTINGS_DB_NAME][SETTINGS_COLLECTION]
@@ -129,14 +135,13 @@ def get_mongo():
         print(f"❌ MongoDB: {e}", flush=True)
         return None, None
 
-def _ensure_mongo():
-    global _mongo_client
+def _db():
     if _mongo_client is None:
         get_mongo()
     return _mongo_client
 
 # ========================================================================
-# 4. التخزين المؤقت
+# 4. أدوات مساعدة
 # ========================================================================
 _cache = {
     'sessions': {},
@@ -158,11 +163,11 @@ DEFAULT_CATEGORIES = [
     {"id": "design", "enabled": True, "name": "التصميم البصري", "icon": "fa-solid fa-palette", "services": ["شعارات","هوية بصرية","تعديل صور","سوشيال ميديا","بطاقات","منشورات","أغلفة"]},
     {"id": "web", "enabled": True, "name": "مواقع الويب", "icon": "fa-solid fa-globe", "services": ["صفحة هبوط","متجر إلكتروني","موقع ثابت","موقع ديناميكي","مدونة","لوحة تحكم"]},
     {"id": "apps", "enabled": True, "name": "التطبيقات", "icon": "fa-solid fa-mobile-screen", "services": ["أندرويد","iOS","ويب App","Flutter","React Native"]},
-    {"id": "desktop", "enabled": True, "name": "ديسكتوب", "icon": "fa-solid fa-desktop", "services": ["ويندوز","ماك","لينكس","إدارة","POS"]},
-    {"id": "systems", "enabled": True, "name": "الأنظمة", "icon": "fa-solid fa-gears", "services": ["CMS","سكربت مخصص","بايثون ولغات أخرى","ERP","CRM","فوترة","حجوزات","بوتات","أتمتة"]},
-    {"id": "editing", "enabled": True, "name": "المونتاج", "icon": "fa-solid fa-film", "services": ["مونتاج فيديو","تعليق صوتي","موشن جرافيك","إعلانات","يوتيوب","ريلز","AI فيديو"]},
-    {"id": "security", "enabled": True, "name": "الأمن السيبراني", "icon": "fa-solid fa-shield-halved", "services": ["اختبار اختراق","حماية مواقع","تحليل ثغرات","استشارات","تدقيق","تقارير"]},
-    {"id": "marketing", "enabled": True, "name": "تسويق", "icon": "fa-solid fa-chart-line", "services": ["تسويق رقمي","إعلانات","SEO","محتوى","حملات","سوشيال ميديا"]},
+    {"id": "desktop", "enabled": True, "name": "ديسك توب", "icon": "fa-solid fa-desktop", "services": ["ويندوز","ماك","لينكس","إدارة","POS"]},
+    {"id": "systems", "enabled": True, "name": "الأنظمة", "icon": "fa-solid fa-gears", "services": ["CMS","سكربت مخصص","ERP","CRM","فوترة","حجوزات","بوتات","أتمتة"]},
+    {"id": "editing", "enabled": True, "name": "المونتاج", "icon": "fa-solid fa-film", "services": ["مونتاج فيديو","تعليق صوتي","موشن جرافيك","إعلانات","يوتيوب","ريلز"]},
+    {"id": "security", "enabled": True, "name": "الأمن السيبراني", "icon": "fa-solid fa-shield-halved", "services": ["اختبار اختراق","حماية مواقع","تحليل ثغرات","استشارات"]},
+    {"id": "marketing", "enabled": True, "name": "تسويق", "icon": "fa-solid fa-chart-line", "services": ["تسويق رقمي","إعلانات","SEO","محتوى","حملات"]},
     {"id": "other", "enabled": True, "name": "أخرى", "icon": "fa-solid fa-box", "services": ["خدمة مخصصة"]},
 ]
 
@@ -175,10 +180,10 @@ def load_categories():
         if doc and doc.get('value') and doc['value'].get('categories'):
             cats = doc['value']['categories']
             _cache['categories'] = cats
-            add_log(f"✅ تم تحميل {len(cats)} تصنيف من MongoDB")
+            add_log(f"✅ تحميل {len(cats)} تصنيف")
             return cats
     except Exception as e:
-        add_log(f"❌ فشل تحميل التصنيفات: {e}")
+        add_log(f"❌ تحميل التصنيفات: {e}")
     return None
 
 def get_categories():
@@ -194,18 +199,16 @@ def format_categories_for_ai():
     for c in cats:
         if not c.get('enabled', True):
             continue
-        cat_id = c.get('id', '')
-        name = c.get('name', cat_id)
+        name = c.get('name', c.get('id', ''))
         services = c.get('services', [])
         svc_labels = []
         for s in services:
             if isinstance(s, dict):
                 if s.get('enabled', True):
-                    lbl = s.get('label_ar') or s.get('label_en') or s.get('id', '')
-                    svc_labels.append(lbl)
+                    svc_labels.append(s.get('label_ar') or s.get('label_en') or s.get('id', ''))
             elif isinstance(s, str):
                 svc_labels.append(s)
-        lines.append(f"[{cat_id}] {name}: {', '.join(svc_labels)}")
+        lines.append(f"[{c.get('id','')}] {name}: {', '.join(svc_labels)}")
     return "\n".join(lines)
 
 def find_category(cat_id):
@@ -226,206 +229,157 @@ def get_owner_id():
     return None
 
 # ========================================================================
-# 7. OpenRouter AI
+# 7. AI Calls (simple, single retry)
 # ========================================================================
+def _ai_headers(title):
+    return {
+        'Authorization': f'Bearer {OPENROUTER_API_KEY}',
+        'Content-Type': 'application/json',
+        'HTTP-Referer': SELF_URL,
+        'X-Title': title,
+    }
+
 def get_ai_response(prompt):
+    """Single-turn AI call (used by customer flow)."""
     if not OPENROUTER_API_KEY:
         add_log("❌ OPENROUTER_API_KEY غير موجود")
         return None
     try:
-        headers = {
-            'Authorization': f'Bearer {OPENROUTER_API_KEY}',
-            'Content-Type': 'application/json',
-            'HTTP-Referer': SELF_URL,
-            'X-Title': 'B.Y PRO Marketing Agent',
-        }
         payload = {
             'model': OPENROUTER_MODEL,
             'messages': [{'role': 'user', 'content': prompt}],
             'temperature': 0.7,
             'max_tokens': 2048,
         }
-        r = requests.post(OPENROUTER_URL, headers=headers, json=payload, timeout=60)
+        r = requests.post(OPENROUTER_URL, headers=_ai_headers('B.Y PRO Marketing Agent'),
+                          json=payload, timeout=90)
         if r.status_code == 200:
-            result = r.json()
-            answer = result.get('choices', [{}])[0].get('message', {}).get('content', '')
+            data = r.json()
+            answer = (data.get('choices') or [{}])[0].get('message', {}).get('content', '')
             if answer and answer.strip():
                 return answer.strip()
-            return None
-        add_log(f"❌ AI HTTP {r.status_code}: {r.text[:200]}")
+        add_log(f"❌ AI {r.status_code}: {r.text[:200]}")
         return None
     except Exception as e:
         add_log(f"❌ AI: {e}")
         return None
 
-def call_ai_with_messages(messages, max_tokens=2500, retries=2):
-    """Call OpenRouter with automatic retry on transient failures."""
+def call_ai_messages(messages, max_tokens=2000):
+    """Multi-turn AI call (used by Executive Assistant). Returns (reply, err)."""
     if not OPENROUTER_API_KEY:
-        add_log("❌ OPENROUTER_API_KEY غير موجود")
-        return None, "AI key missing"
-
-    headers = {
-        'Authorization': f'Bearer {OPENROUTER_API_KEY}',
-        'Content-Type': 'application/json',
-        'HTTP-Referer': SELF_URL,
-        'X-Title': 'B.Y PRO Executive Assistant',
-    }
-    payload = {
-        'model': OPENROUTER_MODEL,
-        'messages': messages,
-        'temperature': 0.7,
-        'max_tokens': max_tokens,
-    }
-
-    last_err = None
-    for attempt in range(retries + 1):
-        try:
-            r = requests.post(OPENROUTER_URL, headers=headers, json=payload, timeout=120)
-
-            if r.status_code == 200:
-                result = r.json()
-                choices = result.get('choices') or []
-                if not choices:
-                    last_err = "empty choices"
-                    time.sleep(1.5)
-                    continue
-                answer = choices[0].get('message', {}).get('content', '')
-                if answer and answer.strip():
-                    return answer.strip(), None
-                last_err = "empty content"
-                time.sleep(1.5)
-                continue
-
-            # Client errors (bad request, context too long) — do not retry with same payload
-            if r.status_code in (400, 413, 422):
-                err_body = r.text[:300]
-                add_log(f"❌ AI client error {r.status_code}: {err_body}")
-                return None, f"HTTP {r.status_code}: {err_body}"
-
-            # Auth errors — do not retry
-            if r.status_code in (401, 403):
-                add_log(f"❌ AI auth error {r.status_code}")
-                return None, f"HTTP {r.status_code}"
-
-            # Rate limit or server error — retry with backoff
-            last_err = f"HTTP {r.status_code}: {r.text[:150]}"
-            add_log(f"⚠️ AI transient {r.status_code} (attempt {attempt+1}/{retries+1})")
-            time.sleep(2 * (attempt + 1))
-            continue
-
-        except requests.exceptions.Timeout:
-            last_err = "timeout"
-            add_log(f"⚠️ AI timeout (attempt {attempt+1}/{retries+1})")
-            time.sleep(2 * (attempt + 1))
-            continue
-        except Exception as e:
-            last_err = str(e)
-            add_log(f"⚠️ AI exception: {e}")
-            time.sleep(2 * (attempt + 1))
-            continue
-
-    return None, last_err or "AI call failed after retries"
+        return None, "missing key"
+    try:
+        payload = {
+            'model': OPENROUTER_MODEL,
+            'messages': messages,
+            'temperature': 0.7,
+            'max_tokens': max_tokens,
+        }
+        r = requests.post(OPENROUTER_URL, headers=_ai_headers('B.Y PRO Executive Assistant'),
+                          json=payload, timeout=120)
+        if r.status_code == 200:
+            data = r.json()
+            choices = data.get('choices') or []
+            if not choices:
+                return None, "empty choices"
+            answer = choices[0].get('message', {}).get('content', '')
+            if answer and answer.strip():
+                return answer.strip(), None
+            return None, "empty content"
+        return None, f"HTTP {r.status_code}: {r.text[:200]}"
+    except Exception as e:
+        return None, str(e)
 
 # ========================================================================
-# 7b. Executive Assistant Bridge
+# 7b. Owner isolated conversation (v4 — SIMPLE)
 # ========================================================================
+def owner_read_history(limit=15):
+    """Read owner's Messenger conversation from the isolated collection."""
+    db = _db()
+    if db is None:
+        return []
+    try:
+        col = db[OWNER_CHAT_COLLECTION]
+        docs = list(col.find({}).sort('_id', -1).limit(limit))
+        docs.reverse()  # chronological
+        return [{'role': d.get('role', 'user'), 'content': d.get('content', '')} for d in docs]
+    except Exception as e:
+        add_log(f"⚠️ owner_read_history: {e}")
+        return []
+
+def owner_save_message(role, content):
+    """Save into owner collection (source of truth) + mirror into Dashboard chat."""
+    db = _db()
+    if db is None:
+        return
+    ts = datetime.now(timezone.utc).isoformat()
+    try:
+        db[OWNER_CHAT_COLLECTION].insert_one({
+            'role': role, 'content': content, 'timestamp': ts,
+        })
+    except Exception as e:
+        add_log(f"⚠️ owner_save (own): {e}")
+    try:
+        # mirror for Dashboard visibility (write-only)
+        db[CHAT_COLLECTION].insert_one({
+            'role': role, 'content': content, 'timestamp': ts,
+            'meta': {'source': 'messenger'},
+        })
+    except Exception as e:
+        add_log(f"⚠️ owner_save (mirror): {e}")
+
+def owner_reset_history():
+    """Clear the owner conversation (can be called manually via API)."""
+    db = _db()
+    if db is None:
+        return False
+    try:
+        db[OWNER_CHAT_COLLECTION].delete_many({})
+        return True
+    except Exception as e:
+        add_log(f"⚠️ owner_reset: {e}")
+        return False
+
 def get_dashboard_settings():
-    client = _ensure_mongo()
-    if client is None:
+    db = _db()
+    if db is None:
         return {}
     out = {}
     try:
-        col = client[DASHBOARD_DB_NAME][DASH_SETTINGS_COLL]
-        for doc in col.find({}):
+        for doc in db[DASH_SETTINGS_COLL].find({}):
             k = doc.get('key')
             if k:
                 out[k] = doc.get('value')
     except Exception as e:
-        add_log(f"⚠️ settings load: {e}")
+        add_log(f"⚠️ settings: {e}")
     return out
 
-def get_chat_history():
-    client = _ensure_mongo()
-    if client is None:
+def get_clients_compact(limit=60):
+    """Compact client list — only the fields the AI really needs."""
+    db = _db()
+    if db is None:
         return []
     try:
-        col = client[DASHBOARD_DB_NAME][CHAT_COLLECTION]
         out = []
-        for d in col.find({}).sort('_id', 1):
-            out.append({
-                'role': d.get('role'),
-                'content': d.get('content', ''),
-                'meta': d.get('meta') or {},
-            })
-        return out
-    except Exception as e:
-        add_log(f"⚠️ chat load: {e}")
-        return []
-
-def get_conversation_history():
-    """
-    Return ONLY the meaningful user/assistant dialogue — exclude auto alerts,
-    welcome greetings, and system notifications that pollute the context.
-    """
-    raw = get_chat_history()
-    clean = []
-    for m in raw:
-        meta = m.get('meta') or {}
-        # Skip automatic/system messages entirely
-        if meta.get('auto') or meta.get('welcome') or meta.get('alert'):
-            continue
-        role = m.get('role')
-        if role not in ('user', 'assistant'):
-            continue
-        content = (m.get('content') or '').strip()
-        if not content:
-            continue
-        clean.append({'role': role, 'content': content})
-    return clean
-
-def save_chat_message(role, content, meta=None):
-    client = _ensure_mongo()
-    if client is None:
-        return False
-    try:
-        col = client[DASHBOARD_DB_NAME][CHAT_COLLECTION]
-        doc = {
-            'role': role,
-            'content': content,
-            'timestamp': datetime.now(timezone.utc).isoformat(),
-        }
-        if meta:
-            doc['meta'] = meta
-        col.insert_one(doc)
-        return True
-    except Exception as e:
-        add_log(f"⚠️ chat save: {e}")
-        return False
-
-def get_clients_for_ai(limit=80):
-    client = _ensure_mongo()
-    if client is None:
-        return []
-    try:
-        col = client[DASHBOARD_DB_NAME][CLIENTS_COLLECTION]
-        out = []
-        for d in col.find({}).sort('_id', -1).limit(limit):
+        for d in db[CLIENTS_COLLECTION].find({}).sort('_id', -1).limit(limit):
             order = d.get('order') or {}
-            out.append({
+            item = {
                 'name': d.get('name', ''),
-                'email': d.get('email', ''),
                 'phone': d.get('phone', ''),
-                'source': d.get('source', ''),
-                'status': d.get('status', ''),
+                'email': d.get('email', ''),
                 'service': order.get('service', ''),
                 'project': order.get('project_name', '') or d.get('project_name', ''),
-            })
+                'status': d.get('status', ''),
+                'source': d.get('source', ''),
+            }
+            # Remove empty fields to shrink payload
+            out.append({k: v for k, v in item.items() if v})
         return out
     except Exception as e:
-        add_log(f"⚠️ clients load: {e}")
+        add_log(f"⚠️ clients: {e}")
         return []
 
-def get_pending_orders_for_ai(limit=30):
+def get_pending_orders_compact(limit=20):
     col, _ = get_mongo()
     if col is None:
         return []
@@ -446,28 +400,23 @@ def get_pending_orders_for_ai(limit=30):
             })
         return out
     except Exception as e:
-        add_log(f"⚠️ orders load: {e}")
+        add_log(f"⚠️ orders: {e}")
         return []
 
-def get_company_summary():
-    client = _ensure_mongo()
-    if client is None:
-        return ''
+def get_company_stats():
+    db = _db()
+    if db is None:
+        return {}
     try:
-        db = client[DASHBOARD_DB_NAME]
         col = db[PROJECTS_COLLECTION]
-        clients_count = db[CLIENTS_COLLECTION].count_documents({})
-        projects_count = col.count_documents({'kind': 'project'})
-        completed = col.count_documents({'kind': 'project', 'progress': {'$gte': 100}})
-        return (
-            "=== Company Summary ===\n"
-            f"Customers: {clients_count}\n"
-            f"Projects: {projects_count}\n"
-            f"Completed: {completed}\n"
-        )
+        return {
+            'clients_count': db[CLIENTS_COLLECTION].count_documents({}),
+            'projects_count': col.count_documents({'kind': 'project'}),
+            'completed_projects': col.count_documents({'kind': 'project', 'progress': {'$gte': 100}}),
+        }
     except Exception as e:
-        add_log(f"⚠️ summary: {e}")
-        return ''
+        add_log(f"⚠️ stats: {e}")
+        return {}
 
 DEFAULT_SYSTEM_PROMPT_FALLBACK = (
     'You are the executive assistant managing B.Y PRO Technologie, a multinational digital software company. '
@@ -481,177 +430,94 @@ DEFAULT_SYSTEM_PROMPT_FALLBACK = (
     'Website: https://by-pro.kesug.com/ (backup: http://bypro.great-site.net/).'
 )
 
-# Instructions added ONLY for Messenger delivery
-MESSENGER_FORMAT_RULE = (
-    "\n\n=== MESSENGER FORMAT RULES (CRITICAL) ===\n"
-    "Your reply will be delivered through Facebook Messenger, which does NOT render Markdown.\n"
-    "STRICT RULES:\n"
-    "1) NEVER use Markdown tables (no | ... | ... |). Instead, list items as bullet lines.\n"
-    "2) NEVER use triple backticks (```). Use plain text or simple indentation.\n"
-    "3) NEVER use # headers. Use a plain uppercase label on its own line if needed.\n"
-    "4) For lists, use one of: • , -, or 1. 2. 3.\n"
-    "5) For each item with fields, use this pattern:\n"
-    "   • Name: Ahmad\n"
-    "     Phone: 0555...\n"
-    "     Service: Website\n"
-    "   • Name: Sara\n"
-    "     Phone: 0666...\n"
-    "     Service: Logo\n"
-    "6) Keep replies focused. If a list has many entries, show the first 5-10 and offer to show more.\n"
-    "7) Bold and italic markers (** **) do not render — do not use them.\n"
+# Small addition that does NOT fight the main system prompt:
+MESSENGER_NOTE = (
+    "\n\n[Note: your reply will be shown in Facebook Messenger, which is plain text. "
+    "Prefer bullet lists (• item) over tables. Avoid ### headers. "
+    "Keep it readable as plain text.]"
 )
 
-def sanitize_for_messenger(text):
-    """
-    Convert any Markdown leftovers into Messenger-friendly plain text.
-    Handles: tables, code fences, headers, bold/italic markers.
-    """
-    if not text:
-        return text
-
-    # 1. Strip code fences (keep inner content)
-    text = re.sub(r'```[a-zA-Z0-9_+\-]*\n?', '', text)
-    text = text.replace('```', '')
-
-    # 2. Convert Markdown tables into bullet lists
-    lines = text.split('\n')
-    out = []
-    i = 0
-    while i < len(lines):
-        line = lines[i]
-        # Detect table header + separator
-        if ('|' in line) and (i + 1 < len(lines)) and re.match(r'^\s*\|?[\s\-:|]+\|?\s*$', lines[i + 1]):
-            header_line = line
-            i += 2  # skip header + separator
-            body = []
-            while i < len(lines) and '|' in lines[i] and lines[i].strip():
-                body.append(lines[i])
-                i += 1
-
-            headers = [c.strip() for c in header_line.strip().strip('|').split('|')]
-
-            if headers:
-                out.append('')
-                for row in body:
-                    cells = [c.strip() for c in row.strip().strip('|').split('|')]
-                    # First field as bullet, rest as indented key: value
-                    first_written = False
-                    for idx, (h, c) in enumerate(zip(headers, cells)):
-                        if not c:
-                            continue
-                        if not first_written:
-                            out.append(f"• {h}: {c}")
-                            first_written = True
-                        else:
-                            out.append(f"     {h}: {c}")
-                    if first_written:
-                        out.append('')
-                # Remove trailing extra blank line if any
-                if out and out[-1] == '':
-                    out.pop()
-                out.append('')
-            continue
-
-        out.append(line)
-        i += 1
-
-    text = '\n'.join(out)
-
-    # 3. Convert headers to plain uppercase
-    def _hdr(m):
-        return m.group(1).strip().upper()
-    text = re.sub(r'^#{1,6}\s*(.+)$', _hdr, text, flags=re.MULTILINE)
-
-    # 4. Remove bold / italic markers
-    text = re.sub(r'\*\*(.+?)\*\*', r'\1', text)
-    text = re.sub(r'__(.+?)__', r'\1', text)
-    text = re.sub(r'(?<!\w)\*(?!\s)(.+?)(?<!\s)\*(?!\w)', r'\1', text)
-    text = re.sub(r'(?<!\w)_(?!\s)(.+?)(?<!\s)_(?!\w)', r'\1', text)
-
-    # 5. Collapse excessive blank lines
-    text = re.sub(r'\n{3,}', '\n\n', text)
-
-    return text.strip()
-
-def build_executive_context(clients_limit=80, orders_limit=30):
+def build_executive_context():
+    """Compact, bounded context — never explodes the payload."""
     settings = get_dashboard_settings()
     now = datetime.now()
-    weekday = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'][now.weekday()]
+    weekday = ['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday'][now.weekday()]
 
-    clients = get_clients_for_ai(clients_limit)
-    pending = get_pending_orders_for_ai(orders_limit)
-    summary = get_company_summary()
+    stats = get_company_stats()
+    clients = get_clients_compact(60)
+    pending = get_pending_orders_compact(20)
 
-    company_info = {
-        'website': settings.get('company_website', ''),
-        'tagline': settings.get('company_tagline', ''),
-    }
+    lines = [
+        "=== CURRENT DATE & TIME ===",
+        f"Today is {weekday}, {now.strftime('%Y-%m-%d %H:%M')}.",
+        "",
+        "=== LIVE BUSINESS DATA ===",
+        f"Clients total: {stats.get('clients_count', 0)}",
+        f"Projects total: {stats.get('projects_count', 0)}",
+        f"Completed projects: {stats.get('completed_projects', 0)}",
+        f"Pending orders: {len(pending)}",
+        "",
+        f"Clients (latest {len(clients)}):",
+        json.dumps(clients, ensure_ascii=False),
+        "",
+        f"Pending orders:",
+        json.dumps(pending, ensure_ascii=False),
+        "",
+        f"Company website: {settings.get('company_website','')}",
+    ]
+    return "\n".join(lines)
 
-    return (
-        "=== CURRENT DATE & TIME ===\n"
-        f"Today is {weekday}, {now.strftime('%Y-%m-%d')} — local time {now.strftime('%H:%M:%S')}.\n\n"
-        "=== LIVE BUSINESS CONTEXT ===\n"
-        f"Clients count: {len(clients)}\n"
-        f"Pending orders count: {len(pending)}\n\n"
-        f"Clients list (most recent {len(clients)}):\n{json.dumps(clients, ensure_ascii=False)}\n\n"
-        f"Pending orders:\n{json.dumps(pending, ensure_ascii=False)}\n\n"
-        f"Company summary:\n{summary}\n\n"
-        f"Company info:\n{json.dumps(company_info, ensure_ascii=False)}\n"
-    )
+def ask_executive_assistant(user_msg):
+    """Simple, isolated pipeline for the owner's Messenger messages."""
+    # 1) Persist user message into owner collection + mirror
+    owner_save_message('user', user_msg)
 
-def ask_executive_assistant(user_msg, attempt=1):
-    """
-    Route owner's message through the Executive Assistant with retry +
-    progressive context reduction so long conversations never break.
-    """
-    MAX_ATTEMPTS = 3
-
-    # Progressive downsizing on retry
-    if attempt == 1:
-        clients_limit, orders_limit, history_limit, max_tokens = 80, 30, 20, 2000
-    elif attempt == 2:
-        clients_limit, orders_limit, history_limit, max_tokens = 30, 15, 10, 1500
-    else:
-        clients_limit, orders_limit, history_limit, max_tokens = 10, 5, 6, 1200
-
+    # 2) Build context
     settings = get_dashboard_settings()
-    system_prompt = (settings.get('system_prompt') or '').strip() or DEFAULT_SYSTEM_PROMPT_FALLBACK
-    system_context = build_executive_context(clients_limit, orders_limit)
+    base_prompt = (settings.get('system_prompt') or '').strip() or DEFAULT_SYSTEM_PROMPT_FALLBACK
+    system_content = base_prompt + "\n\n" + build_executive_context() + MESSENGER_NOTE
 
-    # Save user message once, on first attempt
-    if attempt == 1:
-        save_chat_message('user', user_msg, meta={'source': 'messenger'})
+    # 3) Build messages: 1 system + last 15 from owner's own history
+    history = owner_read_history(limit=15)
+    # Drop the just-saved user message (we'll re-add nothing — it's the last)
+    # Actually keep it: history already includes it as the last item.
+    messages = [{'role': 'system', 'content': system_content}]
+    for h in history:
+        if h['content']:
+            messages.append({'role': h['role'], 'content': h['content']})
 
-    # Clean conversation (no auto alerts)
-    history = get_conversation_history()
-    # Exclude current user message (already appended)
-    if history and history[-1]['role'] == 'user' and history[-1]['content'].strip() == user_msg.strip():
-        history = history[:-1]
-
-    if len(history) > history_limit:
-        history = history[-history_limit:]
-
-    system_block = system_prompt + "\n\n" + system_context + MESSENGER_FORMAT_RULE
-    messages = [{'role': 'system', 'content': system_block}]
-    for m in history:
-        messages.append({'role': m['role'], 'content': m['content']})
-
+    # Safety: cap total payload size
     total_chars = sum(len(m.get('content', '')) for m in messages)
-    add_log(f"📏 [EA] attempt={attempt} size={total_chars} chars, msgs={len(messages)}")
+    if total_chars > 60000:
+        # Trim history to last 6 turns and re-build system context smaller
+        history = owner_read_history(limit=6)
+        clients = get_clients_compact(15)
+        pending = get_pending_orders_compact(5)
+        now = datetime.now()
+        compact_ctx = (
+            f"Today: {now.strftime('%Y-%m-%d %H:%M')}\n"
+            f"Clients count: {len(clients)}\n"
+            f"Pending orders: {len(pending)}\n"
+            f"Clients sample: {json.dumps(clients[:10], ensure_ascii=False)}\n"
+            f"Orders: {json.dumps(pending, ensure_ascii=False)}"
+        )
+        system_content = base_prompt + "\n\n" + compact_ctx + MESSENGER_NOTE
+        messages = [{'role': 'system', 'content': system_content}]
+        for h in history:
+            if h['content']:
+                messages.append({'role': h['role'], 'content': h['content']})
 
-    reply, err = call_ai_with_messages(messages, max_tokens=max_tokens)
+    add_log(f"📏 EA payload: {len(messages)} msgs, ~{sum(len(m['content']) for m in messages)} chars")
+
+    # 4) Call AI (single attempt — no cascading retries)
+    reply, err = call_ai_messages(messages, max_tokens=1800)
 
     if reply is None:
-        add_log(f"❌ [EA] attempt {attempt} failed: {err}")
-        if attempt < MAX_ATTEMPTS:
-            time.sleep(1.5)
-            return ask_executive_assistant(user_msg, attempt=attempt + 1)
+        add_log(f"❌ EA AI failed: {err}")
         return None
 
-    # Convert any leftover Markdown to Messenger-friendly text
-    reply = sanitize_for_messenger(reply)
-
-    save_chat_message('assistant', reply, meta={'source': 'messenger'})
+    # 5) Persist assistant reply
+    owner_save_message('assistant', reply)
     return reply
 
 # ========================================================================
@@ -663,36 +529,30 @@ def get_bot_personality():
 
 شخصيتك:
 - تتحدث كإنسان حقيقي، ودود ومريح، وليس كبوت.
-- مختصر ومباشر، لا تطوّل بدون داعٍ.
+- مختصر ومباشر.
 - تفهم احتياج العميل قبل أي شيء.
-- أجب بنفس لغة العميل (عربي، إنجليزي، فرنسي).
+- أجب بنفس لغة العميل.
 
-الخدمات المتاحة (استخدم الـ ID بين الأقواس):
+الخدمات المتاحة:
 {cats_text}
 
 طريقة عملك:
 1. رحّب واسأل كيف يمكنك المساعدة.
-2. إذا سأل عن الخدمات، اعرض القائمة.
-3. افهم تفاصيل المشروع (اسأل 1-2 سؤال في كل مرة).
-4. اسأل إذا كان لديه نموذج/تصميم جاهز.
-5. قدّم السعر التقريبي والمدة بوضوح.
-6. إذا وافق، اطلب بياناته.
+2. افهم تفاصيل المشروع.
+3. اسأل إذا كان لديه نموذج جاهز.
+4. قدّم السعر التقريبي والمدة.
+5. إذا وافق، اطلب بياناته.
 
 الأسعار التقريبية (بالدولار):
-- صفحة هبوط: 1500$-4000$ | موقع: 4000$-12000$ | متجر: 3500$-15000$
-- تطبيق بسيط: 5000$-20000$ | تطبيق معقد: 25000$-60000$
-- بوت AI: 300$-2000$ | شعار: 150$-500$ | هوية: 800$-3000$
-- ريلز: 30$-100$ | فيديو: 150$-500$ | موشن: 500$-1500$
-- ERP/CRM: 8000$-40000$ | سكربت: 500$-3000$
-التحويل: 1$ = 240 دج.
+- صفحة هبوط: 1500-4000 | موقع: 4000-12000 | متجر: 3500-15000
+- تطبيق بسيط: 5000-20000 | تطبيق معقد: 25000-60000
+- بوت AI: 300-2000 | شعار: 150-500 | هوية: 800-3000
+- ريلز: 30-100 | فيديو: 150-500 | موشن: 500-1500
+- ERP/CRM: 8000-40000 | سكربت: 500-3000
 
-⚠️ أضف في نهاية كل رد سطرين منفصلين:
+⚠️ في نهاية كل رد أضف:
 [CATEGORY:id]
 [SERVICE:اسم_الخدمة]"""
-
-DATA_COLLECTION_PERSONALITY = """أنت وكيل تسويق في B.Y PRO.
-مهمتك: جمع بيانات العميل فقط.
-قواعد: قصير جداً، سؤال واحد، لا أسعار، لا خدمات، لا تحيات مكررة."""
 
 def parse_ai_tags(text):
     cat = re.search(r'\[CATEGORY:([a-zA-Z0-9_\-]+)\]', text)
@@ -702,7 +562,7 @@ def parse_ai_tags(text):
     return clean.strip(), (cat.group(1) if cat else None), (svc.group(1).strip() if svc else None)
 
 def ask_ai(user_msg, sess, extra_instruction="", personality=None):
-    context = "\n".join(sess.get('conversation', [])[-14:])
+    context = "\n".join(sess.get('conversation', [])[-12:])
     stage = sess.get('stage', 'welcome')
     hints = {
         'welcome': "رحّب بالعميل واسأل كيف يمكنك مساعدته.",
@@ -725,9 +585,7 @@ def ask_ai(user_msg, sess, extra_instruction="", personality=None):
 العميل: {user_msg}
 الوكيل:"""
     res = get_ai_response(full)
-    if res:
-        return res[:2500]
-    return "عذراً، حدث خطأ تقني. أعد رسالتك من فضلك."
+    return res[:2500] if res else "عذراً، حدث خطأ تقني. أعد رسالتك من فضلك."
 
 # ========================================================================
 # 9. فيسبوك
@@ -738,26 +596,28 @@ def send_fb(recipient_id, text):
         return False
     try:
         url = f'https://graph.facebook.com/v18.0/me/messages?access_token={PAGE_ACCESS_TOKEN}'
-        payload = {'recipient': {'id': recipient_id}, 'message': {'text': text}, 'messaging_type': 'RESPONSE'}
+        payload = {
+            'recipient': {'id': recipient_id},
+            'message': {'text': text},
+            'messaging_type': 'RESPONSE',
+        }
         r = requests.post(url, json=payload, timeout=10)
         if r.status_code == 200:
             _cache['stats']['msgs_sent'] += 1
             add_log(f"📤 {str(recipient_id)[:12]}: {text[:60]}")
             return True
-        add_log(f"❌ فشل الإرسال: {r.status_code} - {r.text[:150]}")
+        add_log(f"❌ إرسال {r.status_code}: {r.text[:150]}")
         return False
     except Exception as e:
         add_log(f"❌ إرسال: {e}")
         return False
 
 def send_fb_long(recipient_id, text, max_len=1800):
-    """Split long replies to respect Messenger's limit."""
     if text is None:
         return False
     text = str(text)
     if len(text) <= max_len:
         return send_fb(recipient_id, text)
-
     chunks = []
     remaining = text
     while remaining:
@@ -771,7 +631,6 @@ def send_fb_long(recipient_id, text, max_len=1800):
             split_at = max_len
         chunks.append(remaining[:split_at])
         remaining = remaining[split_at:].lstrip()
-
     ok = True
     for i, chunk in enumerate(chunks):
         if i > 0:
@@ -781,7 +640,7 @@ def send_fb_long(recipient_id, text, max_len=1800):
     return ok
 
 # ========================================================================
-# 10. الجلسات
+# 10. الجلسات (للعملاء)
 # ========================================================================
 def new_session():
     return {
@@ -795,7 +654,6 @@ def new_session():
 def get_session(sender_id):
     sid = str(sender_id)
     if sid not in _cache['sessions']:
-        print(f"🆕 [SESSION] {sid}", flush=True)
         _cache['sessions'][sid] = new_session()
     return _cache['sessions'][sid]
 
@@ -822,46 +680,31 @@ def extract_email(text):
 def extract_name(text):
     t = text.strip()
     t = re.sub(r'^(مرحبا|أهلا|السلام عليكم|hi|hello)\s*', '', t, flags=re.I)
-    patterns = [
+    for pat in [
         r'اسمي\s+([\u0600-\u06FF]+(?:\s+[\u0600-\u06FF]+)?)',
         r'الاسم\s+([\u0600-\u06FF]+(?:\s+[\u0600-\u06FF]+)?)',
-        r'انا\s+([\u0600-\u06FF]+(?:\s+[\u0600-\u06FF]+)?)',
         r'أنا\s+([\u0600-\u06FF]+(?:\s+[\u0600-\u06FF]+)?)',
         r'my name is\s+([a-zA-Z]+(?:\s+[a-zA-Z]+)?)',
-        r"i'm\s+([a-zA-Z]+(?:\s+[a-zA-Z]+)?)",
-    ]
-    for pat in patterns:
+    ]:
         m = re.search(pat, t, re.I)
         if m:
             name = m.group(1).strip()
-            name = re.sub(r'\s+(و|ثم|بعدها)$', '', name)
             if 1 <= len(name.split()) <= 4 and 2 <= len(name) <= 40:
                 return name
     words = t.split()
     if 1 <= len(words) <= 3 and len(t) <= 30:
-        if not any(w in t.lower() for w in ['نعم', 'لا', 'كيف', 'متى', 'ماذا', 'شكرا', 'مرحبا', 'اهلا', 'السلام']):
+        if not any(w in t.lower() for w in ['نعم','لا','كيف','متى','ماذا','شكرا','مرحبا']):
             return t
     return None
 
 def is_confirmation(text):
-    words = ['نعم', 'موافق', 'تمام', 'اوكي', 'اوك', 'ok', 'yes', 'موافقة', 'ماشي', 'اتفقنا', 'ممتاز', 'أوافق', 'نبدا', 'نبدأ', 'يلا']
-    return any(w in text.lower() for w in words)
+    return any(w in text.lower() for w in ['نعم','موافق','تمام','اوكي','اوك','ok','yes','ماشي','اتفقنا','أوافق'])
 
 def is_skip(text):
     tl = text.lower().strip()
-    skip_words = [
-        'تخطي', 'skip', 'بدون', 'بلا', 'مش',
-        'لا املك', 'لا أملك', 'لااملك', 'لا امتلك',
-        'ليس لدي', 'ليس عندي', 'ليست لدي',
-        'ما عندي', 'ماعندي', 'ما لدي', 'مالدي',
-        'لا يوجد', 'لايوجد', 'بدون بريد', 'بدون ايميل',
-        'تجاوز', 'تجاوزها', 'مو موجود', 'غير موجود',
-        'ما عنديش', 'ماعنديش',
-        'no email', 'no social', 'none', 'nothing', 'nope'
-    ]
-    if tl in ['لا', 'no', 'nope']:
+    if tl in ['لا','no','nope']:
         return True
-    return any(w in tl for w in skip_words)
+    return any(w in tl for w in ['تخطي','skip','بدون','مش','لا املك','ليس لدي','ماعندي','تجاوز','no email'])
 
 # ========================================================================
 # 12. حفظ الطلب
@@ -869,28 +712,22 @@ def is_skip(text):
 def save_order(sess, sender_id):
     col, _ = get_mongo()
     if col is None:
-        add_log("⚠️ MongoDB غير متاح")
         return None
     try:
         cat = find_category(sess.get('category', ''))
-        cat_name = cat.get('name', sess.get('categoryName', 'أخرى')) if cat else sess.get('categoryName', 'أخرى')
-        cat_icon = cat.get('icon', 'fa-solid fa-box') if cat else sess.get('categoryIcon', 'fa-solid fa-box')
-
+        cat_name = cat.get('name', 'أخرى') if cat else 'أخرى'
+        cat_icon = cat.get('icon', 'fa-solid fa-box') if cat else 'fa-solid fa-box'
         details = sess.get('projectDetails', '')
-        proj_name = details[:80] if details else sess.get('service', '')
-
         doc = {
             'id': f"ORD-{int(time.time() * 1000)}",
             'category': sess.get('category', 'other'),
             'categoryName': cat_name,
             'categoryIcon': cat_icon,
             'service': sess.get('service', ''),
-            'projectName': proj_name,
+            'projectName': details[:80] if details else sess.get('service', ''),
             'projectDetails': details,
-            'hasModel': sess.get('hasModel', False) if sess.get('hasModel') is not None else False,
-            'modelFiles': [],
-            'modelUrls': [],
-            'modelDescription': '',
+            'hasModel': bool(sess.get('hasModel')),
+            'modelFiles': [], 'modelUrls': [], 'modelDescription': '',
             'fullName': sess.get('name', ''),
             'phone': sess.get('phone', ''),
             'email': sess.get('email', ''),
@@ -903,7 +740,7 @@ def save_order(sess, sender_id):
         add_log(f"✅ طلب محفوظ: {result.inserted_id}")
         return str(result.inserted_id)
     except Exception as e:
-        add_log(f"❌ فشل الحفظ: {e}")
+        add_log(f"❌ حفظ: {e}")
         return None
 
 # ========================================================================
@@ -912,10 +749,8 @@ def save_order(sess, sender_id):
 def process_message(sender_id, text):
     sender_id = str(sender_id)
     _cache['stats']['msgs_received'] += 1
-
     print("=" * 70, flush=True)
-    print(f"📨 [MSG] من {sender_id}", flush=True)
-    print(f"📝 [MSG] النص: {text}", flush=True)
+    print(f"📨 من {sender_id}: {text[:100]}", flush=True)
 
     owner = get_owner_id()
     if owner and sender_id == owner:
@@ -923,15 +758,10 @@ def process_message(sender_id, text):
         try:
             reply = ask_executive_assistant(text)
         except Exception as e:
-            add_log(f"❌ EA bridge: {e}")
+            add_log(f"❌ EA: {e}")
             reply = None
-
         if not reply:
-            reply = (
-                "عذراً سيدي، تعذّر الوصول إلى المساعد التنفيذي حالياً.\n"
-                "أعد إرسال رسالتك بعد لحظات من فضلك."
-            )
-
+            reply = "عذراً سيدي، حدث خطأ مؤقت. أعد المحاولة بعد لحظات."
         send_fb_long(sender_id, reply)
         return
 
@@ -939,10 +769,9 @@ def process_message(sender_id, text):
     sess = get_session(sender_id)
     add_conv(sender_id, 'المستخدم', text)
     stage = sess.get('stage', 'welcome')
-    print(f"🎯 [STAGE] {stage}", flush=True)
 
     if stage == 'welcome':
-        raw = ask_ai(text, sess, extra_instruction="رحّب بالعميل واسأل كيف يمكنك مساعدته اليوم. رد مختصر.")
+        raw = ask_ai(text, sess, extra_instruction="رحّب بالعميل واسأل كيف يمكنك مساعدته. رد مختصر.")
         clean, _, _ = parse_ai_tags(raw)
         send_fb(sender_id, clean)
         add_conv(sender_id, 'الوكيل', clean)
@@ -950,7 +779,7 @@ def process_message(sender_id, text):
         return
 
     if stage == 'explore':
-        raw = ask_ai(text, sess, extra_instruction="افهم احتياج العميل. اسأل سؤالاً أو سؤالين.")
+        raw = ask_ai(text, sess)
         clean, cat_id, svc = parse_ai_tags(raw)
         if cat_id:
             cat = find_category(cat_id)
@@ -969,7 +798,7 @@ def process_message(sender_id, text):
     if stage == 'details':
         if not sess.get('projectDetails'):
             sess['projectDetails'] = text.strip()[:2000]
-        raw = ask_ai(text, sess, extra_instruction="اسأل العميل إذا كان لديه نموذج أو تصميم جاهز. سؤال واحد فقط.")
+        raw = ask_ai(text, sess, extra_instruction="اسأل إذا كان لديه نموذج جاهز. سؤال واحد.")
         clean, _, _ = parse_ai_tags(raw)
         send_fb(sender_id, clean)
         add_conv(sender_id, 'الوكيل', clean)
@@ -978,12 +807,9 @@ def process_message(sender_id, text):
 
     if stage == 'model':
         tl = text.lower()
-        if any(w in tl for w in ['نعم', 'yes', 'عندي', 'لدي', 'موجود', 'عندى']):
-            sess['hasModel'] = True
-        elif any(w in tl for w in ['لا', 'no', 'ليس', 'ماعندي', 'مش', 'بدون']):
-            sess['hasModel'] = False
-        raw = ask_ai(text, sess, extra_instruction="قدّم السعر التقريبي والمدة بوضوح بالدولار. انتظر موافقة العميل.")
-        clean, cat_id, svc = parse_ai_tags(raw)
+        sess['hasModel'] = any(w in tl for w in ['نعم','yes','عندي','لدي'])
+        raw = ask_ai(text, sess, extra_instruction="قدّم السعر والمدة. انتظر الموافقة.")
+        clean, cat_id, _ = parse_ai_tags(raw)
         if cat_id:
             cat = find_category(cat_id)
             if cat:
@@ -992,25 +818,15 @@ def process_message(sender_id, text):
                 sess['categoryIcon'] = cat.get('icon', 'fa-solid fa-box')
         send_fb(sender_id, clean)
         add_conv(sender_id, 'الوكيل', clean)
-
-        pm = re.search(r'(\d{2,6})\s*[-–]\s*(\d{2,6})\s*\$', clean)
-        sp = re.search(r'(\d{3,6})\s*\$', clean)
-        if pm:
-            sess['budget'] = int(pm.group(1))
-        elif sp:
-            sess['budget'] = int(sp.group(1))
-        dm = re.search(r'(\d+[-–]\d+\s*(?:يوم|أيام|أسبوع|أسابيع|شهر|أشهر|day|days|week|weeks|month|months))', clean, re.I)
-        if dm:
-            sess['duration'] = dm.group(1)
         sess['stage'] = 'price'
         return
 
     if stage == 'price':
         if is_confirmation(text):
             sess['stage'] = 'collecting_name'
-            send_fb(sender_id, "ممتاز! نحتاج بعض المعلومات لتسجيل طلبك.\nما اسمك الكامل؟")
+            send_fb(sender_id, "ممتاز! ما اسمك الكامل؟")
         else:
-            raw = ask_ai(text, sess, extra_instruction="العميل يستفسر. أجبه باختصار. ذكّره بالسؤال: هل توافق؟")
+            raw = ask_ai(text, sess, extra_instruction="العميل يستفسر. ذكّره بالسؤال: هل توافق؟")
             clean, _, _ = parse_ai_tags(raw)
             send_fb(sender_id, clean)
             add_conv(sender_id, 'الوكيل', clean)
@@ -1031,47 +847,35 @@ def process_message(sender_id, text):
         if phone:
             sess['phone'] = phone
             sess['stage'] = 'collecting_email'
-            send_fb(sender_id, "هل لديك بريد إلكتروني؟ (اختياري — أرسل 'تخطي')")
+            send_fb(sender_id, "هل لديك بريد إلكتروني؟ (اختياري — 'تخطي')")
         else:
-            send_fb(sender_id, "أرسل رقم هاتفك (مثال: +213795082763)")
+            send_fb(sender_id, "أرسل رقم هاتفك")
         return
 
     if stage == 'collecting_email':
         if is_skip(text):
             sess['email'] = ''
             sess['stage'] = 'collecting_social'
-            send_fb(sender_id, "حسناً. هل لديك روابط سوشيال ميديا؟ (اختياري — أرسل 'تخطي')")
+            send_fb(sender_id, "هل لديك روابط سوشيال ميديا؟ (اختياري — 'تخطي')")
         else:
             email = extract_email(text)
             if email:
                 sess['email'] = email
                 sess['stage'] = 'collecting_social'
-                send_fb(sender_id, "هل لديك روابط سوشيال ميديا؟ (اختياري — أرسل 'تخطي')")
+                send_fb(sender_id, "هل لديك روابط سوشيال ميديا؟ (اختياري — 'تخطي')")
             else:
-                send_fb(sender_id, "البريد غير صالح. أرسل بريداً صحيحاً أو 'تخطي'.")
+                send_fb(sender_id, "البريد غير صالح أو 'تخطي'")
         return
 
     if stage == 'collecting_social':
         if not is_skip(text):
             url = re.search(r'https?://[^\s]+', text)
-            if url:
-                sess['social'].append({'platform': 'social', 'url': url.group(0)})
-            else:
-                sess['social'].append({'platform': 'social', 'url': text.strip()[:200]})
-        else:
-            sess['social'] = []
-
+            sess['social'].append({'platform': 'social', 'url': url.group(0) if url else text.strip()[:200]})
         oid = save_order(sess, sender_id)
         if oid:
-            msg = (
-                f"شكراً {sess.get('name', '')} على ثقتك بنا 🌟\n\n"
-                f"تم تسجيل طلبك بنجاح.\n"
-                f"سنتواصل معك مجدداً لمناقشة التفاصيل والبدء في مشروعك.\n\n"
-                f"فريق B.Y PRO"
-            )
-            send_fb(sender_id, msg)
+            send_fb(sender_id, f"شكراً {sess.get('name','')} 🌟\nتم تسجيل طلبك بنجاح.\nفريق B.Y PRO")
         else:
-            send_fb(sender_id, "حدث خطأ تقني أثناء حفظ الطلب. سنتواصل معك قريباً.")
+            send_fb(sender_id, "حدث خطأ أثناء حفظ الطلب.")
         _cache['sessions'][sender_id] = new_session()
         return
 
@@ -1086,38 +890,22 @@ def process_message(sender_id, text):
 @app.route('/webhook', methods=['GET'])
 def verify():
     if request.args.get('hub.verify_token') == VERIFY_TOKEN:
-        print(f"✅ Webhook verified", flush=True)
         return request.args.get('hub.challenge')
     return "Verification failed", 403
 
 @app.route('/webhook', methods=['POST'])
 def webhook():
     body = request.json
-    print("=" * 70, flush=True)
-    print(f"📥 [WEBHOOK] حدث جديد", flush=True)
-
     if not body or body.get('object') != 'page':
         return 'OK', 200
-
     for entry in body.get('entry', []):
         for msg in entry.get('messaging', []):
             sender = str(msg.get('sender', {}).get('id', ''))
             message = msg.get('message', {})
-
             if 'text' in message:
-                print(f"📨 [TEXT] من {sender}: {message['text'][:80]}", flush=True)
-                threading.Thread(target=process_message, args=(sender, message['text']), daemon=True).start()
-                continue
-            if 'postback' in msg:
-                print(f"🔘 [POSTBACK] من {sender}", flush=True)
-                continue
-            if message.get('is_echo'):
-                continue
-            if 'delivery' in msg:
-                continue
-            if 'read' in msg:
-                continue
-
+                print(f"📨 {sender}: {message['text'][:80]}", flush=True)
+                threading.Thread(target=process_message,
+                                 args=(sender, message['text']), daemon=True).start()
     return 'OK', 200
 
 # ========================================================================
@@ -1153,14 +941,13 @@ def api_set_owner():
     if request.method == 'GET':
         oid = request.args.get('owner_id', '').strip()
     else:
-        data = request.json or {}
-        oid = str(data.get('owner_id', '')).strip()
+        oid = str((request.json or {}).get('owner_id', '')).strip()
     if oid:
         OWNER_FB_ID = oid
         _cache['owner_id'] = oid
         add_log(f"👑 تم تعيين المدير: {oid}")
         return jsonify({'success': True, 'owner_id': oid})
-    return jsonify({'success': False, 'error': 'owner_id required'}), 400
+    return jsonify({'success': False, 'error': 'required'}), 400
 
 @app.route('/api/set_owner_direct/<owner_id>', methods=['GET'])
 def api_set_owner_direct(owner_id):
@@ -1169,16 +956,12 @@ def api_set_owner_direct(owner_id):
     if oid:
         OWNER_FB_ID = oid
         _cache['owner_id'] = oid
-        add_log(f"👑 تم تعيين المدير: {oid}")
         return jsonify({'success': True, 'owner_id': oid})
-    return jsonify({'success': False, 'error': 'invalid'}), 400
+    return jsonify({'success': False}), 400
 
 @app.route('/api/whoami', methods=['GET'])
 def api_whoami():
-    return jsonify({
-        'owner_id': _cache.get('owner_id'),
-        'sessions': list(_cache['sessions'].keys())[-10:]
-    })
+    return jsonify({'owner_id': _cache.get('owner_id'), 'sessions': list(_cache['sessions'].keys())[-10:]})
 
 @app.route('/api/dashboard', methods=['GET'])
 def api_dashboard():
@@ -1198,18 +981,33 @@ def health():
         'mongo': col is not None,
         'owner_id': _cache.get('owner_id'),
         'categories_loaded': len(get_categories()),
+        'version': 'v4',
     })
 
+# ========================================================================
+# Diagnostics & manual controls
+# ========================================================================
 @app.route('/api/test_owner_ai', methods=['GET', 'POST'])
 def api_test_owner_ai():
-    """Diagnostic endpoint — simulates an owner message and returns the reply."""
+    """Test the owner→EA pipeline without going through Messenger."""
     if request.method == 'GET':
         msg = request.args.get('msg', 'مرحبا')
     else:
-        data = request.json or {}
-        msg = data.get('msg', 'مرحبا')
+        msg = (request.json or {}).get('msg', 'مرحبا')
     reply = ask_executive_assistant(msg)
     return jsonify({'input': msg, 'reply': reply})
+
+@app.route('/api/owner_history', methods=['GET'])
+def api_owner_history():
+    """Inspect the owner's isolated conversation."""
+    limit = int(request.args.get('limit', 30))
+    return jsonify(owner_read_history(limit=limit))
+
+@app.route('/api/owner_reset', methods=['POST', 'GET'])
+def api_owner_reset():
+    """Reset the owner's isolated conversation (safe — does NOT touch Dashboard chat)."""
+    ok = owner_reset_history()
+    return jsonify({'success': ok})
 
 # ========================================================================
 # 16. Keep-Alive
@@ -1227,7 +1025,7 @@ def keep_alive():
 # ========================================================================
 if __name__ == '__main__':
     print("=" * 70, flush=True)
-    print("🚀 B.Y PRO Marketing Agent v3", flush=True)
+    print("🚀 B.Y PRO Marketing Agent v4", flush=True)
     print("=" * 70, flush=True)
     print(f"👤 Owner ID: {OWNER_FB_ID or 'غير محدد'}", flush=True)
     print(f"📄 Page ID: {PAGE_ID}", flush=True)
@@ -1235,11 +1033,9 @@ if __name__ == '__main__':
     print(f"🔑 PAGE_ACCESS_TOKEN: {'موجود' if PAGE_ACCESS_TOKEN else 'مفقود!'}", flush=True)
     col, _ = get_mongo()
     print(f"🗄️ MongoDB: {'متصل' if col is not None else 'غير متصل'}", flush=True)
-    print(f"👑 Owner → Executive Assistant (Dashboard AI)", flush=True)
-    print(f"📱 Formatting: Messenger-friendly (no Markdown tables/code)", flush=True)
+    print(f"👑 Owner → Executive Assistant (isolated collection)", flush=True)
     load_categories()
     print("=" * 70 + "\n", flush=True)
-
     threading.Thread(target=keep_alive, daemon=True).start()
     port = int(os.environ.get('PORT', 5000))
     app.run(host='0.0.0.0', port=port, debug=False)
