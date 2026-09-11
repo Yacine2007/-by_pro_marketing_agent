@@ -1,6 +1,7 @@
 # ========================================================================
 # B.Y PRO Marketing Agent - Render Server
-# Owner messages are routed to the Dashboard's Executive Assistant
+# Owner messages → Dashboard Executive Assistant
+# v3: Stable long conversations + Messenger-friendly formatting
 # ========================================================================
 import sys
 sys.stdout.reconfigure(line_buffering=True)
@@ -94,7 +95,7 @@ SETTINGS_DB_NAME   = os.environ.get('SETTINGS_DB_NAME', 'DashboardDB')
 SETTINGS_COLLECTION = 'settings'
 SETTINGS_KEY       = 'service_settings'
 
-# ==== Dashboard shared collections ====
+# Dashboard shared collections
 DASHBOARD_DB_NAME     = 'DashboardDB'
 CHAT_COLLECTION       = 'chat_history'
 CLIENTS_COLLECTION    = 'clients'
@@ -151,7 +152,7 @@ def add_log(msg):
     print(f"[{entry['time']}] {msg}", flush=True)
 
 # ========================================================================
-# 5. التصنيفات (للعملاء)
+# 5. التصنيفات (للعملاء فقط)
 # ========================================================================
 DEFAULT_CATEGORIES = [
     {"id": "design", "enabled": True, "name": "التصميم البصري", "icon": "fa-solid fa-palette", "services": ["شعارات","هوية بصرية","تعديل صور","سوشيال ميديا","بطاقات","منشورات","أغلفة"]},
@@ -225,7 +226,7 @@ def get_owner_id():
     return None
 
 # ========================================================================
-# 7. OpenRouter AI — استدعاءات خام
+# 7. OpenRouter AI
 # ========================================================================
 def get_ai_response(prompt):
     if not OPENROUTER_API_KEY:
@@ -251,47 +252,82 @@ def get_ai_response(prompt):
             if answer and answer.strip():
                 return answer.strip()
             return None
-        add_log(f"❌ AI HTTP {r.status_code}: {r.text[:150]}")
+        add_log(f"❌ AI HTTP {r.status_code}: {r.text[:200]}")
         return None
     except Exception as e:
         add_log(f"❌ AI: {e}")
         return None
 
-def call_ai_with_messages(messages, max_tokens=2500):
+def call_ai_with_messages(messages, max_tokens=2500, retries=2):
+    """Call OpenRouter with automatic retry on transient failures."""
     if not OPENROUTER_API_KEY:
         add_log("❌ OPENROUTER_API_KEY غير موجود")
-        return None
-    try:
-        headers = {
-            'Authorization': f'Bearer {OPENROUTER_API_KEY}',
-            'Content-Type': 'application/json',
-            'HTTP-Referer': SELF_URL,
-            'X-Title': 'B.Y PRO Executive Assistant',
-        }
-        payload = {
-            'model': OPENROUTER_MODEL,
-            'messages': messages,
-            'temperature': 0.7,
-            'max_tokens': max_tokens,
-        }
-        r = requests.post(OPENROUTER_URL, headers=headers, json=payload, timeout=90)
-        if r.status_code == 200:
-            result = r.json()
-            choices = result.get('choices') or []
-            if not choices:
-                return None
-            answer = choices[0].get('message', {}).get('content', '')
-            if answer and answer.strip():
-                return answer.strip()
-            return None
-        add_log(f"❌ EA HTTP {r.status_code}: {r.text[:150]}")
-        return None
-    except Exception as e:
-        add_log(f"❌ EA: {e}")
-        return None
+        return None, "AI key missing"
+
+    headers = {
+        'Authorization': f'Bearer {OPENROUTER_API_KEY}',
+        'Content-Type': 'application/json',
+        'HTTP-Referer': SELF_URL,
+        'X-Title': 'B.Y PRO Executive Assistant',
+    }
+    payload = {
+        'model': OPENROUTER_MODEL,
+        'messages': messages,
+        'temperature': 0.7,
+        'max_tokens': max_tokens,
+    }
+
+    last_err = None
+    for attempt in range(retries + 1):
+        try:
+            r = requests.post(OPENROUTER_URL, headers=headers, json=payload, timeout=120)
+
+            if r.status_code == 200:
+                result = r.json()
+                choices = result.get('choices') or []
+                if not choices:
+                    last_err = "empty choices"
+                    time.sleep(1.5)
+                    continue
+                answer = choices[0].get('message', {}).get('content', '')
+                if answer and answer.strip():
+                    return answer.strip(), None
+                last_err = "empty content"
+                time.sleep(1.5)
+                continue
+
+            # Client errors (bad request, context too long) — do not retry with same payload
+            if r.status_code in (400, 413, 422):
+                err_body = r.text[:300]
+                add_log(f"❌ AI client error {r.status_code}: {err_body}")
+                return None, f"HTTP {r.status_code}: {err_body}"
+
+            # Auth errors — do not retry
+            if r.status_code in (401, 403):
+                add_log(f"❌ AI auth error {r.status_code}")
+                return None, f"HTTP {r.status_code}"
+
+            # Rate limit or server error — retry with backoff
+            last_err = f"HTTP {r.status_code}: {r.text[:150]}"
+            add_log(f"⚠️ AI transient {r.status_code} (attempt {attempt+1}/{retries+1})")
+            time.sleep(2 * (attempt + 1))
+            continue
+
+        except requests.exceptions.Timeout:
+            last_err = "timeout"
+            add_log(f"⚠️ AI timeout (attempt {attempt+1}/{retries+1})")
+            time.sleep(2 * (attempt + 1))
+            continue
+        except Exception as e:
+            last_err = str(e)
+            add_log(f"⚠️ AI exception: {e}")
+            time.sleep(2 * (attempt + 1))
+            continue
+
+    return None, last_err or "AI call failed after retries"
 
 # ========================================================================
-# 7b. Executive Assistant Bridge — يعتمد على نفس بيانات Dashboard
+# 7b. Executive Assistant Bridge
 # ========================================================================
 def get_dashboard_settings():
     client = _ensure_mongo()
@@ -326,6 +362,27 @@ def get_chat_history():
         add_log(f"⚠️ chat load: {e}")
         return []
 
+def get_conversation_history():
+    """
+    Return ONLY the meaningful user/assistant dialogue — exclude auto alerts,
+    welcome greetings, and system notifications that pollute the context.
+    """
+    raw = get_chat_history()
+    clean = []
+    for m in raw:
+        meta = m.get('meta') or {}
+        # Skip automatic/system messages entirely
+        if meta.get('auto') or meta.get('welcome') or meta.get('alert'):
+            continue
+        role = m.get('role')
+        if role not in ('user', 'assistant'):
+            continue
+        content = (m.get('content') or '').strip()
+        if not content:
+            continue
+        clean.append({'role': role, 'content': content})
+    return clean
+
 def save_chat_message(role, content, meta=None):
     client = _ensure_mongo()
     if client is None:
@@ -345,7 +402,7 @@ def save_chat_message(role, content, meta=None):
         add_log(f"⚠️ chat save: {e}")
         return False
 
-def get_clients_for_ai(limit=200):
+def get_clients_for_ai(limit=80):
     client = _ensure_mongo()
     if client is None:
         return []
@@ -354,9 +411,7 @@ def get_clients_for_ai(limit=200):
         out = []
         for d in col.find({}).sort('_id', -1).limit(limit):
             order = d.get('order') or {}
-            socials = order.get('social_accounts') or d.get('social_accounts') or []
             out.append({
-                'id': str(d.get('_id', ''))[-6:],
                 'name': d.get('name', ''),
                 'email': d.get('email', ''),
                 'phone': d.get('phone', ''),
@@ -364,15 +419,13 @@ def get_clients_for_ai(limit=200):
                 'status': d.get('status', ''),
                 'service': order.get('service', ''),
                 'project': order.get('project_name', '') or d.get('project_name', ''),
-                'socials': [{'platform': s.get('platform', ''), 'url': s.get('url', '')}
-                            for s in socials if isinstance(s, dict)],
             })
         return out
     except Exception as e:
         add_log(f"⚠️ clients load: {e}")
         return []
 
-def get_pending_orders_for_ai(limit=50):
+def get_pending_orders_for_ai(limit=30):
     col, _ = get_mongo()
     if col is None:
         return []
@@ -387,7 +440,6 @@ def get_pending_orders_for_ai(limit=50):
         for d in col.find(query).sort([('createdAt', -1), ('_id', -1)]).limit(limit):
             out.append({
                 'name': d.get('fullName') or d.get('name', ''),
-                'email': d.get('email', ''),
                 'phone': d.get('phone', ''),
                 'service': d.get('service', ''),
                 'project': d.get('projectName', ''),
@@ -411,7 +463,7 @@ def get_company_summary():
             "=== Company Summary ===\n"
             f"Customers: {clients_count}\n"
             f"Projects: {projects_count}\n"
-            f"Completed projects: {completed}\n"
+            f"Completed: {completed}\n"
         )
     except Exception as e:
         add_log(f"⚠️ summary: {e}")
@@ -424,81 +476,186 @@ DEFAULT_SYSTEM_PROMPT_FALLBACK = (
     'Speak professionally and formally, in the language he uses. '
     'You have full read access to the business data: clients, pending orders, projects, transactions, service settings, and system health. '
     'You can answer questions about any client, help him search for them by name, email, phone, project, service, or source, and report on pending orders. '
-    'When asked about a specific client, provide their name, contact details, project info, status, and any notes you see. '
-    'When asked about orders, tell him how many are pending and summarize the most recent ones. '
-    'You always know the current date and time — use it when answering questions about "today", "yesterday", "this week", etc. '
-    'When your reply contains code, tables, or data that could be useful to copy, present it cleanly using Markdown: '
-    'use triple backticks for code and pipe-tables for tabular data. '
+    'You always know the current date and time. '
     'Company details: Technology, Software Services, Development & AI. '
     'Website: https://by-pro.kesug.com/ (backup: http://bypro.great-site.net/).'
 )
 
-def build_executive_context():
+# Instructions added ONLY for Messenger delivery
+MESSENGER_FORMAT_RULE = (
+    "\n\n=== MESSENGER FORMAT RULES (CRITICAL) ===\n"
+    "Your reply will be delivered through Facebook Messenger, which does NOT render Markdown.\n"
+    "STRICT RULES:\n"
+    "1) NEVER use Markdown tables (no | ... | ... |). Instead, list items as bullet lines.\n"
+    "2) NEVER use triple backticks (```). Use plain text or simple indentation.\n"
+    "3) NEVER use # headers. Use a plain uppercase label on its own line if needed.\n"
+    "4) For lists, use one of: • , -, or 1. 2. 3.\n"
+    "5) For each item with fields, use this pattern:\n"
+    "   • Name: Ahmad\n"
+    "     Phone: 0555...\n"
+    "     Service: Website\n"
+    "   • Name: Sara\n"
+    "     Phone: 0666...\n"
+    "     Service: Logo\n"
+    "6) Keep replies focused. If a list has many entries, show the first 5-10 and offer to show more.\n"
+    "7) Bold and italic markers (** **) do not render — do not use them.\n"
+)
+
+def sanitize_for_messenger(text):
+    """
+    Convert any Markdown leftovers into Messenger-friendly plain text.
+    Handles: tables, code fences, headers, bold/italic markers.
+    """
+    if not text:
+        return text
+
+    # 1. Strip code fences (keep inner content)
+    text = re.sub(r'```[a-zA-Z0-9_+\-]*\n?', '', text)
+    text = text.replace('```', '')
+
+    # 2. Convert Markdown tables into bullet lists
+    lines = text.split('\n')
+    out = []
+    i = 0
+    while i < len(lines):
+        line = lines[i]
+        # Detect table header + separator
+        if ('|' in line) and (i + 1 < len(lines)) and re.match(r'^\s*\|?[\s\-:|]+\|?\s*$', lines[i + 1]):
+            header_line = line
+            i += 2  # skip header + separator
+            body = []
+            while i < len(lines) and '|' in lines[i] and lines[i].strip():
+                body.append(lines[i])
+                i += 1
+
+            headers = [c.strip() for c in header_line.strip().strip('|').split('|')]
+
+            if headers:
+                out.append('')
+                for row in body:
+                    cells = [c.strip() for c in row.strip().strip('|').split('|')]
+                    # First field as bullet, rest as indented key: value
+                    first_written = False
+                    for idx, (h, c) in enumerate(zip(headers, cells)):
+                        if not c:
+                            continue
+                        if not first_written:
+                            out.append(f"• {h}: {c}")
+                            first_written = True
+                        else:
+                            out.append(f"     {h}: {c}")
+                    if first_written:
+                        out.append('')
+                # Remove trailing extra blank line if any
+                if out and out[-1] == '':
+                    out.pop()
+                out.append('')
+            continue
+
+        out.append(line)
+        i += 1
+
+    text = '\n'.join(out)
+
+    # 3. Convert headers to plain uppercase
+    def _hdr(m):
+        return m.group(1).strip().upper()
+    text = re.sub(r'^#{1,6}\s*(.+)$', _hdr, text, flags=re.MULTILINE)
+
+    # 4. Remove bold / italic markers
+    text = re.sub(r'\*\*(.+?)\*\*', r'\1', text)
+    text = re.sub(r'__(.+?)__', r'\1', text)
+    text = re.sub(r'(?<!\w)\*(?!\s)(.+?)(?<!\s)\*(?!\w)', r'\1', text)
+    text = re.sub(r'(?<!\w)_(?!\s)(.+?)(?<!\s)_(?!\w)', r'\1', text)
+
+    # 5. Collapse excessive blank lines
+    text = re.sub(r'\n{3,}', '\n\n', text)
+
+    return text.strip()
+
+def build_executive_context(clients_limit=80, orders_limit=30):
     settings = get_dashboard_settings()
     now = datetime.now()
     weekday = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'][now.weekday()]
 
-    clients = get_clients_for_ai(200)
-    pending = get_pending_orders_for_ai(50)
+    clients = get_clients_for_ai(clients_limit)
+    pending = get_pending_orders_for_ai(orders_limit)
     summary = get_company_summary()
 
     company_info = {
-        'company_website': settings.get('company_website', ''),
-        'company_backup_website': settings.get('company_backup_website', ''),
-        'company_tagline': settings.get('company_tagline', ''),
-        'company_description': settings.get('company_description', ''),
+        'website': settings.get('company_website', ''),
+        'tagline': settings.get('company_tagline', ''),
     }
 
     return (
         "=== CURRENT DATE & TIME ===\n"
-        f"Today is {weekday}, {now.strftime('%Y-%m-%d')} — local time {now.strftime('%H:%M:%S')}.\n"
-        "When the director asks about 'today', 'yesterday', 'this week', 'this month', etc., use this reference.\n\n"
-        "You are the executive assistant of B.Y PRO Technologie. "
-        "Your director is Yacine (address him as 'Sir' or 'Director Yacine'). "
-        "You have LIVE read access to the business data shown below. "
-        "You can answer questions about any client, search clients by name/email/phone/service/project/status/source, "
-        "report on pending orders, and provide summaries. "
-        "When the director asks about a specific client, look them up in the list and give full details. "
-        "When he asks about new orders, report the pending_orders_count and list the pending orders. "
-        "When your reply contains code, tables, or structured data, format it as Markdown: "
-        "use triple backticks (```) for code blocks, and pipe-tables (| col1 | col2 |) for tabular data. "
-        "Always use the LIVE DATA below. Never invent clients or orders.\n\n"
+        f"Today is {weekday}, {now.strftime('%Y-%m-%d')} — local time {now.strftime('%H:%M:%S')}.\n\n"
         "=== LIVE BUSINESS CONTEXT ===\n"
         f"Clients count: {len(clients)}\n"
         f"Pending orders count: {len(pending)}\n\n"
-        f"Clients list:\n{json.dumps(clients, ensure_ascii=False)}\n\n"
+        f"Clients list (most recent {len(clients)}):\n{json.dumps(clients, ensure_ascii=False)}\n\n"
         f"Pending orders:\n{json.dumps(pending, ensure_ascii=False)}\n\n"
         f"Company summary:\n{summary}\n\n"
         f"Company info:\n{json.dumps(company_info, ensure_ascii=False)}\n"
     )
 
-def ask_executive_assistant(user_msg):
+def ask_executive_assistant(user_msg, attempt=1):
+    """
+    Route owner's message through the Executive Assistant with retry +
+    progressive context reduction so long conversations never break.
+    """
+    MAX_ATTEMPTS = 3
+
+    # Progressive downsizing on retry
+    if attempt == 1:
+        clients_limit, orders_limit, history_limit, max_tokens = 80, 30, 20, 2000
+    elif attempt == 2:
+        clients_limit, orders_limit, history_limit, max_tokens = 30, 15, 10, 1500
+    else:
+        clients_limit, orders_limit, history_limit, max_tokens = 10, 5, 6, 1200
+
     settings = get_dashboard_settings()
     system_prompt = (settings.get('system_prompt') or '').strip() or DEFAULT_SYSTEM_PROMPT_FALLBACK
-    system_context = build_executive_context()
+    system_context = build_executive_context(clients_limit, orders_limit)
 
-    # Save the owner's message into chat_history (visible on Dashboard)
-    save_chat_message('user', user_msg, meta={'source': 'messenger'})
+    # Save user message once, on first attempt
+    if attempt == 1:
+        save_chat_message('user', user_msg, meta={'source': 'messenger'})
 
-    # Rebuild message list from persisted history
-    history = get_chat_history()
-    non_sys = [m for m in history if m.get('role') in ('user', 'assistant')]
-    if len(non_sys) > 20:
-        non_sys = non_sys[-20:]
+    # Clean conversation (no auto alerts)
+    history = get_conversation_history()
+    # Exclude current user message (already appended)
+    if history and history[-1]['role'] == 'user' and history[-1]['content'].strip() == user_msg.strip():
+        history = history[:-1]
 
-    messages = [{'role': 'system', 'content': system_prompt + '\n\n' + system_context}]
-    for m in non_sys:
-        messages.append({'role': m['role'], 'content': m.get('content', '')})
+    if len(history) > history_limit:
+        history = history[-history_limit:]
 
-    reply = call_ai_with_messages(messages, max_tokens=2500)
+    system_block = system_prompt + "\n\n" + system_context + MESSENGER_FORMAT_RULE
+    messages = [{'role': 'system', 'content': system_block}]
+    for m in history:
+        messages.append({'role': m['role'], 'content': m['content']})
+
+    total_chars = sum(len(m.get('content', '')) for m in messages)
+    add_log(f"📏 [EA] attempt={attempt} size={total_chars} chars, msgs={len(messages)}")
+
+    reply, err = call_ai_with_messages(messages, max_tokens=max_tokens)
+
     if reply is None:
+        add_log(f"❌ [EA] attempt {attempt} failed: {err}")
+        if attempt < MAX_ATTEMPTS:
+            time.sleep(1.5)
+            return ask_executive_assistant(user_msg, attempt=attempt + 1)
         return None
+
+    # Convert any leftover Markdown to Messenger-friendly text
+    reply = sanitize_for_messenger(reply)
 
     save_chat_message('assistant', reply, meta={'source': 'messenger'})
     return reply
 
 # ========================================================================
-# 8. الشخصيات — للعملاء فقط
+# 8. شخصيات العملاء
 # ========================================================================
 def get_bot_personality():
     cats_text = format_categories_for_ai()
@@ -521,42 +678,21 @@ def get_bot_personality():
 5. قدّم السعر التقريبي والمدة بوضوح.
 6. إذا وافق، اطلب بياناته.
 
-الأسعار التقريبية الواقعية (بالدولار):
-- صفحة هبوط: 1500$-4000$ (2-4 أسابيع)
-- موقع متكامل: 4000$-12000$ (6-12 أسبوع)
-- متجر إلكتروني: 3500$-15000$ (10-20 أسبوع)
-- تطبيق بسيط: 5000$-20000$ (2-4 أشهر)
-- تطبيق معقد: 25000$-60000$ (4-8 أشهر)
-- بوت AI: 300$-2000$ (1-3 أسابيع)
-- شعار: 150$-500$ (3-7 أيام)
-- هوية بصرية: 800$-3000$ (2-4 أسابيع)
-- ريلز: 30$-100$
-- فيديو يوتيوب: 150$-500$
-- موشن جرافيك (60ث): 500$-1500$
-- ERP/CRM: 8000$-40000$ (2-6 أشهر)
-- سكربت مخصص: 500$-3000$
-
+الأسعار التقريبية (بالدولار):
+- صفحة هبوط: 1500$-4000$ | موقع: 4000$-12000$ | متجر: 3500$-15000$
+- تطبيق بسيط: 5000$-20000$ | تطبيق معقد: 25000$-60000$
+- بوت AI: 300$-2000$ | شعار: 150$-500$ | هوية: 800$-3000$
+- ريلز: 30$-100$ | فيديو: 150$-500$ | موشن: 500$-1500$
+- ERP/CRM: 8000$-40000$ | سكربت: 500$-3000$
 التحويل: 1$ = 240 دج.
 
-⚠️ في نهاية كل رد، أضف سطرين منفصلين:
+⚠️ أضف في نهاية كل رد سطرين منفصلين:
 [CATEGORY:id]
-[SERVICE:اسم_الخدمة]
-
-هذه الوسوم تُحذف تلقائياً قبل الإرسال."""
+[SERVICE:اسم_الخدمة]"""
 
 DATA_COLLECTION_PERSONALITY = """أنت وكيل تسويق في B.Y PRO.
-
-مهمتك الآن: جمع بيانات العميل فقط.
-
-قواعد صارمة:
-- لا تعرض خدمات.
-- لا تذكر أسعاراً.
-- لا تشرح أي شيء.
-- اسأل السؤال المطلوب فقط.
-- ردودك قصيرة جداً (سطر واحد).
-- لا تخرج عن الموضوع.
-- لا تكرر التحية.
-- أجب بنفس لغة العميل."""
+مهمتك: جمع بيانات العميل فقط.
+قواعد: قصير جداً، سؤال واحد، لا أسعار، لا خدمات، لا تحيات مكررة."""
 
 def parse_ai_tags(text):
     cat = re.search(r'\[CATEGORY:([a-zA-Z0-9_\-]+)\]', text)
@@ -570,10 +706,10 @@ def ask_ai(user_msg, sess, extra_instruction="", personality=None):
     stage = sess.get('stage', 'welcome')
     hints = {
         'welcome': "رحّب بالعميل واسأل كيف يمكنك مساعدته.",
-        'explore': "افهم ما يريد. اسأل 1-2 سؤال. إذا سأل عن الخدمات اعرض القائمة.",
-        'details': "اطلب تفاصيل المشروع (الأهداف، المميزات، المتطلبات).",
-        'model': "اسأل العميل إذا كان لديه نموذج أو تصميم جاهز.",
-        'price': "قدّم السعر والمدة بوضوح. انتظر موافقته.",
+        'explore': "افهم ما يريد. اسأل 1-2 سؤال.",
+        'details': "اطلب تفاصيل المشروع.",
+        'model': "اسأل إذا كان لديه نموذج جاهز.",
+        'price': "قدّم السعر والمدة.",
     }
     p = personality or get_bot_personality()
     hint = hints.get(stage, "")
@@ -603,7 +739,7 @@ def send_fb(recipient_id, text):
     try:
         url = f'https://graph.facebook.com/v18.0/me/messages?access_token={PAGE_ACCESS_TOKEN}'
         payload = {'recipient': {'id': recipient_id}, 'message': {'text': text}, 'messaging_type': 'RESPONSE'}
-        r = requests.post(url, json=payload, timeout=8)
+        r = requests.post(url, json=payload, timeout=10)
         if r.status_code == 200:
             _cache['stats']['msgs_sent'] += 1
             add_log(f"📤 {str(recipient_id)[:12]}: {text[:60]}")
@@ -614,8 +750,8 @@ def send_fb(recipient_id, text):
         add_log(f"❌ إرسال: {e}")
         return False
 
-def send_fb_long(recipient_id, text, max_len=1900):
-    """تقسيم الرسائل الطويلة لتجاوز حد Messenger (2000 حرف)."""
+def send_fb_long(recipient_id, text, max_len=1800):
+    """Split long replies to respect Messenger's limit."""
     if text is None:
         return False
     text = str(text)
@@ -639,13 +775,13 @@ def send_fb_long(recipient_id, text, max_len=1900):
     ok = True
     for i, chunk in enumerate(chunks):
         if i > 0:
-            time.sleep(0.35)
+            time.sleep(0.4)
         if not send_fb(recipient_id, chunk):
             ok = False
     return ok
 
 # ========================================================================
-# 10. الجلسات — للعملاء فقط
+# 10. الجلسات
 # ========================================================================
 def new_session():
     return {
@@ -693,7 +829,6 @@ def extract_name(text):
         r'أنا\s+([\u0600-\u06FF]+(?:\s+[\u0600-\u06FF]+)?)',
         r'my name is\s+([a-zA-Z]+(?:\s+[a-zA-Z]+)?)',
         r"i'm\s+([a-zA-Z]+(?:\s+[a-zA-Z]+)?)",
-        r'name\s*[:=]\s*([a-zA-Z\u0600-\u06FF]+(?:\s+[a-zA-Z\u0600-\u06FF]+)?)',
     ]
     for pat in patterns:
         m = re.search(pat, t, re.I)
@@ -719,9 +854,9 @@ def is_skip(text):
         'لا املك', 'لا أملك', 'لااملك', 'لا امتلك',
         'ليس لدي', 'ليس عندي', 'ليست لدي',
         'ما عندي', 'ماعندي', 'ما لدي', 'مالدي',
-        'لا يوجد', 'لايوجد',
-        'بدون بريد', 'بدون ايميل', 'تجاوز', 'تجاوزها',
-        'مو موجود', 'غير موجود', 'ما عنديش', 'ماعنديش',
+        'لا يوجد', 'لايوجد', 'بدون بريد', 'بدون ايميل',
+        'تجاوز', 'تجاوزها', 'مو موجود', 'غير موجود',
+        'ما عنديش', 'ماعنديش',
         'no email', 'no social', 'none', 'nothing', 'nope'
     ]
     if tl in ['لا', 'no', 'nope']:
@@ -729,7 +864,7 @@ def is_skip(text):
     return any(w in tl for w in skip_words)
 
 # ========================================================================
-# 12. حفظ الطلب — للعملاء
+# 12. حفظ الطلب
 # ========================================================================
 def save_order(sess, sender_id):
     col, _ = get_mongo()
@@ -782,12 +917,9 @@ def process_message(sender_id, text):
     print(f"📨 [MSG] من {sender_id}", flush=True)
     print(f"📝 [MSG] النص: {text}", flush=True)
 
-    # ============================================================
-    # OWNER PATH → Executive Assistant
-    # ============================================================
     owner = get_owner_id()
     if owner and sender_id == owner:
-        print(f"👑 [OWNER] → المساعد التنفيذي (Dashboard)", flush=True)
+        print(f"👑 [OWNER] → Executive Assistant", flush=True)
         try:
             reply = ask_executive_assistant(text)
         except Exception as e:
@@ -795,31 +927,30 @@ def process_message(sender_id, text):
             reply = None
 
         if not reply:
-            reply = "عذراً سيدي، حدث خطأ مؤقت في المساعد التنفيذي. أعد المحاولة من فضلك."
+            reply = (
+                "عذراً سيدي، تعذّر الوصول إلى المساعد التنفيذي حالياً.\n"
+                "أعد إرسال رسالتك بعد لحظات من فضلك."
+            )
 
         send_fb_long(sender_id, reply)
         return
 
-    # ============================================================
-    # CUSTOMER PATH → marketing flow
-    # ============================================================
+    # ============ CUSTOMER PATH ============
     sess = get_session(sender_id)
     add_conv(sender_id, 'المستخدم', text)
     stage = sess.get('stage', 'welcome')
     print(f"🎯 [STAGE] {stage}", flush=True)
 
-    # 1. welcome
     if stage == 'welcome':
         raw = ask_ai(text, sess, extra_instruction="رحّب بالعميل واسأل كيف يمكنك مساعدته اليوم. رد مختصر.")
-        clean, cat_id, svc = parse_ai_tags(raw)
+        clean, _, _ = parse_ai_tags(raw)
         send_fb(sender_id, clean)
         add_conv(sender_id, 'الوكيل', clean)
         sess['stage'] = 'explore'
         return
 
-    # 2. explore
     if stage == 'explore':
-        raw = ask_ai(text, sess, extra_instruction="افهم احتياج العميل. اسأل سؤالاً أو سؤالين. إذا سأل عن الخدمات اعرض القائمة.")
+        raw = ask_ai(text, sess, extra_instruction="افهم احتياج العميل. اسأل سؤالاً أو سؤالين.")
         clean, cat_id, svc = parse_ai_tags(raw)
         if cat_id:
             cat = find_category(cat_id)
@@ -827,40 +958,31 @@ def process_message(sender_id, text):
                 sess['category'] = cat_id
                 sess['categoryName'] = cat.get('name', '')
                 sess['categoryIcon'] = cat.get('icon', 'fa-solid fa-box')
-                print(f"📂 [CATEGORY] {cat.get('name')}", flush=True)
         if svc:
             sess['service'] = svc
-            print(f"🛠️ [SERVICE] {svc}", flush=True)
-
         send_fb(sender_id, clean)
         add_conv(sender_id, 'الوكيل', clean)
-
         if sess.get('service'):
             sess['stage'] = 'details'
         return
 
-    # 3. details
     if stage == 'details':
         if not sess.get('projectDetails'):
             sess['projectDetails'] = text.strip()[:2000]
-            print(f"✅ [DETAILS] {len(sess['projectDetails'])} حرف", flush=True)
-        raw = ask_ai(text, sess, extra_instruction="اسأل العميل إذا كان لديه نموذج أو تصميم جاهز للمشروع. سؤال واحد فقط.")
+        raw = ask_ai(text, sess, extra_instruction="اسأل العميل إذا كان لديه نموذج أو تصميم جاهز. سؤال واحد فقط.")
         clean, _, _ = parse_ai_tags(raw)
         send_fb(sender_id, clean)
         add_conv(sender_id, 'الوكيل', clean)
         sess['stage'] = 'model'
         return
 
-    # 4. model
     if stage == 'model':
         tl = text.lower()
         if any(w in tl for w in ['نعم', 'yes', 'عندي', 'لدي', 'موجود', 'عندى']):
             sess['hasModel'] = True
         elif any(w in tl for w in ['لا', 'no', 'ليس', 'ماعندي', 'مش', 'بدون']):
             sess['hasModel'] = False
-        print(f"🖼️ [MODEL] {sess['hasModel']}", flush=True)
-
-        raw = ask_ai(text, sess, extra_instruction="قدّم السعر التقريبي والمدة بوضوح بالدولار (أو الدينار إذا طلب، 1$=240دج). انتظر موافقة العميل.")
+        raw = ask_ai(text, sess, extra_instruction="قدّم السعر التقريبي والمدة بوضوح بالدولار. انتظر موافقة العميل.")
         clean, cat_id, svc = parse_ai_tags(raw)
         if cat_id:
             cat = find_category(cat_id)
@@ -880,14 +1002,11 @@ def process_message(sender_id, text):
         dm = re.search(r'(\d+[-–]\d+\s*(?:يوم|أيام|أسبوع|أسابيع|شهر|أشهر|day|days|week|weeks|month|months))', clean, re.I)
         if dm:
             sess['duration'] = dm.group(1)
-
         sess['stage'] = 'price'
         return
 
-    # 5. price
     if stage == 'price':
         if is_confirmation(text):
-            print(f"✅ [CONFIRM] وافق", flush=True)
             sess['stage'] = 'collecting_name'
             send_fb(sender_id, "ممتاز! نحتاج بعض المعلومات لتسجيل طلبك.\nما اسمك الكامل؟")
         else:
@@ -897,52 +1016,41 @@ def process_message(sender_id, text):
             add_conv(sender_id, 'الوكيل', clean)
         return
 
-    # 6. name
     if stage == 'collecting_name':
         name = extract_name(text)
         if name:
             sess['name'] = name
             sess['stage'] = 'collecting_phone'
-            print(f"✅ [NAME] {name}", flush=True)
             send_fb(sender_id, f"تمام {name}، ما رقم هاتفك؟")
         else:
-            print(f"⚠️ [NAME] لم يُستخرج", flush=True)
             send_fb(sender_id, "ما اسمك الكامل؟")
         return
 
-    # 7. phone
     if stage == 'collecting_phone':
         phone = extract_phone(text)
         if phone:
             sess['phone'] = phone
             sess['stage'] = 'collecting_email'
-            print(f"✅ [PHONE] {phone}", flush=True)
-            send_fb(sender_id, "هل لديك بريد إلكتروني؟ (اختياري — أرسل 'تخطي' للمتابعة)")
+            send_fb(sender_id, "هل لديك بريد إلكتروني؟ (اختياري — أرسل 'تخطي')")
         else:
-            print(f"⚠️ [PHONE] لم يُستخرج", flush=True)
             send_fb(sender_id, "أرسل رقم هاتفك (مثال: +213795082763)")
         return
 
-    # 8. email
     if stage == 'collecting_email':
         if is_skip(text):
             sess['email'] = ''
             sess['stage'] = 'collecting_social'
-            print(f"⏭️ [EMAIL] تخطي", flush=True)
             send_fb(sender_id, "حسناً. هل لديك روابط سوشيال ميديا؟ (اختياري — أرسل 'تخطي')")
         else:
             email = extract_email(text)
             if email:
                 sess['email'] = email
                 sess['stage'] = 'collecting_social'
-                print(f"✅ [EMAIL] {email}", flush=True)
                 send_fb(sender_id, "هل لديك روابط سوشيال ميديا؟ (اختياري — أرسل 'تخطي')")
             else:
-                print(f"⚠️ [EMAIL] لم يُستخرج", flush=True)
                 send_fb(sender_id, "البريد غير صالح. أرسل بريداً صحيحاً أو 'تخطي'.")
         return
 
-    # 9. social
     if stage == 'collecting_social':
         if not is_skip(text):
             url = re.search(r'https?://[^\s]+', text)
@@ -953,10 +1061,8 @@ def process_message(sender_id, text):
         else:
             sess['social'] = []
 
-        print(f"💾 [SAVE] حفظ الطلب...", flush=True)
         oid = save_order(sess, sender_id)
         if oid:
-            print(f"✅ [SAVED] {oid}", flush=True)
             msg = (
                 f"شكراً {sess.get('name', '')} على ثقتك بنا 🌟\n\n"
                 f"تم تسجيل طلبك بنجاح.\n"
@@ -969,8 +1075,6 @@ def process_message(sender_id, text):
         _cache['sessions'][sender_id] = new_session()
         return
 
-    # fallback
-    print(f"🔄 [FALLBACK] {stage}", flush=True)
     raw = ask_ai(text, sess)
     clean, _, _ = parse_ai_tags(raw)
     send_fb(sender_id, clean)
@@ -1008,15 +1112,11 @@ def webhook():
                 print(f"🔘 [POSTBACK] من {sender}", flush=True)
                 continue
             if message.get('is_echo'):
-                print(f"🔁 [ECHO]", flush=True)
                 continue
             if 'delivery' in msg:
-                print(f"✓ [DELIVERY]", flush=True)
                 continue
             if 'read' in msg:
-                print(f"👁️ [READ]", flush=True)
                 continue
-            print(f"❓ [UNKNOWN]", flush=True)
 
     return 'OK', 200
 
@@ -1100,14 +1200,25 @@ def health():
         'categories_loaded': len(get_categories()),
     })
 
+@app.route('/api/test_owner_ai', methods=['GET', 'POST'])
+def api_test_owner_ai():
+    """Diagnostic endpoint — simulates an owner message and returns the reply."""
+    if request.method == 'GET':
+        msg = request.args.get('msg', 'مرحبا')
+    else:
+        data = request.json or {}
+        msg = data.get('msg', 'مرحبا')
+    reply = ask_executive_assistant(msg)
+    return jsonify({'input': msg, 'reply': reply})
+
 # ========================================================================
 # 16. Keep-Alive
 # ========================================================================
 def keep_alive():
     while True:
-        time.sleep(300)
+        time.sleep(240)
         try:
-            requests.get(SELF_URL, timeout=8)
+            requests.get(SELF_URL + '/health', timeout=10)
         except:
             pass
 
@@ -1116,7 +1227,7 @@ def keep_alive():
 # ========================================================================
 if __name__ == '__main__':
     print("=" * 70, flush=True)
-    print("🚀 B.Y PRO Marketing Agent", flush=True)
+    print("🚀 B.Y PRO Marketing Agent v3", flush=True)
     print("=" * 70, flush=True)
     print(f"👤 Owner ID: {OWNER_FB_ID or 'غير محدد'}", flush=True)
     print(f"📄 Page ID: {PAGE_ID}", flush=True)
@@ -1125,6 +1236,7 @@ if __name__ == '__main__':
     col, _ = get_mongo()
     print(f"🗄️ MongoDB: {'متصل' if col is not None else 'غير متصل'}", flush=True)
     print(f"👑 Owner → Executive Assistant (Dashboard AI)", flush=True)
+    print(f"📱 Formatting: Messenger-friendly (no Markdown tables/code)", flush=True)
     load_categories()
     print("=" * 70 + "\n", flush=True)
 
