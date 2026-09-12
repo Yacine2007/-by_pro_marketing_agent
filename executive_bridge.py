@@ -1,5 +1,5 @@
 # ========================================================================
-# B.Y PRO — Executive Bridge (fixed for pymongo bool() restriction)
+# B.Y PRO — Executive Bridge (Arabic-enforced, low-credit optimized)
 # ========================================================================
 
 import json
@@ -29,7 +29,7 @@ class ExecutiveBridge:
     PROJECTS_COL     = 'projects_registry'
     ORDERS_COL       = 'orders'
 
-    MAX_HISTORY_TURNS   = 12
+    MAX_HISTORY_TURNS   = 10
     MAX_CLIENTS         = 40
     MAX_PENDING_ORDERS  = 20
     MAX_PROJECTS        = 20
@@ -41,7 +41,7 @@ class ExecutiveBridge:
         self._lock = threading.Lock()
 
     # ====================================================================
-    # MongoDB (all checks use `is None`, never truthiness)
+    # MongoDB
     # ====================================================================
     def _ensure_client(self):
         if self._client is not None:
@@ -164,24 +164,6 @@ class ExecutiveBridge:
             self.log(f"⚠️ pending orders: {e}")
             return []
 
-    def _load_recent_orders(self, limit=10):
-        c = self._ensure_client()
-        if c is None:
-            return []
-        try:
-            col = c[self.ORDERS_DB][self.ORDERS_COL]
-            out = []
-            for d in col.find({}).sort([('createdAt', -1), ('_id', -1)]).limit(limit):
-                out.append({
-                    'name':    d.get('fullName') or d.get('name', ''),
-                    'service': d.get('service', ''),
-                    'status':  d.get('status', ''),
-                })
-            return out
-        except Exception as e:
-            self.log(f"⚠️ recent orders: {e}")
-            return []
-
     def _load_projects(self):
         db = self._db()
         if db is None:
@@ -224,7 +206,6 @@ class ExecutiveBridge:
                 'income_dzd':  round(income_dzd),
                 'expense_dzd': round(expense_dzd),
                 'net_dzd':     round(income_dzd - expense_dzd),
-                'by_currency': {'income': income, 'expense': expense},
             }
         except Exception as e:
             self.log(f"⚠️ finances: {e}")
@@ -252,7 +233,7 @@ class ExecutiveBridge:
     def _load_health(self, ai_cfg_getter, img_cfg_getter, marketer_cfg_getter):
         out = {
             'db': False, 'ai': False, 'img': False, 'marketer': False,
-            'db_size_mb': None, 'db_objects': None,
+            'db_size_mb': None,
         }
         db = self._db()
         if db is not None:
@@ -261,7 +242,6 @@ class ExecutiveBridge:
                 total = (stats.get('dataSize', 0) or 0) + (stats.get('indexSize', 0) or 0)
                 out['db'] = True
                 out['db_size_mb'] = round(total / (1024 * 1024), 2)
-                out['db_objects'] = stats.get('objects', 0)
             except Exception:
                 pass
         try: out['ai'] = ai_cfg_getter() is not None
@@ -273,7 +253,7 @@ class ExecutiveBridge:
         return out
 
     # ====================================================================
-    # Conversation persistence
+    # Conversation
     # ====================================================================
     def _load_history(self, limit=None):
         db = self._db()
@@ -319,9 +299,9 @@ class ExecutiveBridge:
             return False
 
     # ====================================================================
-    # AI call — token budget cascade
+    # AI — Cascade starting at 1200 to save credits
     # ====================================================================
-    def _call_ai(self, messages, cfg, max_tokens=1600):
+    def _call_ai(self, messages, cfg, max_tokens=1200):
         if requests is None:
             return None, "requests missing"
         if not cfg:
@@ -334,7 +314,7 @@ class ExecutiveBridge:
             'X-Title': 'B.Y PRO Executive Bridge',
         }
 
-        budgets = sorted({b for b in (max_tokens, 1200, 900, 600, 400, 250) if b <= max_tokens},
+        budgets = sorted({b for b in (max_tokens, 1000, 800, 600, 400, 250) if b <= max_tokens},
                          reverse=True)
 
         last_err = None
@@ -343,7 +323,7 @@ class ExecutiveBridge:
                 payload = {
                     'model': cfg['model'],
                     'messages': messages,
-                    'temperature': 0.7,
+                    'temperature': 0.75,
                     'max_tokens': mt,
                 }
                 t0 = time.time()
@@ -390,17 +370,16 @@ class ExecutiveBridge:
         return None, last_err or "all budgets failed"
 
     # ====================================================================
-    # System prompt builder
+    # ARABIC-ENFORCED system prompt
     # ====================================================================
     def _build_system_prompt(self, base_prompt, ctx, size='full'):
         now = datetime.now()
-        weekday = ['Monday', 'Tuesday', 'Wednesday', 'Thursday',
-                   'Friday', 'Saturday', 'Sunday'][now.weekday()]
+        weekday_ar = ['الإثنين','الثلاثاء','الأربعاء','الخميس','الجمعة','السبت','الأحد'][now.weekday()]
 
         if size == 'full':
-            c_lim, o_lim, p_lim = self.MAX_CLIENTS, self.MAX_PENDING_ORDERS, self.MAX_PROJECTS
+            c_lim, o_lim, p_lim = 30, 15, 15
         elif size == 'medium':
-            c_lim, o_lim, p_lim = 20, 10, 10
+            c_lim, o_lim, p_lim = 15, 8, 8
         else:
             c_lim, o_lim, p_lim = 8, 5, 5
 
@@ -408,44 +387,48 @@ class ExecutiveBridge:
         pending  = ctx['pending_orders'][:o_lim]
         projects = ctx['projects'][:p_lim]
 
+        # Arabic enforcement goes LAST so it overrides English base_prompt
+        arabic_override = (
+            "\n\n═══ قواعد صارمة ═══\n"
+            "🔴 اللغة: أجب دائماً بالعربية الفصحى الواضحة، مهما كانت لغة الرسالة السابقة.\n"
+            "🔴 المخاطبة: نادِ المدير: \"سيدي\" أو \"سيدي ياسين\" فقط.\n"
+            "🔴 لا تستخدم كلمات إنجليزية أو فرنسية إلا للأسماء التقنية.\n"
+            "🔴 التنسيق: نقاط (•) — لا جداول، لا ```، لا ###، لا **.\n"
+            "🔴 لا تكرر ردك السابق. كل رسالة تستحق إجابة جديدة ومختلفة.\n"
+            "🔴 كن موجزاً (2-5 أسطر عادة). لا تسأل أسئلة عامة.\n"
+            "🔴 استخدم فقط الأرقام من البيانات أعلاه، لا تخترع.\n"
+        )
+
         parts = [
-            "=== TIME ===",
-            f"{weekday}, {now.strftime('%Y-%m-%d %H:%M')}",
+            "=== الوقت الحالي ===",
+            f"{weekday_ar}، {now.strftime('%Y-%m-%d %H:%M')}",
             "",
-            "=== COMPANY ===",
+            "=== الشركة ===",
             json.dumps(ctx['settings'], ensure_ascii=False),
             "",
-            "=== STATS ===",
+            "=== إحصائيات ===",
             json.dumps(ctx['stats'], ensure_ascii=False),
             "",
-            "=== FINANCES (DZD, USD@245) ===",
+            "=== المالية (دج، دولار@245) ===",
             json.dumps(ctx['finances'], ensure_ascii=False),
             "",
-            "=== HEALTH & KEYS ===",
+            "=== الحالة والمفاتيح ===",
             json.dumps(ctx['health'], ensure_ascii=False),
             "",
-            "=== ENABLED SERVICES ===",
+            "=== الخدمات المفعّلة ===",
             json.dumps(ctx['services'], ensure_ascii=False),
             "",
-            f"=== CLIENTS ({len(clients)}) ===",
+            f"=== العملاء ({len(clients)}) ===",
             json.dumps(clients, ensure_ascii=False),
             "",
-            f"=== PENDING ORDERS ({len(pending)}) ===",
+            f"=== الطلبات المعلقة ({len(pending)}) ===",
             json.dumps(pending, ensure_ascii=False),
             "",
-            f"=== PROJECTS ({len(projects)}) ===",
+            f"=== المشاريع ({len(projects)}) ===",
             json.dumps(projects, ensure_ascii=False),
-            "",
-            "=== REPLY RULES ===",
-            "- Address him as سيدي / سيدي ياسين / Sir.",
-            "- Concise, professional, in his language.",
-            "- Bullet points (• item). NEVER markdown tables.",
-            "- NEVER use ``` code fences.",
-            "- NEVER use ### headers or ** bold.",
-            "- Plain text only (will be sent to Messenger).",
-            "- Never invent data. Use only the numbers above.",
         ]
-        return base_prompt + "\n\n" + "\n".join(parts)
+
+        return base_prompt + "\n\n" + "\n".join(parts) + arabic_override
 
     # ====================================================================
     # PUBLIC API
@@ -477,10 +460,10 @@ class ExecutiveBridge:
         raw_settings = self._load_settings()
         ctx = {
             'settings': {
-                'admin_name':          raw_settings.get('admin_name', 'Yacine'),
+                'admin_name':          raw_settings.get('admin_name', 'ياسين'),
                 'company_website':     raw_settings.get('company_website', ''),
                 'company_tagline':     raw_settings.get('company_tagline', ''),
-                'company_description': (raw_settings.get('company_description') or '')[:300],
+                'company_description': (raw_settings.get('company_description') or '')[:200],
             },
             'stats':          self._load_stats(),
             'finances':       self._load_finances(),
@@ -491,20 +474,19 @@ class ExecutiveBridge:
             'projects':       self._load_projects(),
         }
 
-        # 4. Base prompt
-        base = ''
-        if base_prompt_getter:
-            try:
-                base = base_prompt_getter() or ''
-            except Exception:
-                pass
-        if not base:
-            base = (
-                'You are the executive assistant of B.Y PRO Technologie. '
-                'Your director is Yacine. Address him as "سيدي" or "سيدي ياسين". '
-                'Speak in his language. You have FULL access to the LIVE data below. '
-                'Use ONLY that data. Never invent clients, orders, or numbers.'
-            )
+        # 4. Base prompt — Arabic-first (overrides Dashboard's English prompt)
+        base = (
+            "أنت المساعد التنفيذي لشركة B.Y PRO للتكنولوجيا والبرمجيات.\n"
+            "مديرك هو ياسين بن مقران — مؤسس الشركة.\n"
+            "تتحدث معه بالعربية دائماً.\n"
+            "لديك وصول كامل للبيانات الحية أدناه.\n"
+            "استخدم فقط هذه البيانات، لا تخترع أرقاماً."
+        )
+        # The Dashboard prompt is deliberately NOT used — it was forcing English.
+        # If you want to combine, uncomment the line below:
+        # if base_prompt_getter:
+        #     try: base = (base_prompt_getter() or '') + "\n\n" + base
+        #     except Exception: pass
 
         # 5. AI config
         cfg = ai_cfg_getter()
@@ -513,15 +495,15 @@ class ExecutiveBridge:
             self._save_msg('assistant', err)
             return err, "no ai config"
 
-        # 6. Attempts with decreasing size
-        attempts = ['full', 'medium', 'small']
+        # 6. Attempts with decreasing size (starts at 1200, not 1600)
+        attempts = [('full', 1200), ('medium', 1000), ('small', 800)]
         last_err = None
 
-        for i, size in enumerate(attempts):
+        for i, (size, budget) in enumerate(attempts):
             system_prompt = self._build_system_prompt(base, ctx, size=size)
             messages = [{'role': 'system', 'content': system_prompt}]
 
-            hist_turns = 10 if size == 'full' else (6 if size == 'medium' else 3)
+            hist_turns = 8 if size == 'full' else (5 if size == 'medium' else 3)
             for h in history[-hist_turns:]:
                 if h['content']:
                     messages.append({'role': h['role'], 'content': h['content']})
@@ -529,7 +511,6 @@ class ExecutiveBridge:
             total_chars = sum(len(m['content']) for m in messages)
             self.log(f"📏 attempt {i+1} ({size}): {len(messages)} msgs, {total_chars}c")
 
-            budget = 1600 if size == 'full' else (1200 if size == 'medium' else 800)
             reply, err = self._call_ai(messages, cfg, max_tokens=budget)
 
             if reply:
@@ -539,11 +520,10 @@ class ExecutiveBridge:
             last_err = err
             self.log(f"⚠️ attempt {i+1} failed: {err}")
 
-        # 7. Fallback
         err_reply = (
             "عذراً سيدي، تعذّر إكمال الرد.\n\n"
             "الأسباب المحتملة:\n"
-            "• نفاد رصيد OpenRouter\n"
+            "• نفاد رصيد OpenRouter (اشحن الرصيد — 5$ تكفي لشهور)\n"
             "• تعطّل مؤقت في الخدمة\n\n"
             "أعد إرسال رسالتك بعد قليل."
         )
