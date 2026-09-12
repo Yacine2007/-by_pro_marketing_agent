@@ -1,6 +1,6 @@
 # ========================================================================
 # B.Y PRO Marketing Agent - Render Server
-# v6 — Executive Bridge integration (separate module)
+# v6.1 — Executive Bridge + webhook dedup
 # ========================================================================
 import sys
 sys.stdout.reconfigure(line_buffering=True)
@@ -13,10 +13,10 @@ import time
 import threading
 from flask import Flask, request, jsonify
 from datetime import datetime, timezone
-from collections import deque
+from collections import deque, OrderedDict
 from pymongo import MongoClient
 
-# ---- Executive Bridge (separate file next to main.py) ----
+# ---- Executive Bridge (separate file) ----
 try:
     from executive_bridge import ExecutiveBridge
     BRIDGE_AVAILABLE = True
@@ -154,8 +154,28 @@ def add_log(msg):
     logs.appendleft(entry)
     print(f"[{entry['time']}] {msg}", flush=True)
 
+# ---- Webhook dedup (LRU with TTL) ----
+_WEBHOOK_SEEN = OrderedDict()
+_WEBHOOK_SEEN_MAX = 500
+_WEBHOOK_SEEN_TTL = 120  # seconds
+
+def webhook_is_duplicate(mid):
+    if not mid:
+        return False
+    now = time.time()
+    # purge old
+    expired = [k for k, ts in _WEBHOOK_SEEN.items() if now - ts > _WEBHOOK_SEEN_TTL]
+    for k in expired:
+        _WEBHOOK_SEEN.pop(k, None)
+    if mid in _WEBHOOK_SEEN:
+        return True
+    _WEBHOOK_SEEN[mid] = now
+    while len(_WEBHOOK_SEEN) > _WEBHOOK_SEEN_MAX:
+        _WEBHOOK_SEEN.popitem(last=False)
+    return False
+
 # ========================================================================
-# Executive Bridge instance (created after Mongo is up)
+# Executive Bridge instance
 # ========================================================================
 bridge = None
 if BRIDGE_AVAILABLE and MONGODB_URI:
@@ -171,7 +191,7 @@ else:
         add_log("❌ No MONGODB_URI, bridge disabled")
 
 # ========================================================================
-# AI config getters (used by bridge)
+# AI config getters
 # ========================================================================
 def get_ai_config():
     if not OPENROUTER_API_KEY:
@@ -183,7 +203,6 @@ def get_ai_config():
     }
 
 def get_img_config():
-    # The server doesn't strictly need this; report presence only
     key = os.environ.get('IMGBB_API_KEY') or os.environ.get('IMGBB_KEY')
     return {'api_key': key} if key else None
 
@@ -195,7 +214,6 @@ def get_marketer_config():
     return {'fb_page_token_ok': bool(fb_token), 'user_token_ok': bool(user_tok)}
 
 def get_dashboard_system_prompt():
-    """Load the same system_prompt the Dashboard uses."""
     db = _db()
     if db is None:
         return None
@@ -271,7 +289,7 @@ def get_owner_id():
     return None
 
 # ========================================================================
-# AI call (customer flow — single-turn)
+# AI call (customer flow)
 # ========================================================================
 def ask_ai_raw(prompt, max_tokens=1400):
     if not OPENROUTER_API_KEY:
@@ -283,7 +301,6 @@ def ask_ai_raw(prompt, max_tokens=1400):
         'HTTP-Referer': SELF_URL,
         'X-Title': 'B.Y PRO Marketing Agent',
     }
-    # Cascade on 402
     for mt in [max_tokens, 1200, 900, 600, 400]:
         try:
             payload = {
@@ -361,7 +378,7 @@ def ask_ai_customer(user_msg, sess, extra=""):
     return res[:2500] if res else "عذراً، حدث خطأ. أعد رسالتك."
 
 # ========================================================================
-# Facebook send — with 3-strategy fallback
+# Facebook send
 # ========================================================================
 def send_fb(recipient_id, text):
     if not PAGE_ACCESS_TOKEN:
@@ -370,16 +387,10 @@ def send_fb(recipient_id, text):
     url = f'https://graph.facebook.com/v18.0/me/messages?access_token={PAGE_ACCESS_TOKEN}'
     text = (text or '')[:2000]
     strategies = [
-        {'recipient': {'id': recipient_id},
-         'message': {'text': text},
-         'messaging_type': 'RESPONSE'},
-        {'recipient': {'id': recipient_id},
-         'message': {'text': text},
-         'messaging_type': 'UPDATE'},
-        {'recipient': {'id': recipient_id},
-         'message': {'text': text},
-         'messaging_type': 'MESSAGE_TAG',
-         'tag': 'HUMAN_AGENT'},
+        {'recipient': {'id': recipient_id}, 'message': {'text': text}, 'messaging_type': 'RESPONSE'},
+        {'recipient': {'id': recipient_id}, 'message': {'text': text}, 'messaging_type': 'UPDATE'},
+        {'recipient': {'id': recipient_id}, 'message': {'text': text},
+         'messaging_type': 'MESSAGE_TAG', 'tag': 'HUMAN_AGENT'},
     ]
     last_err = None
     for i, payload in enumerate(strategies):
@@ -390,10 +401,8 @@ def send_fb(recipient_id, text):
                 add_log(f"📤 → {str(recipient_id)[:12]} ({len(text)}c) [s{i+1}]")
                 return True
             last_err = f"{r.status_code}: {r.text[:180]}"
-            add_log(f"⚠️ send attempt {i+1}: {last_err}")
         except Exception as e:
             last_err = str(e)
-            add_log(f"⚠️ send exception {i+1}: {e}")
     add_log(f"❌ send_fb all failed: {last_err}")
     return False
 
@@ -423,7 +432,7 @@ def send_fb_long(recipient_id, text, max_len=1800):
     return ok
 
 # ========================================================================
-# Sessions (customers only)
+# Sessions
 # ========================================================================
 def new_session():
     return {
@@ -447,7 +456,7 @@ def add_conv(sender_id, role, message):
         sess['conversation'] = sess['conversation'][-20:]
 
 # ========================================================================
-# Extraction helpers
+# Extraction
 # ========================================================================
 def extract_phone(text):
     for pat in [r'(\+213[567][0-9]{8})', r'(0[567][0-9]{8})',
@@ -526,7 +535,7 @@ def save_order(sess, sender_id):
         return None
 
 # ========================================================================
-# Process message — the main dispatcher
+# Message dispatcher
 # ========================================================================
 def process_message(sender_id, text):
     sender_id = str(sender_id)
@@ -538,13 +547,11 @@ def process_message(sender_id, text):
     is_owner = (owner and sender_id == owner)
     print(f"👤 owner_id={owner} | sender={sender_id} | is_owner={is_owner}", flush=True)
 
-    # ==========================================================
-    # OWNER PATH → Executive Bridge
-    # ==========================================================
+    # ---- OWNER PATH ----
     if is_owner:
         print("👑 OWNER → Executive Bridge", flush=True)
         if bridge is None:
-            reply = "عذراً سيدي، جسر المساعد التنفيذي غير متوفر حالياً. راجع إعدادات السيرفر."
+            reply = "عذراً سيدي، جسر المساعد التنفيذي غير متوفر حالياً."
             send_fb_long(sender_id, reply)
             return
 
@@ -569,9 +576,7 @@ def process_message(sender_id, text):
         print(f"📤 owner reply sent={ok}, length={len(reply)}", flush=True)
         return
 
-    # ==========================================================
-    # CUSTOMER PATH (unchanged)
-    # ==========================================================
+    # ---- CUSTOMER PATH ----
     sess = get_session(sender_id)
     add_conv(sender_id, 'المستخدم', text)
     stage = sess.get('stage', 'welcome')
@@ -692,7 +697,7 @@ def process_message(sender_id, text):
     add_conv(sender_id, 'الوكيل', clean)
 
 # ========================================================================
-# Webhook
+# Webhook (with dedup)
 # ========================================================================
 @app.route('/webhook', methods=['GET'])
 def verify():
@@ -709,22 +714,26 @@ def webhook():
         for msg in entry.get('messaging', []):
             sender = str(msg.get('sender', {}).get('id', ''))
             message = msg.get('message', {})
+            mid = message.get('mid')
             if 'text' in message:
-                print(f"📥 webhook from {sender}", flush=True)
+                if webhook_is_duplicate(mid):
+                    print(f"🔁 duplicate mid={mid} — skipped", flush=True)
+                    continue
+                print(f"📥 webhook from {sender} mid={mid}", flush=True)
                 threading.Thread(target=process_message,
                                  args=(sender, message['text']),
                                  daemon=True).start()
     return 'OK', 200
 
 # ========================================================================
-# API endpoints
+# API
 # ========================================================================
 @app.route('/health')
 def health():
     col, _ = get_mongo()
     return jsonify({
         'status': 'ok',
-        'version': 'v6',
+        'version': 'v6.1',
         'mongo': col is not None,
         'bridge_available': BRIDGE_AVAILABLE,
         'bridge_ready': bridge is not None,
@@ -755,7 +764,6 @@ def api_set_owner_direct(owner_id):
     add_log(f"👑 owner set: {OWNER_FB_ID}")
     return jsonify({'success': True, 'owner_id': OWNER_FB_ID})
 
-# ---- Owner bridge endpoints ----
 @app.route('/api/owner_history', methods=['GET'])
 def api_owner_history():
     if bridge is None:
@@ -809,7 +817,6 @@ def api_test_send_fb():
     ok = send_fb(owner, msg)
     return jsonify({'owner': owner, 'sent': ok})
 
-# ---- Orders / categories ----
 @app.route('/api/orders', methods=['GET'])
 def api_orders():
     col, _ = get_mongo()
@@ -856,7 +863,7 @@ def keep_alive():
 # ========================================================================
 if __name__ == '__main__':
     print("=" * 70, flush=True)
-    print("🚀 B.Y PRO Marketing Agent v6", flush=True)
+    print("🚀 B.Y PRO Marketing Agent v6.1", flush=True)
     print("=" * 70, flush=True)
     print(f"👤 OWNER_FB_ID: {OWNER_FB_ID or 'not set'}", flush=True)
     print(f"🤖 Model: {OPENROUTER_MODEL}", flush=True)
