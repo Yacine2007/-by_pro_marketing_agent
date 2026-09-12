@@ -1,7 +1,6 @@
 # ========================================================================
 # B.Y PRO Marketing Agent - Render Server
-# v5.1 — Owner → Executive Assistant + Full Diagnostics
-# Fixes: MongoDB _db() returning Database + Facebook send fallback
+# v6 — Executive Bridge integration (separate module)
 # ========================================================================
 import sys
 sys.stdout.reconfigure(line_buffering=True)
@@ -16,6 +15,16 @@ from flask import Flask, request, jsonify
 from datetime import datetime, timezone
 from collections import deque
 from pymongo import MongoClient
+
+# ---- Executive Bridge (separate file next to main.py) ----
+try:
+    from executive_bridge import ExecutiveBridge
+    BRIDGE_AVAILABLE = True
+except ImportError as _e:
+    ExecutiveBridge = None
+    BRIDGE_AVAILABLE = False
+    _BRIDGE_IMPORT_ERR = str(_e)
+
 
 app = Flask(__name__)
 
@@ -35,10 +44,10 @@ def cors_preflight(_any=None):
     return '', 204
 
 # ========================================================================
-# تحميل الأسرار من GitHub
+# Load secrets from GitHub
 # ========================================================================
-GITHUB_TOKEN = os.environ.get('GITHUB_TOKEN')
-GITHUB_REPO  = os.environ.get('GITHUB_REPO', 'Yacine2007/APIs-B.YPRO-Managment')
+GITHUB_TOKEN  = os.environ.get('GITHUB_TOKEN')
+GITHUB_REPO   = os.environ.get('GITHUB_REPO', 'Yacine2007/APIs-B.YPRO-Managment')
 GITHUB_BRANCH = os.environ.get('GITHUB_BRANCH', 'main')
 
 SECRET_FILES = [
@@ -49,9 +58,9 @@ SECRET_FILES = [
 ]
 
 def load_secrets_from_github():
-    print("🔐 تحميل الأسرار من GitHub...", flush=True)
+    print("🔐 Loading secrets from GitHub...", flush=True)
     if not GITHUB_TOKEN:
-        print("⚠️ GITHUB_TOKEN غير موجود", flush=True)
+        print("⚠️ GITHUB_TOKEN missing", flush=True)
         return
     headers = {'Authorization': f'token {GITHUB_TOKEN}', 'Accept': 'application/vnd.github.raw'}
     for path in SECRET_FILES:
@@ -76,7 +85,7 @@ def load_secrets_from_github():
 load_secrets_from_github()
 
 # ========================================================================
-# المفاتيح
+# Config
 # ========================================================================
 PAGE_ACCESS_TOKEN = os.environ.get('PAGE_ACCESS_TOKEN')
 VERIFY_TOKEN      = os.environ.get('VERIFY_TOKEN', 'bypro_verify_2026')
@@ -94,55 +103,40 @@ SETTINGS_DB_NAME    = os.environ.get('SETTINGS_DB_NAME', 'DashboardDB')
 SETTINGS_COLLECTION = 'settings'
 SETTINGS_KEY        = 'service_settings'
 
-# Dashboard shared collections
-DASHBOARD_DB_NAME     = 'DashboardDB'
-CHAT_COLLECTION       = 'chat_history'
-CLIENTS_COLLECTION    = 'clients'
-PROJECTS_COLLECTION   = 'projects_registry'
-DASH_SETTINGS_COLL    = 'settings'
-
-# Owner's isolated conversation (source of truth for Messenger)
-OWNER_CHAT_COLLECTION = 'messenger_owner_chat'
-
 SELF_URL = os.environ.get('SELF_URL', 'https://by-pro-marketing-agent-v2jk.onrender.com')
 
 # ========================================================================
-# MongoDB
+# MongoDB (server-side)
 # ========================================================================
 _mongo_client = None
-_orders_col = None
+_orders_col   = None
 _settings_col = None
 
 def get_mongo():
-    """Initialize MongoDB connection and return (orders_col, settings_col)."""
     global _mongo_client, _orders_col, _settings_col
     if _orders_col is not None:
         return _orders_col, _settings_col
     if not MONGODB_URI:
-        print("❌ MONGODB_URI غير موجود", flush=True)
+        print("❌ MONGODB_URI missing", flush=True)
         return None, None
     try:
-        _mongo_client = MongoClient(
-            MONGODB_URI,
-            serverSelectionTimeoutMS=15000,
-            tlsAllowInvalidCertificates=True,
-        )
+        _mongo_client = MongoClient(MONGODB_URI, serverSelectionTimeoutMS=15000,
+                                    tlsAllowInvalidCertificates=True)
         _mongo_client.admin.command('ping')
-        _orders_col = _mongo_client[ORDERS_DB_NAME][ORDERS_COLLECTION]
+        _orders_col   = _mongo_client[ORDERS_DB_NAME][ORDERS_COLLECTION]
         _settings_col = _mongo_client[SETTINGS_DB_NAME][SETTINGS_COLLECTION]
-        print("✅ MongoDB متصل", flush=True)
+        print("✅ MongoDB connected", flush=True)
         return _orders_col, _settings_col
     except Exception as e:
         print(f"❌ MongoDB: {e}", flush=True)
         return None, None
 
 def _db():
-    """Return the Dashboard DATABASE object (not the client)."""
     if _mongo_client is None:
         get_mongo()
     if _mongo_client is None:
         return None
-    return _mongo_client[DASHBOARD_DB_NAME]
+    return _mongo_client[SETTINGS_DB_NAME]
 
 # ========================================================================
 # Utilities
@@ -161,15 +155,68 @@ def add_log(msg):
     print(f"[{entry['time']}] {msg}", flush=True)
 
 # ========================================================================
-# Categories
+# Executive Bridge instance (created after Mongo is up)
+# ========================================================================
+bridge = None
+if BRIDGE_AVAILABLE and MONGODB_URI:
+    try:
+        bridge = ExecutiveBridge(MONGODB_URI, logger=add_log)
+        add_log("🌉 Executive Bridge initialized")
+    except Exception as e:
+        add_log(f"❌ Bridge init failed: {e}")
+else:
+    if not BRIDGE_AVAILABLE:
+        add_log(f"❌ ExecutiveBridge import failed: {_BRIDGE_IMPORT_ERR}")
+    if not MONGODB_URI:
+        add_log("❌ No MONGODB_URI, bridge disabled")
+
+# ========================================================================
+# AI config getters (used by bridge)
+# ========================================================================
+def get_ai_config():
+    if not OPENROUTER_API_KEY:
+        return None
+    return {
+        'api_key': OPENROUTER_API_KEY,
+        'model':   OPENROUTER_MODEL,
+        'api_url': OPENROUTER_URL,
+    }
+
+def get_img_config():
+    # The server doesn't strictly need this; report presence only
+    key = os.environ.get('IMGBB_API_KEY') or os.environ.get('IMGBB_KEY')
+    return {'api_key': key} if key else None
+
+def get_marketer_config():
+    fb_token = os.environ.get('PAGE_ACCESS_TOKEN')
+    user_tok = os.environ.get('USER_TOKEN') or os.environ.get('VERIFY_TOKEN')
+    if not fb_token:
+        return None
+    return {'fb_page_token_ok': bool(fb_token), 'user_token_ok': bool(user_tok)}
+
+def get_dashboard_system_prompt():
+    """Load the same system_prompt the Dashboard uses."""
+    db = _db()
+    if db is None:
+        return None
+    try:
+        doc = db[SETTINGS_COLLECTION].find_one({'key': 'system_prompt'})
+        if doc and doc.get('value'):
+            return doc['value']
+    except Exception:
+        pass
+    return None
+
+# ========================================================================
+# Categories (customer flow)
 # ========================================================================
 DEFAULT_CATEGORIES = [
-    {"id": "design", "enabled": True, "name": "التصميم", "services": ["شعارات","هوية بصرية","سوشيال ميديا"]},
-    {"id": "web", "enabled": True, "name": "مواقع", "services": ["صفحة هبوط","متجر","موقع"]},
-    {"id": "apps", "enabled": True, "name": "تطبيقات", "services": ["أندرويد","iOS","Web App"]},
-    {"id": "systems", "enabled": True, "name": "أنظمة", "services": ["ERP","CRM","بوتات"]},
-    {"id": "marketing", "enabled": True, "name": "تسويق", "services": ["تسويق رقمي","SEO"]},
-    {"id": "other", "enabled": True, "name": "أخرى", "services": ["خدمة مخصصة"]},
+    {"id": "design",  "enabled": True, "name": "التصميم",  "services": ["شعارات","هوية بصرية","سوشيال ميديا"]},
+    {"id": "web",     "enabled": True, "name": "مواقع",     "services": ["صفحة هبوط","متجر","موقع"]},
+    {"id": "apps",    "enabled": True, "name": "تطبيقات",   "services": ["أندرويد","iOS","Web App"]},
+    {"id": "systems", "enabled": True, "name": "أنظمة",     "services": ["ERP","CRM","بوتات"]},
+    {"id": "marketing","enabled":True, "name": "تسويق",     "services": ["تسويق رقمي","SEO"]},
+    {"id": "other",   "enabled": True, "name": "أخرى",      "services": ["خدمة مخصصة"]},
 ]
 
 def load_categories():
@@ -181,7 +228,7 @@ def load_categories():
         if doc and doc.get('value') and doc['value'].get('categories'):
             cats = doc['value']['categories']
             _cache['categories'] = cats
-            add_log(f"✅ {len(cats)} تصنيف محمّل")
+            add_log(f"✅ {len(cats)} categories loaded")
             return cats
     except Exception as e:
         add_log(f"❌ categories: {e}")
@@ -224,212 +271,48 @@ def get_owner_id():
     return None
 
 # ========================================================================
-# AI — single function used everywhere
+# AI call (customer flow — single-turn)
 # ========================================================================
-def ask_ai_raw(prompt, max_tokens=2000):
-    """Single-turn AI call — used by both customer flow and owner flow."""
+def ask_ai_raw(prompt, max_tokens=1400):
     if not OPENROUTER_API_KEY:
-        add_log("❌ OPENROUTER_API_KEY غير موجود")
+        add_log("❌ OPENROUTER_API_KEY missing")
         return None
-    try:
-        headers = {
-            'Authorization': f'Bearer {OPENROUTER_API_KEY}',
-            'Content-Type': 'application/json',
-            'HTTP-Referer': SELF_URL,
-            'X-Title': 'B.Y PRO Agent',
-        }
-        payload = {
-            'model': OPENROUTER_MODEL,
-            'messages': [{'role': 'user', 'content': prompt}],
-            'temperature': 0.7,
-            'max_tokens': max_tokens,
-        }
-        t0 = time.time()
-        r = requests.post(OPENROUTER_URL, headers=headers, json=payload, timeout=90)
-        dt = round(time.time() - t0, 1)
-        if r.status_code == 200:
-            data = r.json()
-            answer = (data.get('choices') or [{}])[0].get('message', {}).get('content', '')
-            if answer and answer.strip():
-                add_log(f"✅ AI ({dt}s, {len(answer)} chars)")
-                return answer.strip()
-            add_log(f"⚠️ AI empty ({dt}s)")
-            return None
-        add_log(f"❌ AI {r.status_code} ({dt}s): {r.text[:200]}")
-        return None
-    except Exception as e:
-        add_log(f"❌ AI exception: {e}")
-        return None
-
-# ========================================================================
-# OWNER — isolated conversation + context
-# ========================================================================
-def owner_history_load(limit=12):
-    """Load owner's recent messages from the isolated collection."""
-    db = _db()
-    if db is None:
-        return []
-    try:
-        docs = list(db[OWNER_CHAT_COLLECTION].find({}).sort('_id', -1).limit(limit))
-        docs.reverse()
-        return [{'role': d.get('role', 'user'), 'content': d.get('content', '')} for d in docs]
-    except Exception as e:
-        add_log(f"⚠️ owner_history_load: {e}")
-        return []
-
-def owner_history_save(role, content):
-    """Save to owner collection + mirror into Dashboard chat_history."""
-    db = _db()
-    if db is None:
-        return
-    ts = datetime.now(timezone.utc).isoformat()
-    try:
-        db[OWNER_CHAT_COLLECTION].insert_one({'role': role, 'content': content, 'timestamp': ts})
-    except Exception as e:
-        add_log(f"⚠️ owner_save (own): {e}")
-    try:
-        db[CHAT_COLLECTION].insert_one({
-            'role': role, 'content': content, 'timestamp': ts,
-            'meta': {'source': 'messenger'},
-        })
-    except Exception as e:
-        add_log(f"⚠️ owner_save (mirror): {e}")
-
-def owner_history_reset():
-    db = _db()
-    if db is None:
-        return False
-    try:
-        db[OWNER_CHAT_COLLECTION].delete_many({})
-        return True
-    except Exception:
-        return False
-
-def get_clients(limit=40):
-    db = _db()
-    if db is None:
-        return []
-    try:
-        out = []
-        for d in db[CLIENTS_COLLECTION].find({}).sort('_id', -1).limit(limit):
-            order = d.get('order') or {}
-            item = {
-                'name': d.get('name', ''),
-                'phone': d.get('phone', ''),
-                'email': d.get('email', ''),
-                'service': order.get('service', ''),
-                'project': order.get('project_name', '') or d.get('project_name', ''),
-                'status': d.get('status', ''),
+    headers = {
+        'Authorization': f'Bearer {OPENROUTER_API_KEY}',
+        'Content-Type': 'application/json',
+        'HTTP-Referer': SELF_URL,
+        'X-Title': 'B.Y PRO Marketing Agent',
+    }
+    # Cascade on 402
+    for mt in [max_tokens, 1200, 900, 600, 400]:
+        try:
+            payload = {
+                'model': OPENROUTER_MODEL,
+                'messages': [{'role': 'user', 'content': prompt}],
+                'temperature': 0.7,
+                'max_tokens': mt,
             }
-            out.append({k: v for k, v in item.items() if v})
-        return out
-    except Exception as e:
-        add_log(f"⚠️ clients: {e}")
-        return []
-
-def get_pending_orders(limit=15):
-    col, _ = get_mongo()
-    if col is None:
-        return []
-    try:
-        query = {'$or': [
-            {'status': 'new'},
-            {'status': {'$exists': False}},
-            {'status': None},
-            {'status': 'pending'},
-        ]}
-        out = []
-        for d in col.find(query).sort([('createdAt', -1), ('_id', -1)]).limit(limit):
-            out.append({
-                'name': d.get('fullName') or d.get('name', ''),
-                'phone': d.get('phone', ''),
-                'service': d.get('service', ''),
-                'project': d.get('projectName', ''),
-            })
-        return out
-    except Exception as e:
-        add_log(f"⚠️ orders: {e}")
-        return []
-
-def get_stats():
-    db = _db()
-    if db is None:
-        return {}
-    try:
-        col = db[PROJECTS_COLLECTION]
-        return {
-            'clients': db[CLIENTS_COLLECTION].count_documents({}),
-            'projects': col.count_documents({'kind': 'project'}),
-            'completed': col.count_documents({'kind': 'project', 'progress': {'$gte': 100}}),
-        }
-    except Exception as e:
-        add_log(f"⚠️ stats: {e}")
-        return {}
-
-def ask_ea(user_msg):
-    """Owner path — single-turn, isolated history, full business context."""
-    add_log(f"👑 [EA] معالجة رسالة المدير ({len(user_msg)} حرف)")
-
-    # Save user message
-    owner_history_save('user', user_msg)
-
-    # Load previous conversation (without the just-saved message)
-    history = owner_history_load(limit=13)
-    if history and history[-1]['role'] == 'user' and history[-1]['content'].strip() == user_msg.strip():
-        history = history[:-1]
-
-    history_text = ""
-    for h in history[-10:]:
-        role_ar = "المدير" if h['role'] == 'user' else "المساعد"
-        history_text += f"{role_ar}: {h['content']}\n"
-
-    # Business context
-    stats = get_stats()
-    clients = get_clients(40)
-    pending = get_pending_orders(15)
-    now = datetime.now()
-
-    prompt = f"""أنت المساعد التنفيذي لشركة B.Y PRO للتكنولوجيا والبرمجيات.
-اسم المدير: ياسين بن مقران. نادِه "سيدي" أو "سيدي ياسين".
-أجب بنفس لغة المدير.
-
-=== الوقت الحالي ===
-{now.strftime('%A, %Y-%m-%d %H:%M')}
-
-=== إحصائيات ===
-- العملاء: {stats.get('clients', 0)}
-- المشاريع: {stats.get('projects', 0)}
-- المشاريع المكتملة: {stats.get('completed', 0)}
-- الطلبات المعلقة: {len(pending)}
-
-=== قائمة العملاء (آخر {len(clients)}) ===
-{json.dumps(clients, ensure_ascii=False)}
-
-=== الطلبات المعلقة ===
-{json.dumps(pending, ensure_ascii=False)}
-
-=== قواعد الرد ===
-- مختصر ومهني.
-- استخدم النقاط (•) وليس الجداول.
-- لا تستخدم ``` أو ### أو **.
-- استخدم البيانات أعلاه فقط، لا تخترع أرقاماً.
-
-=== سجل المحادثة ===
-{history_text if history_text else '(محادثة جديدة)'}
-
-المدير: {user_msg}
-المساعد:"""
-
-    reply = ask_ai_raw(prompt, max_tokens=1800)
-
-    if reply:
-        owner_history_save('assistant', reply)
-        return reply
-
+            t0 = time.time()
+            r = requests.post(OPENROUTER_URL, headers=headers, json=payload, timeout=90)
+            dt = round(time.time() - t0, 1)
+            if r.status_code == 200:
+                answer = (r.json().get('choices') or [{}])[0].get('message', {}).get('content', '')
+                if answer and answer.strip():
+                    add_log(f"✅ AI ({dt}s, {len(answer)}c, mt={mt})")
+                    return answer.strip()
+                return None
+            if r.status_code == 402:
+                add_log(f"⚠️ AI 402 (mt={mt}) — reducing")
+                continue
+            add_log(f"❌ AI {r.status_code}: {r.text[:180]}")
+            return None
+        except Exception as e:
+            add_log(f"❌ AI exception: {e}")
+            return None
     return None
 
 # ========================================================================
-# CUSTOMER path
+# Customer personality
 # ========================================================================
 def get_bot_personality():
     return f"""أنت وكيل تسويق لخدمة العملاء في B.Y PRO.
@@ -461,8 +344,8 @@ def ask_ai_customer(user_msg, sess, extra=""):
         'welcome': "رحّب واسأل كيف يمكنك المساعدة.",
         'explore': "افهم ما يريد. اسأل 1-2 سؤال.",
         'details': "اطلب تفاصيل المشروع.",
-        'model': "اسأل إذا كان لديه نموذج.",
-        'price': "قدّم السعر والمدة.",
+        'model':   "اسأل إذا كان لديه نموذج.",
+        'price':   "قدّم السعر والمدة.",
     }
     full = f"""{get_bot_personality()}
 
@@ -478,57 +361,69 @@ def ask_ai_customer(user_msg, sess, extra=""):
     return res[:2500] if res else "عذراً، حدث خطأ. أعد رسالتك."
 
 # ========================================================================
-# Facebook Send — with 3-strategy fallback
+# Facebook send — with 3-strategy fallback
 # ========================================================================
 def send_fb(recipient_id, text):
     if not PAGE_ACCESS_TOKEN:
-        add_log("❌ PAGE_ACCESS_TOKEN مفقود")
+        add_log("❌ PAGE_ACCESS_TOKEN missing")
         return False
-
     url = f'https://graph.facebook.com/v18.0/me/messages?access_token={PAGE_ACCESS_TOKEN}'
     text = (text or '')[:2000]
-
     strategies = [
-        # 1) Standard reply within 24h window
-        {
-            'recipient': {'id': recipient_id},
-            'message': {'text': text},
-            'messaging_type': 'RESPONSE',
-        },
-        # 2) Update type (used for non-reply messages)
-        {
-            'recipient': {'id': recipient_id},
-            'message': {'text': text},
-            'messaging_type': 'UPDATE',
-        },
-        # 3) Human agent tag (bypasses window restrictions)
-        {
-            'recipient': {'id': recipient_id},
-            'message': {'text': text},
-            'messaging_type': 'MESSAGE_TAG',
-            'tag': 'HUMAN_AGENT',
-        },
+        {'recipient': {'id': recipient_id},
+         'message': {'text': text},
+         'messaging_type': 'RESPONSE'},
+        {'recipient': {'id': recipient_id},
+         'message': {'text': text},
+         'messaging_type': 'UPDATE'},
+        {'recipient': {'id': recipient_id},
+         'message': {'text': text},
+         'messaging_type': 'MESSAGE_TAG',
+         'tag': 'HUMAN_AGENT'},
     ]
-
     last_err = None
     for i, payload in enumerate(strategies):
         try:
             r = requests.post(url, json=payload, timeout=10)
             if r.status_code == 200:
                 _cache['stats']['msgs_sent'] += 1
-                add_log(f"📤 → {str(recipient_id)[:12]} ({len(text)} chars) [strategy {i+1}]")
+                add_log(f"📤 → {str(recipient_id)[:12]} ({len(text)}c) [s{i+1}]")
                 return True
             last_err = f"{r.status_code}: {r.text[:180]}"
-            add_log(f"⚠️ send_fb attempt {i+1} failed: {last_err}")
+            add_log(f"⚠️ send attempt {i+1}: {last_err}")
         except Exception as e:
             last_err = str(e)
-            add_log(f"⚠️ send_fb attempt {i+1} exception: {e}")
-
-    add_log(f"❌ send_fb all strategies failed: {last_err}")
+            add_log(f"⚠️ send exception {i+1}: {e}")
+    add_log(f"❌ send_fb all failed: {last_err}")
     return False
 
+def send_fb_long(recipient_id, text, max_len=1800):
+    if text is None:
+        return False
+    text = str(text)
+    if len(text) <= max_len:
+        return send_fb(recipient_id, text)
+    chunks = []
+    remaining = text
+    while remaining:
+        if len(remaining) <= max_len:
+            chunks.append(remaining); break
+        split_at = remaining.rfind('\n', 0, max_len)
+        if split_at < max_len // 2:
+            split_at = remaining.rfind(' ', 0, max_len)
+        if split_at < max_len // 2:
+            split_at = max_len
+        chunks.append(remaining[:split_at])
+        remaining = remaining[split_at:].lstrip()
+    ok = True
+    for i, chunk in enumerate(chunks):
+        if i > 0: time.sleep(0.4)
+        if not send_fb(recipient_id, chunk):
+            ok = False
+    return ok
+
 # ========================================================================
-# Sessions (customers)
+# Sessions (customers only)
 # ========================================================================
 def new_session():
     return {
@@ -555,7 +450,8 @@ def add_conv(sender_id, role, message):
 # Extraction helpers
 # ========================================================================
 def extract_phone(text):
-    for pat in [r'(\+213[567][0-9]{8})', r'(0[567][0-9]{8})', r'(\+[1-9][0-9]{7,14})', r'([0-9]{10,13})']:
+    for pat in [r'(\+213[567][0-9]{8})', r'(0[567][0-9]{8})',
+                r'(\+[1-9][0-9]{7,14})', r'([0-9]{10,13})']:
         m = re.search(pat, text)
         if m:
             return m.group(1)
@@ -586,13 +482,15 @@ def extract_name(text):
     return None
 
 def is_confirmation(text):
-    return any(w in text.lower() for w in ['نعم','موافق','تمام','اوكي','اوك','ok','yes','ماشي','اتفقنا','أوافق'])
+    return any(w in text.lower() for w in
+               ['نعم','موافق','تمام','اوكي','اوك','ok','yes','ماشي','اتفقنا','أوافق'])
 
 def is_skip(text):
     tl = text.lower().strip()
     if tl in ['لا','no','nope']:
         return True
-    return any(w in tl for w in ['تخطي','skip','بدون','مش','لا املك','ليس لدي','ماعندي','تجاوز','no email'])
+    return any(w in tl for w in
+               ['تخطي','skip','بدون','مش','لا املك','ليس لدي','ماعندي','تجاوز','no email'])
 
 def save_order(sess, sender_id):
     col, _ = get_mongo()
@@ -604,21 +502,21 @@ def save_order(sess, sender_id):
         cat_icon = cat.get('icon', 'fa-solid fa-box') if cat else 'fa-solid fa-box'
         details = sess.get('projectDetails', '')
         doc = {
-            'id': f"ORD-{int(time.time() * 1000)}",
-            'category': sess.get('category', 'other'),
+            'id':           f"ORD-{int(time.time() * 1000)}",
+            'category':     sess.get('category', 'other'),
             'categoryName': cat_name,
             'categoryIcon': cat_icon,
-            'service': sess.get('service', ''),
-            'projectName': details[:80] if details else sess.get('service', ''),
+            'service':      sess.get('service', ''),
+            'projectName':  details[:80] if details else sess.get('service', ''),
             'projectDetails': details,
-            'hasModel': bool(sess.get('hasModel')),
-            'fullName': sess.get('name', ''),
-            'phone': sess.get('phone', ''),
-            'email': sess.get('email', ''),
+            'hasModel':     bool(sess.get('hasModel')),
+            'fullName':     sess.get('name', ''),
+            'phone':        sess.get('phone', ''),
+            'email':        sess.get('email', ''),
             'socialAccounts': sess.get('social', []),
-            'createdAt': datetime.now(timezone.utc).isoformat(),
-            'status': 'pending',
-            'isNew': True,
+            'createdAt':    datetime.now(timezone.utc).isoformat(),
+            'status':       'pending',
+            'isNew':        True,
         }
         r = col.insert_one(doc)
         add_log(f"✅ order saved: {r.inserted_id}")
@@ -628,7 +526,7 @@ def save_order(sess, sender_id):
         return None
 
 # ========================================================================
-# Message processing
+# Process message — the main dispatcher
 # ========================================================================
 def process_message(sender_id, text):
     sender_id = str(sender_id)
@@ -641,27 +539,38 @@ def process_message(sender_id, text):
     print(f"👤 owner_id={owner} | sender={sender_id} | is_owner={is_owner}", flush=True)
 
     # ==========================================================
-    # OWNER PATH
+    # OWNER PATH → Executive Bridge
     # ==========================================================
     if is_owner:
-        print("👑 OWNER PATH", flush=True)
-        reply = None
+        print("👑 OWNER → Executive Bridge", flush=True)
+        if bridge is None:
+            reply = "عذراً سيدي، جسر المساعد التنفيذي غير متوفر حالياً. راجع إعدادات السيرفر."
+            send_fb_long(sender_id, reply)
+            return
+
         try:
-            reply = ask_ea(text)
+            reply, err = bridge.get_owner_reply(
+                text,
+                ai_cfg_getter=get_ai_config,
+                img_cfg_getter=get_img_config,
+                marketer_cfg_getter=get_marketer_config,
+                base_prompt_getter=get_dashboard_system_prompt,
+            )
         except Exception as e:
-            add_log(f"❌ EA exception: {e}")
+            add_log(f"❌ Bridge exception: {e}")
             import traceback
             traceback.print_exc()
+            reply, err = None, str(e)
 
         if not reply:
-            reply = "عذراً سيدي، تعذّر الوصول إلى المساعد التنفيذي. أعد المحاولة من فضلك."
+            reply = "عذراً سيدي، حدث خطأ مؤقت. أعد المحاولة من فضلك."
 
-        ok = send_fb(sender_id, reply)
+        ok = send_fb_long(sender_id, reply)
         print(f"📤 owner reply sent={ok}, length={len(reply)}", flush=True)
         return
 
     # ==========================================================
-    # CUSTOMER PATH
+    # CUSTOMER PATH (unchanged)
     # ==========================================================
     sess = get_session(sender_id)
     add_conv(sender_id, 'المستخدم', text)
@@ -744,7 +653,7 @@ def process_message(sender_id, text):
         if phone:
             sess['phone'] = phone
             sess['stage'] = 'collecting_email'
-            send_fb(sender_id, "هل لديك بريد إلكتروني؟ ('تخطي' للمتابعة)")
+            send_fb(sender_id, "هل لديك بريد إلكتروني؟ ('تخطي')")
         else:
             send_fb(sender_id, "أرسل رقم هاتفك")
         return
@@ -767,7 +676,8 @@ def process_message(sender_id, text):
     if stage == 'collecting_social':
         if not is_skip(text):
             url = re.search(r'https?://[^\s]+', text)
-            sess['social'].append({'platform': 'social', 'url': url.group(0) if url else text.strip()[:200]})
+            sess['social'].append({'platform': 'social',
+                                   'url': url.group(0) if url else text.strip()[:200]})
         oid = save_order(sess, sender_id)
         if oid:
             send_fb(sender_id, f"شكراً {sess.get('name','')} 🌟\nتم تسجيل طلبك.\nفريق B.Y PRO")
@@ -800,12 +710,10 @@ def webhook():
             sender = str(msg.get('sender', {}).get('id', ''))
             message = msg.get('message', {})
             if 'text' in message:
-                print(f"📥 webhook text from {sender}", flush=True)
-                threading.Thread(
-                    target=process_message,
-                    args=(sender, message['text']),
-                    daemon=True,
-                ).start()
+                print(f"📥 webhook from {sender}", flush=True)
+                threading.Thread(target=process_message,
+                                 args=(sender, message['text']),
+                                 daemon=True).start()
     return 'OK', 200
 
 # ========================================================================
@@ -816,13 +724,14 @@ def health():
     col, _ = get_mongo()
     return jsonify({
         'status': 'ok',
-        'version': 'v5.1',
+        'version': 'v6',
         'mongo': col is not None,
+        'bridge_available': BRIDGE_AVAILABLE,
+        'bridge_ready': bridge is not None,
         'owner_id': _cache.get('owner_id'),
         'owner_fb_id_env': OWNER_FB_ID,
         'ai_key_set': bool(OPENROUTER_API_KEY),
         'fb_token_set': bool(PAGE_ACCESS_TOKEN),
-        'categories_loaded': len(get_categories()),
         'stats': _cache['stats'],
     })
 
@@ -846,42 +755,61 @@ def api_set_owner_direct(owner_id):
     add_log(f"👑 owner set: {OWNER_FB_ID}")
     return jsonify({'success': True, 'owner_id': OWNER_FB_ID})
 
+# ---- Owner bridge endpoints ----
+@app.route('/api/owner_history', methods=['GET'])
+def api_owner_history():
+    if bridge is None:
+        return jsonify({'error': 'bridge unavailable'}), 503
+    limit = int(request.args.get('limit', 50))
+    return jsonify(bridge.get_conversation(limit=limit))
+
+@app.route('/api/owner_reset', methods=['POST', 'GET'])
+def api_owner_reset():
+    if bridge is None:
+        return jsonify({'error': 'bridge unavailable'}), 503
+    return jsonify({'success': bridge.reset_conversation()})
+
+@app.route('/api/owner_report', methods=['GET'])
+def api_owner_report():
+    if bridge is None:
+        return jsonify({'error': 'bridge unavailable'}), 503
+    try:
+        return jsonify(bridge.get_full_report(
+            get_ai_config, get_img_config, get_marketer_config
+        ))
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
 @app.route('/api/test_owner_ai', methods=['GET', 'POST'])
 def api_test_owner_ai():
-    """Test EA pipeline without Messenger."""
+    if bridge is None:
+        return jsonify({'error': 'bridge unavailable'}), 503
     if request.method == 'GET':
         msg = request.args.get('msg', 'مرحبا، كم عدد العملاء؟')
     else:
         msg = (request.json or {}).get('msg', 'مرحبا')
-    reply = ask_ea(msg)
-    return jsonify({
-        'input': msg,
-        'reply': reply,
-        'ai_key_set': bool(OPENROUTER_API_KEY),
-        'mongo_connected': _db() is not None,
-    })
+    reply, err = bridge.get_owner_reply(
+        msg,
+        ai_cfg_getter=get_ai_config,
+        img_cfg_getter=get_img_config,
+        marketer_cfg_getter=get_marketer_config,
+        base_prompt_getter=get_dashboard_system_prompt,
+    )
+    return jsonify({'input': msg, 'reply': reply, 'error': err})
 
 @app.route('/api/test_send_fb', methods=['GET', 'POST'])
 def api_test_send_fb():
-    """Test send_fb to owner without going through AI."""
     if request.method == 'GET':
-        msg = request.args.get('msg', '🧪 اختبار الإرسال من السيرفر')
+        msg = request.args.get('msg', '🧪 Test send')
     else:
-        msg = (request.json or {}).get('msg', '🧪 اختبار الإرسال من السيرفر')
+        msg = (request.json or {}).get('msg', '🧪 Test send')
     owner = get_owner_id()
     if not owner:
         return jsonify({'error': 'owner not set'}), 400
     ok = send_fb(owner, msg)
-    return jsonify({'owner': owner, 'sent': ok, 'fb_token_set': bool(PAGE_ACCESS_TOKEN)})
+    return jsonify({'owner': owner, 'sent': ok})
 
-@app.route('/api/owner_history', methods=['GET'])
-def api_owner_history():
-    return jsonify(owner_history_load(limit=int(request.args.get('limit', 30))))
-
-@app.route('/api/owner_reset', methods=['POST', 'GET'])
-def api_owner_reset():
-    return jsonify({'success': owner_history_reset()})
-
+# ---- Orders / categories ----
 @app.route('/api/orders', methods=['GET'])
 def api_orders():
     col, _ = get_mongo()
@@ -913,7 +841,7 @@ def api_dashboard():
     return jsonify({'total_orders': total, 'completed': completed, 'pending': pending})
 
 # ========================================================================
-# Keep alive
+# Keep-alive
 # ========================================================================
 def keep_alive():
     while True:
@@ -928,15 +856,15 @@ def keep_alive():
 # ========================================================================
 if __name__ == '__main__':
     print("=" * 70, flush=True)
-    print("🚀 B.Y PRO Marketing Agent v5.1", flush=True)
+    print("🚀 B.Y PRO Marketing Agent v6", flush=True)
     print("=" * 70, flush=True)
-    print(f"👤 OWNER_FB_ID: {OWNER_FB_ID or 'غير محدد'}", flush=True)
-    print(f"📄 PAGE_ID: {PAGE_ID}", flush=True)
+    print(f"👤 OWNER_FB_ID: {OWNER_FB_ID or 'not set'}", flush=True)
     print(f"🤖 Model: {OPENROUTER_MODEL}", flush=True)
-    print(f"🔑 PAGE_ACCESS_TOKEN: {'موجود' if PAGE_ACCESS_TOKEN else 'مفقود!'}", flush=True)
-    print(f"🔑 OPENROUTER_API_KEY: {'موجود' if OPENROUTER_API_KEY else 'مفقود!'}", flush=True)
+    print(f"🔑 PAGE_ACCESS_TOKEN: {'set' if PAGE_ACCESS_TOKEN else 'MISSING'}", flush=True)
+    print(f"🔑 OPENROUTER_API_KEY: {'set' if OPENROUTER_API_KEY else 'MISSING'}", flush=True)
     col, _ = get_mongo()
-    print(f"🗄️ MongoDB: {'متصل' if col is not None else 'غير متصل'}", flush=True)
+    print(f"🗄️ MongoDB: {'connected' if col is not None else 'not connected'}", flush=True)
+    print(f"🌉 Bridge: {'READY' if bridge else 'NOT AVAILABLE'}", flush=True)
     load_categories()
     print("=" * 70 + "\n", flush=True)
 
