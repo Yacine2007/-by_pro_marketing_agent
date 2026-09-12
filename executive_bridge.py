@@ -1,17 +1,5 @@
 # ========================================================================
-# B.Y PRO — Executive Bridge
-# ------------------------------------------------------------------------
-# Modular pipeline that gives the OWNER full company intelligence through
-# Facebook Messenger, using the same MongoDB the Dashboard uses.
-#
-# Features:
-#   • Isolated conversation (owner_messenger_chat) — clean and stable
-#   • Mirror to chat_history so Dashboard shows the same dialogue
-#   • Full business context: clients, orders, projects, finances,
-#     service settings, API keys status, system health
-#   • Credit-aware token cascade (no more 402 interruptions)
-#   • Robust history management (bounded, no growth)
-#   • Never silent — always returns a usable reply
+# B.Y PRO — Executive Bridge (fixed for pymongo bool() restriction)
 # ========================================================================
 
 import json
@@ -32,7 +20,6 @@ except ImportError:
 
 class ExecutiveBridge:
 
-    # ---- Collection / DB names ----------------------------------------
     DASHBOARD_DB     = 'DashboardDB'
     ORDERS_DB        = 'bypro_orders'
     CHAT_COL         = 'chat_history'
@@ -42,7 +29,6 @@ class ExecutiveBridge:
     PROJECTS_COL     = 'projects_registry'
     ORDERS_COL       = 'orders'
 
-    # ---- Safety limits -------------------------------------------------
     MAX_HISTORY_TURNS   = 12
     MAX_CLIENTS         = 40
     MAX_PENDING_ORDERS  = 20
@@ -55,24 +41,25 @@ class ExecutiveBridge:
         self._lock = threading.Lock()
 
     # ====================================================================
-    # MongoDB
+    # MongoDB (all checks use `is None`, never truthiness)
     # ====================================================================
     def _ensure_client(self):
         if self._client is not None:
             return self._client
-        if not MongoClient:
+        if MongoClient is None:
             self.log("❌ pymongo not installed")
             return None
         if not self.mongo_uri:
             self.log("❌ Bridge: no mongo uri")
             return None
         try:
-            self._client = MongoClient(
+            client = MongoClient(
                 self.mongo_uri,
                 serverSelectionTimeoutMS=15000,
                 tlsAllowInvalidCertificates=True,
             )
-            self._client.admin.command('ping')
+            client.admin.command('ping')
+            self._client = client
             self.log("✅ Bridge connected")
             return self._client
         except Exception as e:
@@ -82,14 +69,16 @@ class ExecutiveBridge:
 
     def _db(self):
         c = self._ensure_client()
-        return c[self.DASHBOARD_DB] if c else None
+        if c is None:
+            return None
+        return c[self.DASHBOARD_DB]
 
     # ====================================================================
     # Data loaders
     # ====================================================================
     def _load_settings(self):
         db = self._db()
-        if not db:
+        if db is None:
             return {}
         out = {}
         try:
@@ -104,17 +93,17 @@ class ExecutiveBridge:
     def _load_stats(self):
         db = self._db()
         c = self._ensure_client()
-        if not db or not c:
+        if db is None or c is None:
             return {}
         try:
             return {
-                'clients':             db[self.CLIENTS_COL].count_documents({}),
-                'projects':            db[self.PROJECTS_COL].count_documents({'kind': 'project'}),
-                'projects_completed':  db[self.PROJECTS_COL].count_documents({
+                'clients':            db[self.CLIENTS_COL].count_documents({}),
+                'projects':           db[self.PROJECTS_COL].count_documents({'kind': 'project'}),
+                'projects_completed': db[self.PROJECTS_COL].count_documents({
                     'kind': 'project', 'progress': {'$gte': 100}
                 }),
-                'orders_total':        c[self.ORDERS_DB][self.ORDERS_COL].count_documents({}),
-                'orders_pending':      c[self.ORDERS_DB][self.ORDERS_COL].count_documents({
+                'orders_total':       c[self.ORDERS_DB][self.ORDERS_COL].count_documents({}),
+                'orders_pending':     c[self.ORDERS_DB][self.ORDERS_COL].count_documents({
                     '$or': [
                         {'status': 'new'},
                         {'status': {'$exists': False}},
@@ -129,7 +118,7 @@ class ExecutiveBridge:
 
     def _load_clients(self, limit=None):
         db = self._db()
-        if not db:
+        if db is None:
             return []
         limit = limit or self.MAX_CLIENTS
         try:
@@ -144,7 +133,6 @@ class ExecutiveBridge:
                     'service': order.get('service', ''),
                     'project': order.get('project_name', '') or d.get('project_name', ''),
                 }
-                # keep only non-empty fields to save tokens
                 out.append({k: v for k, v in item.items() if v})
             return out
         except Exception as e:
@@ -153,7 +141,7 @@ class ExecutiveBridge:
 
     def _load_pending_orders(self):
         c = self._ensure_client()
-        if not c:
+        if c is None:
             return []
         try:
             col = c[self.ORDERS_DB][self.ORDERS_COL]
@@ -178,7 +166,7 @@ class ExecutiveBridge:
 
     def _load_recent_orders(self, limit=10):
         c = self._ensure_client()
-        if not c:
+        if c is None:
             return []
         try:
             col = c[self.ORDERS_DB][self.ORDERS_COL]
@@ -196,7 +184,7 @@ class ExecutiveBridge:
 
     def _load_projects(self):
         db = self._db()
-        if not db:
+        if db is None:
             return []
         try:
             out = []
@@ -213,7 +201,7 @@ class ExecutiveBridge:
 
     def _load_finances(self):
         db = self._db()
-        if not db:
+        if db is None:
             return {}
         try:
             col = db[self.PROJECTS_COL]
@@ -229,17 +217,14 @@ class ExecutiveBridge:
 
             income  = _sum('income')
             expense = _sum('expense')
-            rate = 245  # USD → DZD
+            rate = 245
             income_dzd  = income.get('DZD', 0)  + income.get('USD', 0)  * rate
             expense_dzd = expense.get('DZD', 0) + expense.get('USD', 0) * rate
             return {
                 'income_dzd':  round(income_dzd),
                 'expense_dzd': round(expense_dzd),
                 'net_dzd':     round(income_dzd - expense_dzd),
-                'by_currency': {
-                    'income':  income,
-                    'expense': expense,
-                },
+                'by_currency': {'income': income, 'expense': expense},
             }
         except Exception as e:
             self.log(f"⚠️ finances: {e}")
@@ -247,7 +232,7 @@ class ExecutiveBridge:
 
     def _load_services_summary(self):
         db = self._db()
-        if not db:
+        if db is None:
             return []
         try:
             doc = db[self.SETTINGS_COL].find_one({'key': 'service_settings'})
@@ -292,7 +277,7 @@ class ExecutiveBridge:
     # ====================================================================
     def _load_history(self, limit=None):
         db = self._db()
-        if not db:
+        if db is None:
             return []
         limit = limit or self.MAX_HISTORY_TURNS
         try:
@@ -305,7 +290,7 @@ class ExecutiveBridge:
 
     def _save_msg(self, role, content, mirror=True):
         db = self._db()
-        if not db:
+        if db is None:
             return
         ts = datetime.now(timezone.utc).isoformat()
         try:
@@ -325,7 +310,7 @@ class ExecutiveBridge:
 
     def reset_conversation(self):
         db = self._db()
-        if not db:
+        if db is None:
             return False
         try:
             db[self.OWNER_CHAT_COL].delete_many({})
@@ -334,10 +319,10 @@ class ExecutiveBridge:
             return False
 
     # ====================================================================
-    # AI call — token budget cascade (no more 402 interruptions)
+    # AI call — token budget cascade
     # ====================================================================
     def _call_ai(self, messages, cfg, max_tokens=1600):
-        if not requests:
+        if requests is None:
             return None, "requests missing"
         if not cfg:
             return None, "AI key missing"
@@ -349,7 +334,6 @@ class ExecutiveBridge:
             'X-Title': 'B.Y PRO Executive Bridge',
         }
 
-        # Cascade: try high budgets, then progressively lower on 402
         budgets = sorted({b for b in (max_tokens, 1200, 900, 600, 400, 250) if b <= max_tokens},
                          reverse=True)
 
@@ -406,7 +390,7 @@ class ExecutiveBridge:
         return None, last_err or "all budgets failed"
 
     # ====================================================================
-    # System prompt builder — sized context
+    # System prompt builder
     # ====================================================================
     def _build_system_prompt(self, base_prompt, ctx, size='full'):
         now = datetime.now()
@@ -464,7 +448,7 @@ class ExecutiveBridge:
         return base_prompt + "\n\n" + "\n".join(parts)
 
     # ====================================================================
-    # PUBLIC API — main entry point
+    # PUBLIC API
     # ====================================================================
     def get_owner_reply(
         self,
@@ -474,10 +458,6 @@ class ExecutiveBridge:
         marketer_cfg_getter,
         base_prompt_getter=None,
     ):
-        """
-        Returns (reply_text, error). Never returns (None, err) silently —
-        if anything fails, the user still gets an explanatory reply.
-        """
         user_msg = (user_msg or '').strip()
         if not user_msg:
             return None, "empty"
@@ -487,13 +467,13 @@ class ExecutiveBridge:
         # 1. Persist user message
         self._save_msg('user', user_msg)
 
-        # 2. Load previous history (excluding the just-saved msg)
+        # 2. Load prior history (excluding just-saved)
         history = self._load_history()
         if history and history[-1]['role'] == 'user' \
                 and history[-1]['content'].strip() == user_msg:
             history = history[:-1]
 
-        # 3. Load full context (single pass)
+        # 3. Load context
         raw_settings = self._load_settings()
         ctx = {
             'settings': {
@@ -511,7 +491,7 @@ class ExecutiveBridge:
             'projects':       self._load_projects(),
         }
 
-        # 4. Base prompt (Dashboard's system_prompt when available)
+        # 4. Base prompt
         base = ''
         if base_prompt_getter:
             try:
@@ -533,7 +513,7 @@ class ExecutiveBridge:
             self._save_msg('assistant', err)
             return err, "no ai config"
 
-        # 6. Attempts with decreasing context size
+        # 6. Attempts with decreasing size
         attempts = ['full', 'medium', 'small']
         last_err = None
 
@@ -559,11 +539,11 @@ class ExecutiveBridge:
             last_err = err
             self.log(f"⚠️ attempt {i+1} failed: {err}")
 
-        # 7. All attempts failed → still answer the user
+        # 7. Fallback
         err_reply = (
             "عذراً سيدي، تعذّر إكمال الرد.\n\n"
             "الأسباب المحتملة:\n"
-            "• نفاد رصيد OpenRouter (اشحن الرصيد)\n"
+            "• نفاد رصيد OpenRouter\n"
             "• تعطّل مؤقت في الخدمة\n\n"
             "أعد إرسال رسالتك بعد قليل."
         )
@@ -572,7 +552,7 @@ class ExecutiveBridge:
         return err_reply, last_err or "unknown"
 
     # ====================================================================
-    # Extra admin helpers
+    # Helpers
     # ====================================================================
     def get_conversation(self, limit=50):
         return self._load_history(limit=limit)
