@@ -1,0 +1,589 @@
+# ========================================================================
+# B.Y PRO — Executive Bridge
+# ------------------------------------------------------------------------
+# Modular pipeline that gives the OWNER full company intelligence through
+# Facebook Messenger, using the same MongoDB the Dashboard uses.
+#
+# Features:
+#   • Isolated conversation (owner_messenger_chat) — clean and stable
+#   • Mirror to chat_history so Dashboard shows the same dialogue
+#   • Full business context: clients, orders, projects, finances,
+#     service settings, API keys status, system health
+#   • Credit-aware token cascade (no more 402 interruptions)
+#   • Robust history management (bounded, no growth)
+#   • Never silent — always returns a usable reply
+# ========================================================================
+
+import json
+import time
+import threading
+from datetime import datetime, timezone
+
+try:
+    from pymongo import MongoClient
+except ImportError:
+    MongoClient = None
+
+try:
+    import requests
+except ImportError:
+    requests = None
+
+
+class ExecutiveBridge:
+
+    # ---- Collection / DB names ----------------------------------------
+    DASHBOARD_DB     = 'DashboardDB'
+    ORDERS_DB        = 'bypro_orders'
+    CHAT_COL         = 'chat_history'
+    OWNER_CHAT_COL   = 'owner_messenger_chat'
+    SETTINGS_COL     = 'settings'
+    CLIENTS_COL      = 'clients'
+    PROJECTS_COL     = 'projects_registry'
+    ORDERS_COL       = 'orders'
+
+    # ---- Safety limits -------------------------------------------------
+    MAX_HISTORY_TURNS   = 12
+    MAX_CLIENTS         = 40
+    MAX_PENDING_ORDERS  = 20
+    MAX_PROJECTS        = 20
+
+    def __init__(self, mongo_uri, logger=None):
+        self.mongo_uri = mongo_uri
+        self.log = logger or (lambda m: print(m, flush=True))
+        self._client = None
+        self._lock = threading.Lock()
+
+    # ====================================================================
+    # MongoDB
+    # ====================================================================
+    def _ensure_client(self):
+        if self._client is not None:
+            return self._client
+        if not MongoClient:
+            self.log("❌ pymongo not installed")
+            return None
+        if not self.mongo_uri:
+            self.log("❌ Bridge: no mongo uri")
+            return None
+        try:
+            self._client = MongoClient(
+                self.mongo_uri,
+                serverSelectionTimeoutMS=15000,
+                tlsAllowInvalidCertificates=True,
+            )
+            self._client.admin.command('ping')
+            self.log("✅ Bridge connected")
+            return self._client
+        except Exception as e:
+            self.log(f"❌ Bridge MongoDB: {e}")
+            self._client = None
+            return None
+
+    def _db(self):
+        c = self._ensure_client()
+        return c[self.DASHBOARD_DB] if c else None
+
+    # ====================================================================
+    # Data loaders
+    # ====================================================================
+    def _load_settings(self):
+        db = self._db()
+        if not db:
+            return {}
+        out = {}
+        try:
+            for doc in db[self.SETTINGS_COL].find({}):
+                k = doc.get('key')
+                if k:
+                    out[k] = doc.get('value')
+        except Exception as e:
+            self.log(f"⚠️ settings: {e}")
+        return out
+
+    def _load_stats(self):
+        db = self._db()
+        c = self._ensure_client()
+        if not db or not c:
+            return {}
+        try:
+            return {
+                'clients':             db[self.CLIENTS_COL].count_documents({}),
+                'projects':            db[self.PROJECTS_COL].count_documents({'kind': 'project'}),
+                'projects_completed':  db[self.PROJECTS_COL].count_documents({
+                    'kind': 'project', 'progress': {'$gte': 100}
+                }),
+                'orders_total':        c[self.ORDERS_DB][self.ORDERS_COL].count_documents({}),
+                'orders_pending':      c[self.ORDERS_DB][self.ORDERS_COL].count_documents({
+                    '$or': [
+                        {'status': 'new'},
+                        {'status': {'$exists': False}},
+                        {'status': None},
+                        {'status': 'pending'},
+                    ]
+                }),
+            }
+        except Exception as e:
+            self.log(f"⚠️ stats: {e}")
+            return {}
+
+    def _load_clients(self, limit=None):
+        db = self._db()
+        if not db:
+            return []
+        limit = limit or self.MAX_CLIENTS
+        try:
+            out = []
+            for d in db[self.CLIENTS_COL].find({}).sort('_id', -1).limit(limit):
+                order = d.get('order') or {}
+                item = {
+                    'name':    d.get('name', ''),
+                    'phone':   d.get('phone', ''),
+                    'email':   d.get('email', ''),
+                    'status':  d.get('status', ''),
+                    'service': order.get('service', ''),
+                    'project': order.get('project_name', '') or d.get('project_name', ''),
+                }
+                # keep only non-empty fields to save tokens
+                out.append({k: v for k, v in item.items() if v})
+            return out
+        except Exception as e:
+            self.log(f"⚠️ clients: {e}")
+            return []
+
+    def _load_pending_orders(self):
+        c = self._ensure_client()
+        if not c:
+            return []
+        try:
+            col = c[self.ORDERS_DB][self.ORDERS_COL]
+            query = {'$or': [
+                {'status': 'new'},
+                {'status': {'$exists': False}},
+                {'status': None},
+                {'status': 'pending'},
+            ]}
+            out = []
+            for d in col.find(query).sort([('createdAt', -1), ('_id', -1)]).limit(self.MAX_PENDING_ORDERS):
+                out.append({
+                    'name':    d.get('fullName') or d.get('name', ''),
+                    'phone':   d.get('phone', ''),
+                    'service': d.get('service', ''),
+                    'project': d.get('projectName', ''),
+                })
+            return out
+        except Exception as e:
+            self.log(f"⚠️ pending orders: {e}")
+            return []
+
+    def _load_recent_orders(self, limit=10):
+        c = self._ensure_client()
+        if not c:
+            return []
+        try:
+            col = c[self.ORDERS_DB][self.ORDERS_COL]
+            out = []
+            for d in col.find({}).sort([('createdAt', -1), ('_id', -1)]).limit(limit):
+                out.append({
+                    'name':    d.get('fullName') or d.get('name', ''),
+                    'service': d.get('service', ''),
+                    'status':  d.get('status', ''),
+                })
+            return out
+        except Exception as e:
+            self.log(f"⚠️ recent orders: {e}")
+            return []
+
+    def _load_projects(self):
+        db = self._db()
+        if not db:
+            return []
+        try:
+            out = []
+            for d in db[self.PROJECTS_COL].find({'kind': 'project'}).sort('_id', -1).limit(self.MAX_PROJECTS):
+                out.append({
+                    'title':    d.get('title') or d.get('name') or '',
+                    'progress': d.get('progress', 0),
+                    'status':   d.get('status', ''),
+                })
+            return out
+        except Exception as e:
+            self.log(f"⚠️ projects: {e}")
+            return []
+
+    def _load_finances(self):
+        db = self._db()
+        if not db:
+            return {}
+        try:
+            col = db[self.PROJECTS_COL]
+
+            def _sum(t_type):
+                out = {}
+                for row in col.aggregate([
+                    {'$match': {'kind': 'transaction', 'type': t_type}},
+                    {'$group': {'_id': '$currency', 'total': {'$sum': '$amount'}}},
+                ]):
+                    out[row['_id'] or 'DZD'] = row['total']
+                return out
+
+            income  = _sum('income')
+            expense = _sum('expense')
+            rate = 245  # USD → DZD
+            income_dzd  = income.get('DZD', 0)  + income.get('USD', 0)  * rate
+            expense_dzd = expense.get('DZD', 0) + expense.get('USD', 0) * rate
+            return {
+                'income_dzd':  round(income_dzd),
+                'expense_dzd': round(expense_dzd),
+                'net_dzd':     round(income_dzd - expense_dzd),
+                'by_currency': {
+                    'income':  income,
+                    'expense': expense,
+                },
+            }
+        except Exception as e:
+            self.log(f"⚠️ finances: {e}")
+            return {}
+
+    def _load_services_summary(self):
+        db = self._db()
+        if not db:
+            return []
+        try:
+            doc = db[self.SETTINGS_COL].find_one({'key': 'service_settings'})
+            if not doc or not doc.get('value'):
+                return []
+            out = []
+            for c in (doc['value'].get('categories') or []):
+                if not c.get('enabled', True):
+                    continue
+                on = [s.get('id') for s in c.get('services', []) if s.get('enabled', True)]
+                out.append({'id': c.get('id'), 'on': on})
+            return out
+        except Exception as e:
+            self.log(f"⚠️ services: {e}")
+            return []
+
+    def _load_health(self, ai_cfg_getter, img_cfg_getter, marketer_cfg_getter):
+        out = {
+            'db': False, 'ai': False, 'img': False, 'marketer': False,
+            'db_size_mb': None, 'db_objects': None,
+        }
+        db = self._db()
+        if db is not None:
+            try:
+                stats = db.command('dbStats')
+                total = (stats.get('dataSize', 0) or 0) + (stats.get('indexSize', 0) or 0)
+                out['db'] = True
+                out['db_size_mb'] = round(total / (1024 * 1024), 2)
+                out['db_objects'] = stats.get('objects', 0)
+            except Exception:
+                pass
+        try: out['ai'] = ai_cfg_getter() is not None
+        except Exception: pass
+        try: out['img'] = img_cfg_getter() is not None
+        except Exception: pass
+        try: out['marketer'] = marketer_cfg_getter() is not None
+        except Exception: pass
+        return out
+
+    # ====================================================================
+    # Conversation persistence
+    # ====================================================================
+    def _load_history(self, limit=None):
+        db = self._db()
+        if not db:
+            return []
+        limit = limit or self.MAX_HISTORY_TURNS
+        try:
+            docs = list(db[self.OWNER_CHAT_COL].find({}).sort('_id', -1).limit(limit))
+            docs.reverse()
+            return [{'role': d.get('role', 'user'), 'content': d.get('content', '')} for d in docs]
+        except Exception as e:
+            self.log(f"⚠️ history: {e}")
+            return []
+
+    def _save_msg(self, role, content, mirror=True):
+        db = self._db()
+        if not db:
+            return
+        ts = datetime.now(timezone.utc).isoformat()
+        try:
+            db[self.OWNER_CHAT_COL].insert_one({
+                'role': role, 'content': content, 'timestamp': ts,
+            })
+        except Exception as e:
+            self.log(f"⚠️ save own: {e}")
+        if mirror:
+            try:
+                db[self.CHAT_COL].insert_one({
+                    'role': role, 'content': content, 'timestamp': ts,
+                    'meta': {'source': 'messenger'},
+                })
+            except Exception:
+                pass
+
+    def reset_conversation(self):
+        db = self._db()
+        if not db:
+            return False
+        try:
+            db[self.OWNER_CHAT_COL].delete_many({})
+            return True
+        except Exception:
+            return False
+
+    # ====================================================================
+    # AI call — token budget cascade (no more 402 interruptions)
+    # ====================================================================
+    def _call_ai(self, messages, cfg, max_tokens=1600):
+        if not requests:
+            return None, "requests missing"
+        if not cfg:
+            return None, "AI key missing"
+
+        headers = {
+            'Authorization': f"Bearer {cfg['api_key']}",
+            'Content-Type': 'application/json',
+            'HTTP-Referer': 'https://bypro-marketing-agent.onrender.com',
+            'X-Title': 'B.Y PRO Executive Bridge',
+        }
+
+        # Cascade: try high budgets, then progressively lower on 402
+        budgets = sorted({b for b in (max_tokens, 1200, 900, 600, 400, 250) if b <= max_tokens},
+                         reverse=True)
+
+        last_err = None
+        for mt in budgets:
+            try:
+                payload = {
+                    'model': cfg['model'],
+                    'messages': messages,
+                    'temperature': 0.7,
+                    'max_tokens': mt,
+                }
+                t0 = time.time()
+                r = requests.post(cfg['api_url'], headers=headers, json=payload, timeout=90)
+                dt = round(time.time() - t0, 1)
+
+                if r.status_code == 200:
+                    data = r.json()
+                    choices = data.get('choices') or []
+                    if not choices:
+                        last_err = "empty choices"
+                        continue
+                    content = choices[0].get('message', {}).get('content', '')
+                    if content and content.strip():
+                        self.log(f"✅ AI ({dt}s, {len(content)}c, mt={mt})")
+                        return content.strip(), None
+                    last_err = "empty content"
+                    continue
+
+                if r.status_code == 402:
+                    self.log(f"⚠️ AI 402 (mt={mt}) — reducing")
+                    last_err = f"402 at mt={mt}"
+                    continue
+
+                if r.status_code in (401, 403):
+                    return None, f"auth {r.status_code}"
+
+                if r.status_code in (400, 413, 422):
+                    self.log(f"⚠️ AI {r.status_code}: {r.text[:150]}")
+                    last_err = f"{r.status_code}"
+                    continue
+
+                if r.status_code in (429, 500, 502, 503, 504):
+                    time.sleep(1.5)
+                    last_err = f"{r.status_code}"
+                    continue
+
+                return None, f"HTTP {r.status_code}"
+            except Exception as e:
+                last_err = str(e)
+                self.log(f"⚠️ AI exception: {e}")
+                continue
+
+        return None, last_err or "all budgets failed"
+
+    # ====================================================================
+    # System prompt builder — sized context
+    # ====================================================================
+    def _build_system_prompt(self, base_prompt, ctx, size='full'):
+        now = datetime.now()
+        weekday = ['Monday', 'Tuesday', 'Wednesday', 'Thursday',
+                   'Friday', 'Saturday', 'Sunday'][now.weekday()]
+
+        if size == 'full':
+            c_lim, o_lim, p_lim = self.MAX_CLIENTS, self.MAX_PENDING_ORDERS, self.MAX_PROJECTS
+        elif size == 'medium':
+            c_lim, o_lim, p_lim = 20, 10, 10
+        else:
+            c_lim, o_lim, p_lim = 8, 5, 5
+
+        clients  = ctx['clients'][:c_lim]
+        pending  = ctx['pending_orders'][:o_lim]
+        projects = ctx['projects'][:p_lim]
+
+        parts = [
+            "=== TIME ===",
+            f"{weekday}, {now.strftime('%Y-%m-%d %H:%M')}",
+            "",
+            "=== COMPANY ===",
+            json.dumps(ctx['settings'], ensure_ascii=False),
+            "",
+            "=== STATS ===",
+            json.dumps(ctx['stats'], ensure_ascii=False),
+            "",
+            "=== FINANCES (DZD, USD@245) ===",
+            json.dumps(ctx['finances'], ensure_ascii=False),
+            "",
+            "=== HEALTH & KEYS ===",
+            json.dumps(ctx['health'], ensure_ascii=False),
+            "",
+            "=== ENABLED SERVICES ===",
+            json.dumps(ctx['services'], ensure_ascii=False),
+            "",
+            f"=== CLIENTS ({len(clients)}) ===",
+            json.dumps(clients, ensure_ascii=False),
+            "",
+            f"=== PENDING ORDERS ({len(pending)}) ===",
+            json.dumps(pending, ensure_ascii=False),
+            "",
+            f"=== PROJECTS ({len(projects)}) ===",
+            json.dumps(projects, ensure_ascii=False),
+            "",
+            "=== REPLY RULES ===",
+            "- Address him as سيدي / سيدي ياسين / Sir.",
+            "- Concise, professional, in his language.",
+            "- Bullet points (• item). NEVER markdown tables.",
+            "- NEVER use ``` code fences.",
+            "- NEVER use ### headers or ** bold.",
+            "- Plain text only (will be sent to Messenger).",
+            "- Never invent data. Use only the numbers above.",
+        ]
+        return base_prompt + "\n\n" + "\n".join(parts)
+
+    # ====================================================================
+    # PUBLIC API — main entry point
+    # ====================================================================
+    def get_owner_reply(
+        self,
+        user_msg,
+        ai_cfg_getter,
+        img_cfg_getter,
+        marketer_cfg_getter,
+        base_prompt_getter=None,
+    ):
+        """
+        Returns (reply_text, error). Never returns (None, err) silently —
+        if anything fails, the user still gets an explanatory reply.
+        """
+        user_msg = (user_msg or '').strip()
+        if not user_msg:
+            return None, "empty"
+
+        self.log(f"👑 Bridge ({len(user_msg)}c)")
+
+        # 1. Persist user message
+        self._save_msg('user', user_msg)
+
+        # 2. Load previous history (excluding the just-saved msg)
+        history = self._load_history()
+        if history and history[-1]['role'] == 'user' \
+                and history[-1]['content'].strip() == user_msg:
+            history = history[:-1]
+
+        # 3. Load full context (single pass)
+        raw_settings = self._load_settings()
+        ctx = {
+            'settings': {
+                'admin_name':          raw_settings.get('admin_name', 'Yacine'),
+                'company_website':     raw_settings.get('company_website', ''),
+                'company_tagline':     raw_settings.get('company_tagline', ''),
+                'company_description': (raw_settings.get('company_description') or '')[:300],
+            },
+            'stats':          self._load_stats(),
+            'finances':       self._load_finances(),
+            'health':         self._load_health(ai_cfg_getter, img_cfg_getter, marketer_cfg_getter),
+            'services':       self._load_services_summary(),
+            'clients':        self._load_clients(),
+            'pending_orders': self._load_pending_orders(),
+            'projects':       self._load_projects(),
+        }
+
+        # 4. Base prompt (Dashboard's system_prompt when available)
+        base = ''
+        if base_prompt_getter:
+            try:
+                base = base_prompt_getter() or ''
+            except Exception:
+                pass
+        if not base:
+            base = (
+                'You are the executive assistant of B.Y PRO Technologie. '
+                'Your director is Yacine. Address him as "سيدي" or "سيدي ياسين". '
+                'Speak in his language. You have FULL access to the LIVE data below. '
+                'Use ONLY that data. Never invent clients, orders, or numbers.'
+            )
+
+        # 5. AI config
+        cfg = ai_cfg_getter()
+        if not cfg:
+            err = "عذراً سيدي، مفتاح AI غير متوفر حالياً. راجع إعدادات API-AI."
+            self._save_msg('assistant', err)
+            return err, "no ai config"
+
+        # 6. Attempts with decreasing context size
+        attempts = ['full', 'medium', 'small']
+        last_err = None
+
+        for i, size in enumerate(attempts):
+            system_prompt = self._build_system_prompt(base, ctx, size=size)
+            messages = [{'role': 'system', 'content': system_prompt}]
+
+            hist_turns = 10 if size == 'full' else (6 if size == 'medium' else 3)
+            for h in history[-hist_turns:]:
+                if h['content']:
+                    messages.append({'role': h['role'], 'content': h['content']})
+
+            total_chars = sum(len(m['content']) for m in messages)
+            self.log(f"📏 attempt {i+1} ({size}): {len(messages)} msgs, {total_chars}c")
+
+            budget = 1600 if size == 'full' else (1200 if size == 'medium' else 800)
+            reply, err = self._call_ai(messages, cfg, max_tokens=budget)
+
+            if reply:
+                self._save_msg('assistant', reply)
+                return reply, None
+
+            last_err = err
+            self.log(f"⚠️ attempt {i+1} failed: {err}")
+
+        # 7. All attempts failed → still answer the user
+        err_reply = (
+            "عذراً سيدي، تعذّر إكمال الرد.\n\n"
+            "الأسباب المحتملة:\n"
+            "• نفاد رصيد OpenRouter (اشحن الرصيد)\n"
+            "• تعطّل مؤقت في الخدمة\n\n"
+            "أعد إرسال رسالتك بعد قليل."
+        )
+        self.log(f"❌ Bridge final error: {last_err}")
+        self._save_msg('assistant', err_reply)
+        return err_reply, last_err or "unknown"
+
+    # ====================================================================
+    # Extra admin helpers
+    # ====================================================================
+    def get_conversation(self, limit=50):
+        return self._load_history(limit=limit)
+
+    def get_full_report(self, ai_cfg_getter, img_cfg_getter, marketer_cfg_getter):
+        return {
+            'settings':             self._load_settings(),
+            'stats':                self._load_stats(),
+            'finances':             self._load_finances(),
+            'health':               self._load_health(ai_cfg_getter, img_cfg_getter, marketer_cfg_getter),
+            'clients_count':        len(self._load_clients()),
+            'pending_orders_count': len(self._load_pending_orders()),
+            'projects_count':       len(self._load_projects()),
+        }
